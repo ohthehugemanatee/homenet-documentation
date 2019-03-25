@@ -24,6 +24,7 @@ Setup
 * NFS storage from `warehouse` is mounted in /media/bigdrive
 * Plex, nextcloud (and its mariadb), ouroburos, and organizr run in containers, thanks to https://github.com/GhostWriters/DockSTARTer
 * Requires hand installation of macfanctld through apt-get. I also lowered the default temperature thresholds to run a bit cooler.
+* I wrote a script to adjust the screen backlight, at /usr/local/bin/brightness . tldr: `brightness up` and `brightness down`
 
 TODO
 ---
