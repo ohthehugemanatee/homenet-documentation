@@ -11,8 +11,8 @@ It uses [dockstarter](https://github.com/GhostWriters/DockSTARTer) to manage an 
 * Jackett - Translation layer beteween Sonarr and IPTorrents. Web UI: [http://warehouse.vert:9117/](http://warehouse.vert:9117/UI/Dashboard)
 
 None of this is accessible outside the homenet, except through the `frontdoor` instance at internal.germany.vertesi.com . See that server's reade for details.
+Everything configured through dockstarter lives in `~/.docker` . So a nightly crontab backs that directory up to `/mnt/storage/docker/warehouse` shortly before the offsite backup starts. 
 
 @todo:
 * Configure bazarr [http://warehouse.vert:6767/](http://warehouse.vert:6767/). It's a subtitle grabber.
-
-
+* Move Duplicati to container
