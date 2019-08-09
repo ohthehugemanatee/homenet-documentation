@@ -15,4 +15,3 @@ Everything configured through dockstarter lives in `~/.docker` . So a nightly cr
 
 @todo:
 * Configure bazarr [http://warehouse.vert:6767/](http://warehouse.vert:6767/). It's a subtitle grabber.
-* Move Duplicati to container

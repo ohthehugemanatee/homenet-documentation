@@ -7,7 +7,6 @@ It hosts an NGINX reverse proxy for other services within the network, with Cert
 | Nextcloud | https://germany.vertesi.com          | https://localhost:444/  | It's own auth | Configured with DS                                                          |
 | MariaDB   |                                      | localhost:3306          | It's own auth | Configured with DS, used for Nextcloud                                      |
 | Organizr  | https://internal.germany.vertesi.com | http://localhost:8006   | It's own auth | Front for all other services. Configured with DS.                           |
-| Duplicity | https://backups.germany.vertesi.com  | http://warehouse:8200   | Organizr      |                                                                             |
 | Deluge    | https://deluge.germany.vertesi.com   | http://warehouse:8112   | Organizr      | Torrent client, only connection is through privateInternetAccess.           |
 | NetData   | https://monitor.germany.vertesi.com  | http://localhost:199999 | Organizr      | Collects stats for all other machines on the network. Runs on this machine. |
 | NzbGet    | https://nzbget.germany.vertesi.com   | http://warehouse:6789   | Organizr      |  Newsbin downloader.                                                        |
@@ -26,6 +25,7 @@ Setup
 * Requires hand installation of macfanctld through apt-get. I also lowered the default temperature thresholds to run a bit cooler.
 * I wrote a script to adjust the screen backlight, at /usr/local/bin/brightness . tldr: `brightness up` and `brightness down`
 * Everything configured through dockstarter lives in `~/.docker` . So a nightly crontab backs that directory up to `/mnt/storage/docker/nextcloud/` shortly before the offsite backup starts.
+* The contents of the big storage drive (`/media/bigdrive`) are backed up daily using borg-backup, using a script in `/usr/local/bin/borg-backup.sh`. Backups are stored encrypted on blob storage in my personal azure account. (Credentials in Bitwarden)
 
 
 TODO
