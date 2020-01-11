@@ -15,6 +15,7 @@ Check out the individual docs for details.
 
 ## TODO
 * Try running all services in a mixed CPU k8s cluster instead
+* Add new RPI4, transfer services from warehouse
 * Add https://github.com/ohthehugemanatee/signal-photo-mail
 * Add https://github.com/bank2ynab/bank2ynab
 * Fix DNS behavior on internet disconnection
