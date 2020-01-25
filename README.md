@@ -19,3 +19,4 @@ Check out the individual docs for details.
 * Add https://github.com/ohthehugemanatee/signal-photo-mail
 * Add https://github.com/bank2ynab/bank2ynab
 * Fix DNS behavior on internet disconnection
+* Fix boot order of Nextcloud server
