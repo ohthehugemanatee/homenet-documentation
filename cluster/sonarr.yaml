@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarr
+spec:
+  selector:
+    matchLabels:
+      run: sonarr
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        run: sonarr
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+      - name: sonarr
+        image: linuxserver/sonarr
+        ports:
+          - containerPort: 8989
+        env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: "Europe/Berlin"
+        volumeMounts:
+          - name: nfs
+            mountPath: "/config"
+            subPath: ".docker/config/sonarr"
+          - name: nfs
+            mountPath: "/downloads"
+            subPath: "media/Downloads"
+          - name: nfs
+            mountPath: "/tv"
+            subPath: "media/TV Shows"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  labels:
+    run: sonarr
+spec:
+  ports:
+  - port: 8989
+    protocol: TCP
+  selector:
+    run: sonarr
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: sonarr
+spec:
+  rules:
+  - host: sonarr.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: sonarr
+          servicePort: 8989
+
