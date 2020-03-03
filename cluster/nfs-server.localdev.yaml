@@ -47,7 +47,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: nfs-config
+  name: nfs
   annotations:
     pv.beta.kubernetes.io/gid: "1000"
 spec:
@@ -58,42 +58,5 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   nfs:
     server: nfs-service.default.svc.cluster-domain.example
-    path: "/mnt/storage/config"
+    path: "/mnt/storage"
     readOnly: false
-
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: nfs-downloads
-  annotations:
-    pv.beta.kubernetes.io/gid: "1000"
-spec:
-  capacity: 
-    storage: 8Ti
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  nfs:
-    server: nfs-service.default.svc.cluster-domain.example
-    path: "/mnt/storage/downloads"
-    readOnly: false
-
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: nfs-movies
-  annotations:
-    pv.beta.kubernetes.io/gid: "1000"
-spec:
-  capacity: 
-    storage: 8Ti
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  nfs:
-    server: nfs-service.default.svc.cluster-domain.example
-    path: "/mnt/storage/Movies"
-    readOnly: false
-
