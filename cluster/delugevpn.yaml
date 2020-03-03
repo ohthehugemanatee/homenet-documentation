@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delugevpn
+spec:
+  selector:
+    matchLabels:
+      run: delugevpn
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        run: delugevpn
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+      - name: delugevpn
+        image: ledokun/armhf-arch-delugevpn
+        ports:
+          - containerPort: 8112
+          - containerPort: 58846
+        env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: "Europe/Berlin"
+          - name: ENABLE_PRIVOXY
+            value: "no"
+          - name: LAN_NETWORK
+            value: "192.168.1.0/24"
+          - name: NAME_SERVERS
+            value: "8.8.8.8"
+          - name: VPN_ENABLED
+            value: "yes"
+          - name: VPN_PASS
+            valueFrom:
+              secretKeyRef:
+                name: pia-vpn
+                key: password
+          - name: VPN_USER
+            valueFrom:
+              secretKeyRef:
+                name: pia-vpn
+                key: username
+          - name: VPN_PROV
+            value: "pia"
+        volumeMounts:
+          - name: nfs
+            mountPath: "/config"
+            subPath: ".docker/config/delugevpn"
+          - name: nfs
+            mountPath: "/data"
+            subPath: "media/Downloads"
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: delugevpn
+  labels:
+    run: delugevpn
+spec:
+  ports:
+  - name: http
+    port: 8112
+    protocol: TCP
+  - name: api
+    port: 58846
+    protocol: TCP
+  selector:
+    run: delugevpn
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: delugevpn
+spec:
+  rules:
+  - host: deluge.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: delugevpn
+          servicePort: 8112
+
