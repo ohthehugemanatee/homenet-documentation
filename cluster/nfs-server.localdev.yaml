@@ -42,18 +42,13 @@ spec:
 
 ---
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: nfs
-  annotations:
-    pv.beta.kubernetes.io/gid: "1000"
+  name: nfs-claim
 spec:
-  capacity: 
-    storage: 8Ti
   accessModes:
     - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  nfs:
-    server: nfs-service.default.svc.cluster-domain.example
-    path: "/mnt/storage"
-    readOnly: false
+  resources:
+    requests:
+      storage: 8Ti
+  storageClassName: ""
