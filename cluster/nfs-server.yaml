@@ -1,0 +1,99 @@
+# NFS server for local testing only.
+# Create a service to expose the NFS server
+# to pods inside the cluster.
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: nfs-service
+spec:
+  selector:
+    role: nfs
+  ports:
+    # Open the ports required by the NFS server
+    # Port 2049 for TCP
+    - name: tcp-2049
+      port: 2049
+      protocol: TCP
+
+    # Port 111 for UDP
+    - name: udp-111
+      port: 111
+      protocol: UDP
+
+---
+
+# Run the NFS server image in a pod that is
+# exposed by the service.
+
+kind: Pod
+apiVersion: v1
+metadata:
+  name: nfs-server-pod
+  labels:
+    role: nfs
+spec:
+  containers:
+    - name: nfs-server-container
+      image: cpuguy83/nfs-server
+      args:
+        # Pass the paths to share to the Docker image
+        - /mnt/storage
+        - /mnt/storage/config
+        - /mnt/storage/Downloads
+        - /mnt/storage/Movies
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-config
+  annotations:
+    pv.beta.kubernetes.io/gid: "1000"
+spec:
+  capacity: 
+    storage: 8Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: nfs-service.default.svc.cluster-domain.example
+    path: "/mnt/storage/config"
+    readOnly: false
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-downloads
+  annotations:
+    pv.beta.kubernetes.io/gid: "1000"
+spec:
+  capacity: 
+    storage: 8Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: nfs-service.default.svc.cluster-domain.example
+    path: "/mnt/storage/downloads"
+    readOnly: false
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-movies
+  annotations:
+    pv.beta.kubernetes.io/gid: "1000"
+spec:
+  capacity: 
+    storage: 8Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: nfs-service.default.svc.cluster-domain.example
+    path: "/mnt/storage/Movies"
+    readOnly: false
+
