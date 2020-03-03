@@ -39,9 +39,6 @@ spec:
       args:
         # Pass the paths to share to the Docker image
         - /mnt/storage
-        - /mnt/storage/config
-        - /mnt/storage/Downloads
-        - /mnt/storage/Movies
 
 ---
 apiVersion: v1
