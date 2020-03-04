@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nzbget
+spec:
+  selector:
+    matchLabels:
+      run: nzbget
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        run: nzbget
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+      - name: nzbget
+        image: linuxserver/nzbget
+        ports:
+          - containerPort: 6789
+        env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: "Europe/Berlin"
+        volumeMounts:
+          - name: nfs
+            mountPath: "/config"
+            subPath: ".docker/config/nzbget"
+          - name: nfs
+            mountPath: "/downloads"
+            subPath: "media/Downloads"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nzbget
+  labels:
+    run: nzbget
+spec:
+  ports:
+  - port: 6789
+    protocol: TCP
+  selector:
+    run: nzbget
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nzbget
+spec:
+  rules:
+  - host: nzbget.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nzbget
+          servicePort: 6789
+
