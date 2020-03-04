@@ -13,3 +13,5 @@ Presently running:
 None of this is accessible outside the homenet, except through the `frontdoor` instance.
 
 Configuration lives in `/mnt/storage/.docker/config`. All storage is shared out over NFS. 
+
+All pods are using their latest versions with (implicit) image pull policy of "always". There's a root cronjob that runs weekly to delete all pods, forcing an image update.
