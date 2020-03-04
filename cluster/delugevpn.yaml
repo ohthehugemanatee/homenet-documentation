@@ -12,6 +12,8 @@ spec:
       labels:
         run: delugevpn
     spec:
+      nodeSelector:
+        beta.kubernetes.io/arch: arm
       volumes:
         - name: nfs
           persistentVolumeClaim:
