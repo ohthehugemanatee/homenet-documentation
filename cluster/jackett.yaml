@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jackett
+spec:
+  selector:
+    matchLabels:
+      run: jackett
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        run: jackett
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+      - name: jackett
+        image: linuxserver/jackett
+        ports:
+          - containerPort: 9117
+        env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: "Europe/Berlin"
+        volumeMounts:
+          - name: nfs
+            mountPath: "/config"
+            subPath: ".docker/config/jackett"
+          - name: nfs
+            mountPath: "/data"
+            subPath: "media/Downloads"
+          - name: nfs
+            mountPath: "/downloads"
+            subPath: "media/Downloads"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: jackett
+  labels:
+    run: jackett
+spec:
+  ports:
+  - port: 9117
+    protocol: TCP
+  selector:
+    run: jackett
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: jackett
+spec:
+  rules:
+  - host: jackett.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: jackett
+          servicePort: 9117
+
