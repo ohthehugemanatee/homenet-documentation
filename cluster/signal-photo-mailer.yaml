@@ -18,7 +18,7 @@ spec:
             claimName: nfs-claim
       containers:
       - name: signal-photo-mail
-        image: ohthehugemanatee/signal-photo-mail
+        image: ohthehugemanatee/signal-photo-mail:latest-armhf
         env:
           - name: MYPHONE 
             valueFrom:
