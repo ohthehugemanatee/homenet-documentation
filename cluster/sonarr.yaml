@@ -16,6 +16,17 @@ spec:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
+        - name: iscsi
+          iscsi:
+            targetPortal: 192.16.1.50
+            iqn: "iqn.2003-01.org.linux-iscsi.warehouse:sonarr"
+            lun: 0
+            fsType: ext4
+            readOnly: false
+            chapAuthDiscovery: true
+            chapAuthSession: true
+            secretRef:
+              name: iscsi-creds
       containers:
       - name: sonarr
         image: linuxserver/sonarr
@@ -29,9 +40,8 @@ spec:
           - name: TZ
             value: "Europe/Berlin"
         volumeMounts:
-          - name: nfs
+          - name: iscsi
             mountPath: "/config"
-            subPath: ".docker/config/sonarr"
           - name: nfs
             mountPath: "/downloads"
             subPath: "media/Downloads"
