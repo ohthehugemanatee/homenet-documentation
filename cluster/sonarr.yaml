@@ -6,80 +6,86 @@ spec:
   selector:
     matchLabels:
       run: sonarr
-  replicas: 1 
+  replicas: 1
   strategy:
     type: Recreate
   template:
     metadata:
-      labels:
-        run: sonarr
+        labels:
+          run: sonarr
     spec:
       volumes:
+        - name: ramdisk
+          emptyDir:
+            medium: Memory
+            sizeLimit: 400M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-        - name: iscsi
-          persistentVolumeClaim:
-            claimName: sonarr-claim
+        - emptyDir: {}
+          name: sonarr-ramdisk-mount
       containers:
-      - name: sonarr
-        image: linuxserver/sonarr
-        ports:
-          - containerPort: 8989
-        env:
-          - name: PGID
-            value: "1000"
-          - name: PUID
-            value: "1000"
-          - name: TZ
-            value: "Europe/Berlin"
-        volumeMounts:
-          - name: iscsi
-            mountPath: "/config"
-          - name: nfs
-            mountPath: "/downloads"
-            subPath: "media/Downloads"
-          - name: nfs
-            mountPath: "/tv"
-            subPath: "media/TV Shows"
-
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: sonarr-pv
-spec:
-  capacity:
-    storage: 1Gi
-  persistentVolumeReclaimPolicy: Retain
-  claimRef:
-    namespace: default
-    name: sonarr-claim
-  accessModes:
-    - ReadWriteOnce
-  iscsi:
-    targetPortal: 192.168.1.50
-    iqn: "iqn.2003-01.org.linux-iscsi.warehouse:sonarr"
-    lun: 0
-    fsType: ext4
-    readOnly: false
-    chapAuthDiscovery: true
-    chapAuthSession: true
-    secretRef:
-      name: iscsi-creds
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-  name: sonarr-claim
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ''
-  volumeName: "sonarr-pv"
-  resources:
-    requests:
-      storage: 1Gi
+        - name: sonarr-config
+          command:
+            - sh
+            - -c
+            - |-
+              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
+              mkfs.ext4 /ramdisk/image.ext4; \
+              mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
+              cp -fvpR /sonarr-config/*.* /mnt/sonarr-ramdisk-mount; \
+              while true; do \
+              sleep 890; \
+              sync /mnt/sonarr-ramdisk-mount/*.*; \
+              fsfreeze --freeze /mnt/sonarr-ramdisk-mount; \
+              sleep 10; \
+              cp -fvp /mnt/sonarr-ramdisk-mount/*.* /sonarr-config/; \
+              fsfreeze --unfreeze /mnt/sonarr-ramdisk-mount; \
+              done;
+          image: ubuntu
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - umount /mnt/sonarr-ramdisk-mount;
+          resources: {}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: ramdisk
+              mountPath: /ramdisk
+            - name: nfs
+              mountPath: /sonarr-config
+              subPath: ".docker/config/sonarr"
+            - mountPath: /mnt/sonarr-ramdisk-mount
+              mountPropagation: Bidirectional
+              name: sonarr-ramdisk-mount
+        - name: sonarr
+          command:
+            - sh
+            - -c
+            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+          image: linuxserver/sonarr
+          ports:
+            - containerPort: 8989
+              name: sonarr
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /config
+              mountPropagation: HostToContainer
+              name: sonarr-ramdisk-mount
+            - name: nfs
+              mountPath: "/downloads"
+              subPath: "media/Downloads"
+            - name: nfs
+              mountPath: "/tv"
+              subPath: "media/TV Shows"
 ---
 
 apiVersion: v1
