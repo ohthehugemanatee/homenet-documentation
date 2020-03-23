@@ -33,7 +33,7 @@ spec:
               dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
               mkfs.ext4 /ramdisk/image.ext4; \
               mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
-              cp -fvpR /sonarr-config/*.* /mnt/sonarr-ramdisk-mount; \
+              cp -fvpR /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
               while true; do \
               sleep 890; \
               sync /mnt/sonarr-ramdisk-mount/*.*; \
