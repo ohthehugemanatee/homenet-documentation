@@ -7,37 +7,85 @@ spec:
     matchLabels:
       run: radarr
   replicas: 1 
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
         run: radarr
     spec:
       volumes:
+        - name: ramdisk
+          emptyDir:
+            medium: Memory
+            sizeLimit: 400M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
+        - emptyDir: {}
+          name: radarr-ramdisk-mount
       containers:
-      - name: radarr
-        image: linuxserver/radarr
-        ports:
-          - containerPort: 7878
-        env:
-          - name: PGID
-            value: "1000"
-          - name: PUID
-            value: "1000"
-          - name: TZ
-            value: "Europe/Berlin"
-        volumeMounts:
-          - name: nfs
-            mountPath: "/config"
-            subPath: ".docker/config/radarr"
-          - name: nfs
-            mountPath: "/downloads"
-            subPath: "media/Downloads"
-          - name: nfs
-            mountPath: "/movies"
-            subPath: "media/Movies"
+        - name: radarr-config
+          command:
+            - sh
+            - -c
+            - |-
+              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
+              mkfs.ext4 /ramdisk/image.ext4; \
+              mount /ramdisk/image.ext4 /mnt/radarr-ramdisk-mount; \
+              cp -fvpR /radarr-config/*.* /mnt/radarr-ramdisk-mount; \
+              while true; do \
+              sleep 890; \
+              sync /mnt/radarr-ramdisk-mount/*.*; \
+              fsfreeze --freeze /mnt/radarr-ramdisk-mount; \
+              sleep 10; \
+              cp -fvp /mnt/radarr-ramdisk-mount/*.* /radarr-config/; \
+              fsfreeze --unfreeze /mnt/radarr-ramdisk-mount; \
+              done;
+          image: ubuntu
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - umount /mnt/radarr-ramdisk-mount;
+          resources: {}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: ramdisk
+              mountPath: /ramdisk
+            - name: nfs
+              mountPath: /radarr-config
+              subPath: ".docker/config/radarr"
+            - mountPath: /mnt/radarr-ramdisk-mount
+              mountPropagation: Bidirectional
+              name: radarr-ramdisk-mount
+        - name: radarr
+          command:
+            - sh
+            - -c
+            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
+          image: linuxserver/radarr
+          ports:
+            - containerPort: 7878
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - mountPath: /config
+              mountPropagation: HostToContainer
+              name: radarr-ramdisk-mount
+            - name: nfs
+              mountPath: "/downloads"
+              subPath: "media/Downloads"
+            - name: nfs
+              mountPath: "/movies"
+              subPath: "media/Movies"
 
 ---
 
