@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: radarr
+  name: bazarr
 spec:
   selector:
     matchLabels:
-      run: radarr
+      run: bazarr
   replicas: 1 
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        run: radarr
+        run: bazarr
     spec:
       volumes:
         - name: ramdisk
@@ -23,24 +23,24 @@ spec:
           persistentVolumeClaim:
             claimName: nfs-claim
         - emptyDir: {}
-          name: radarr-ramdisk-mount
+          name: bazarr-ramdisk-mount
       containers:
-        - name: radarr-config
+        - name: bazarr-config
           command:
             - sh
             - -c
             - |-
               dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
               mkfs.ext4 /ramdisk/image.ext4; \
-              mount /ramdisk/image.ext4 /mnt/radarr-ramdisk-mount; \
-              cp -fvpR /radarr-config/* /mnt/radarr-ramdisk-mount; \
+              mount /ramdisk/image.ext4 /mnt/bazarr-ramdisk-mount; \
+              cp -fvpR /bazarr-config/* /mnt/bazarr-ramdisk-mount; \
               while true; do \
               sleep 890; \
-              sync /mnt/radarr-ramdisk-mount/*; \
-              fsfreeze --freeze /mnt/radarr-ramdisk-mount; \
+              sync /mnt/bazarr-ramdisk-mount/*; \
+              fsfreeze --freeze /mnt/bazarr-ramdisk-mount; \
               sleep 10; \
-              cp -fvp /mnt/radarr-ramdisk-mount/*.* /radarr-config/; \
-              fsfreeze --unfreeze /mnt/radarr-ramdisk-mount; \
+              cp -fvp /mnt/bazarr-ramdisk-mount/*.* /bazarr-config/; \
+              fsfreeze --unfreeze /mnt/bazarr-ramdisk-mount; \
               done;
           image: ubuntu
           imagePullPolicy: Always
@@ -48,7 +48,7 @@ spec:
             preStop:
               exec:
                 command:
-                  - umount /mnt/radarr-ramdisk-mount;
+                  - umount /mnt/bazarr-ramdisk-mount;
           resources: {}
           securityContext:
             privileged: true
@@ -56,19 +56,19 @@ spec:
             - name: ramdisk
               mountPath: /ramdisk
             - name: nfs
-              mountPath: /radarr-config
-              subPath: ".docker/config/radarr"
-            - mountPath: /mnt/radarr-ramdisk-mount
+              mountPath: /bazarr-config
+              subPath: ".docker/config/bazarr"
+            - mountPath: /mnt/bazarr-ramdisk-mount
               mountPropagation: Bidirectional
-              name: radarr-ramdisk-mount
-        - name: radarr
+              name: bazarr-ramdisk-mount
+        - name: bazarr
           command:
             - sh
             - -c
-            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
-          image: linuxserver/radarr
+            - until [ -f "/config/db/bazarr.db" ]; do sleep 1; done; /init
+          image: linuxserver/bazarr
           ports:
-            - containerPort: 7878
+            - containerPort: 6767
           env:
             - name: PGID
               value: "1000"
@@ -79,56 +79,59 @@ spec:
           volumeMounts:
             - mountPath: /config
               mountPropagation: HostToContainer
-              name: radarr-ramdisk-mount
+              name: bazarr-ramdisk-mount
             - name: nfs
               mountPath: "/downloads"
               subPath: "media/Downloads"
             - name: nfs
               mountPath: "/movies"
               subPath: "media/Movies"
+            - name: nfs
+              mountPath: "/tv"
+              subPath: "media/TV Shows"
 
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: radarr
+  name: bazarr
   labels:
-    run: radarr
+    run: bazarr
 spec:
   ports:
-  - port: 7878
+  - port: 6767
     protocol: TCP
   selector:
-    run: radarr
+    run: bazarr
 
 ---
 
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
-  name: radarr
+  name: bazarr
 spec:
   rules:
-  - host: radarr.cluster.vert
+  - host: bazarr.cluster.vert
     http:
       paths:
       - path: /
         backend:
-          serviceName: radarr
-          servicePort: 7878
-  - host: radarr.germany.vertesi.com
+          serviceName: bazarr
+          servicePort: 6767
+  - host: bazarr.germany.vertesi.com
     http:
       paths:
       - path: /
         backend:
-          serviceName: radarr
-          servicePort: 7878
-  - host: radarr.vert
+          serviceName: bazarr
+          servicePort: 6767
+  - host: bazarr.vert
     http:
       paths:
       - path: /
         backend:
-          serviceName: radarr
-          servicePort: 7878
+          serviceName: bazarr
+          servicePort: 6767
 
