@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duplicati
+spec:
+  selector:
+    matchLabels:
+      run: duplicati
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+        labels:
+          run: duplicati
+    spec:
+      volumes:
+        - name: ramdisk
+          emptyDir:
+            medium: Memory
+            sizeLimit: 400M
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+        - emptyDir: {}
+          name: duplicati-ramdisk-mount
+      containers:
+        - name: duplicati-config
+          command:
+            - sh
+            - -c
+            - |-
+              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
+              mkfs.ext4 /ramdisk/image.ext4; \
+              mount /ramdisk/image.ext4 /mnt/duplicati-ramdisk-mount; \
+              cp -fvpR /duplicati-config/* /mnt/duplicati-ramdisk-mount; \
+              while true; do \
+              sleep 890; \
+              sync /mnt/duplicati-ramdisk-mount/*; \
+              fsfreeze --freeze /mnt/duplicati-ramdisk-mount; \
+              sleep 10; \
+              cp -fvp /mnt/duplicati-ramdisk-mount/*.* /duplicati-config/; \
+              fsfreeze --unfreeze /mnt/duplicati-ramdisk-mount; \
+              done;
+          image: ubuntu
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - umount /mnt/duplicati-ramdisk-mount;
+          resources: {}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: ramdisk
+              mountPath: /ramdisk
+            - name: nfs
+              mountPath: /duplicati-config
+              subPath: ".docker/config/duplicati"
+            - mountPath: /mnt/duplicati-ramdisk-mount
+              mountPropagation: Bidirectional
+              name: duplicati-ramdisk-mount
+        - name: duplicati
+          #command:
+          #  - sh
+          #  - -c
+          #  - until [ -f "/config/config.xml" ]; do sleep 1; done; /init*/
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+          image: linuxserver/duplicati
+          ports:
+            - containerPort: 8200
+              name: duplicati
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /config
+              mountPropagation: HostToContainer
+              name: duplicati-ramdisk-mount
+            - name: nfs
+              mountPath: "/source"
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: duplicati
+  labels:
+    run: duplicati
+spec:
+  ports:
+  - port: 8200
+    protocol: TCP
+  selector:
+    run: duplicati
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: duplicati
+spec:
+  rules:
+  - host: duplicati.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: duplicati
+          servicePort: 8200
+  - host: duplicati.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: duplicati
+          servicePort: 8200
+  - host: duplicati.germany.vertesi.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: duplicati
+          servicePort: 8200
+
