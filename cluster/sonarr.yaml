@@ -34,6 +34,7 @@ spec:
               mkfs.ext4 /ramdisk/image.ext4; \
               mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
               cp -fvpR /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
+              trap 'exit 0' 15; \
               while true; do \
               sleep 890; \
               sync /mnt/sonarr-ramdisk-mount/*; \
@@ -48,7 +49,8 @@ spec:
             preStop:
               exec:
                 command:
-                  - umount /mnt/sonarr-ramdisk-mount;
+                  - cp -fvp /mnt/sonarr-ramdisk-mount/*.* /sonarr-config/; \
+                   umount /mnt/sonarr-ramdisk-mount;
           resources: {}
           securityContext:
             privileged: true

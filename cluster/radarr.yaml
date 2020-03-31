@@ -34,6 +34,7 @@ spec:
               mkfs.ext4 /ramdisk/image.ext4; \
               mount /ramdisk/image.ext4 /mnt/radarr-ramdisk-mount; \
               cp -fvpR /radarr-config/* /mnt/radarr-ramdisk-mount; \
+              trap 'exit 0' 15; \
               while true; do \
               sleep 890; \
               sync /mnt/radarr-ramdisk-mount/*; \
@@ -48,7 +49,8 @@ spec:
             preStop:
               exec:
                 command:
-                  - umount /mnt/radarr-ramdisk-mount;
+                  - cp -fvp /mnt/radarr-ramdisk-mount/*.* /radarr-config/; \
+                   umount /mnt/radarr-ramdisk-mount;
           resources: {}
           securityContext:
             privileged: true
