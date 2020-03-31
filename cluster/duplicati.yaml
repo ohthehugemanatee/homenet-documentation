@@ -17,8 +17,7 @@ spec:
       volumes:
         - name: ramdisk
           emptyDir:
-            medium: Memory
-            sizeLimit: 400M
+            sizeLimit: 800M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
@@ -67,7 +66,7 @@ spec:
           command:
             - sh
             - -c
-            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init*/
+            - until [ -f "/config/Duplicati-server.sqlite" ]; do sleep 1; done; /init
           env:
             - name: PUID
               value: "1000"
