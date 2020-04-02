@@ -17,7 +17,6 @@ spec:
       volumes:
         - name: ramdisk
           emptyDir:
-            medium: Memory
             sizeLimit: 400M
         - name: nfs
           persistentVolumeClaim:
