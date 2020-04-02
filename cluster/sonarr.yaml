@@ -44,12 +44,6 @@ spec:
               done;
           image: ubuntu
           imagePullPolicy: Always
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  - cp -fvp /mnt/sonarr-ramdisk-mount/*.* /sonarr-config/; \
-                   umount /mnt/sonarr-ramdisk-mount;
           resources: {}
           securityContext:
             privileged: true

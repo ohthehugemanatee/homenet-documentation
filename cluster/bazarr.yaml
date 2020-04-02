@@ -44,12 +44,6 @@ spec:
               done;
           image: ubuntu
           imagePullPolicy: Always
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  - cp -fvp /mnt/bazarr-ramdisk-mount/*.* /bazarr-config/; \
-                   umount /mnt/bazarr-ramdisk-mount;
           resources: {}
           securityContext:
             privileged: true
