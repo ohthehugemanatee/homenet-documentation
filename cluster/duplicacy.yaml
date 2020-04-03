@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duplicacy-nextcloud
+spec:
+  selector:
+    matchLabels:
+      run: duplicacy-nextcloud
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+        labels:
+          run: duplicacy-nextcloud
+    spec:
+      volumes:
+        - name: ramdisk
+          emptyDir:
+            medium: Memory
+            sizeLimit: 800M
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+        - name: duplicacy
+          env:
+            - name: "TZ"
+              value: "Europe/Berlin"
+          image: erichough/duplicacy
+          ports:
+            - containerPort: 3875
+              name: duplicacy
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /etc/duplicacy
+              name: nfs
+              subPath: ".docker/config/duplicacy"
+            - mountPath: /var/cache/duplicacy
+              name: nfs
+              subPath: ".docker/cache/duplicacy"
+            - name: nfs
+              subPath: "ohthehugemanatee"
+              mountPath: "/storage"
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: duplicacy
+  labels:
+    run: duplicacy
+spec:
+  ports:
+  - port: 3875
+    protocol: TCP
+  selector:
+    run: duplicacy
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: duplicacy
+spec:
+  rules:
+  - host: duplicacy.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: duplicacy
+          servicePort: 3875
+  - host: duplicacy.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: duplicacy
+          servicePort: 3875
+  - host: duplicacy.germany.vertesi.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: duplicacy
+          servicePort: 3875
+
