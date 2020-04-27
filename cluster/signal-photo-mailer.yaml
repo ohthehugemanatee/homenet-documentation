@@ -12,13 +12,15 @@ spec:
       labels:
         run: signal-photo-mail
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
       containers:
       - name: signal-photo-mail
-        image: ohthehugemanatee/signal-photo-mail:latest-armhf
+        image: ohthehugemanatee/signal-photo-mail:latest-x64
         env:
           - name: MYPHONE 
             valueFrom:
