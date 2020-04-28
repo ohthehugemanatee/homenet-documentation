@@ -38,8 +38,9 @@ spec:
             - mountPath: "/etc/duplicacy"
               name: nfs
               subPath: ".docker/config/duplicacy"
-            - mountPath: /var/cache/duplicacy
-              name: ramdisk
+            - mountPath: "/var/cache/duplicacy"
+              name: nfs
+              subPath: ".docker/cache/duplicacy"
             - name: nfs
               mountPath: "/storage"
 ---
