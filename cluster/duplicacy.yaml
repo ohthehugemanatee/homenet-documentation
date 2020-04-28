@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: duplicacy-nextcloud
+  name: duplicacy
 spec:
   selector:
     matchLabels:
-      run: duplicacy-nextcloud
+      run: duplicacy
   replicas: 1
   strategy:
     type: Recreate
   template:
     metadata:
         labels:
-          run: duplicacy-nextcloud
+          run: duplicacy
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
@@ -35,14 +35,12 @@ spec:
               name: duplicacy
               protocol: TCP
           volumeMounts:
-            - mountPath: /etc/duplicacy
+            - mountPath: "/etc/duplicacy"
               name: nfs
               subPath: ".docker/config/duplicacy"
             - mountPath: /var/cache/duplicacy
-              name: nfs
-              subPath: ".docker/cache/duplicacy"
+              name: ramdisk
             - name: nfs
-              subPath: "ohthehugemanatee"
               mountPath: "/storage"
 ---
 
