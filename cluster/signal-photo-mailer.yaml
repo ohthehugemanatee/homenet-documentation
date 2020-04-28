@@ -20,7 +20,7 @@ spec:
             claimName: nfs-claim
       containers:
       - name: signal-photo-mail
-        image: ohthehugemanatee/signal-photo-mail:latest-x64
+        image: ohthehugemanatee/signal-photo-mail
         env:
           - name: MYPHONE 
             valueFrom:
