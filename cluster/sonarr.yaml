@@ -81,6 +81,9 @@ spec:
             - name: nfs
               mountPath: "/tv"
               subPath: "media/TV Shows"
+            - name: nfs
+              mountPath: "/data"
+              subPath: "media/Downloads"
 ---
 
 apiVersion: v1
