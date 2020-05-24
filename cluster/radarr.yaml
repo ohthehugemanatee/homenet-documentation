@@ -81,6 +81,9 @@ spec:
             - name: nfs
               mountPath: "/movies"
               subPath: "media/Movies"
+            - name: nfs
+              mountPath: "/data"
+              subPath: "media/Downloads"
 
 ---
 
