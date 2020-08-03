@@ -1,44 +1,56 @@
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  labels:
-    run: db-sync-checking
+  name: db-sync-checking
 spec:
-  containers:
-  - image: ohthehugemanatee/db-ynab-sync:changed-scopes
-    name: db-sync-checking
-    ports:
-    - containerPort: 3000
-      name: dbsyncchecking
-      protocol: TCP
-    env:
-    - name: DB_CLIENT_ID
-      valueFrom:
-        secretKeyRef:
-          key: client-id
-          name: db-sync
-    - name: DB_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          key: client-id
-          name: db-sync
-    - name: YNAB_SECRET
-      valueFrom:
-        secretKeyRef:
-          key: ynab-secret
-          name: db-sync
-    - name: DB_API_ENDPOINT_HOSTNAME
-      value: https://api.db.com/
-    - name: REDIRECT_BASE_URL
-      value: https://db-ynab-sync.germany.vertesi.com/
-    - name: DB_ACCOUNT
-      value: DE95370700240551595200
-    - name: YNAB_BUDGET_ID
-      value: 3f5062ae-c23d-4ce5-b2ec-b2a243fcb38e
-    - name: YNAB_ACCOUNT_ID
-      value: 0ec1bbc6-25c5-4f3c-af3a-97ed3b1fb3a2
-  nodeSelector:
-    kubernetes.io/arch: amd64
+  selector:
+    matchLabels:
+      run: db-sync-checking
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: db-sync-checking
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+      - image: ohthehugemanatee/db-ynab-sync:changed-scopes
+        name: db-sync-checking
+        ports:
+        - containerPort: 3000
+          name: dbsyncchecking
+          protocol: TCP
+        env:
+        - name: DB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: client-id
+              name: db-sync
+        - name: DB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: client-id
+              name: db-sync
+        - name: YNAB_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: ynab-secret
+              name: db-sync
+        - name: DB_API_ENDPOINT_HOSTNAME
+          value: https://api.db.com/
+        - name: REDIRECT_BASE_URL
+          value: https://db-ynab-sync.germany.vertesi.com/
+        - name: DB_ACCOUNT
+          value: DE95370700240551595200
+        - name: YNAB_BUDGET_ID
+          value: 3f5062ae-c23d-4ce5-b2ec-b2a243fcb38e
+        - name: YNAB_ACCOUNT_ID
+          value: 0ec1bbc6-25c5-4f3c-af3a-97ed3b1fb3a2
+        ports:
+        - containerPort: 3000
+          name: dbsyncchecking
+          protocol: TCP
 
 ---
 
