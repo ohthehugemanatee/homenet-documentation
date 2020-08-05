@@ -15,7 +15,7 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       containers:
-      - image: ohthehugemanatee/db-ynab-sync:changed-scopes
+      - image: ohthehugemanatee/db-ynab-sync:0.9.5
         name: db-sync-checking
         ports:
         - containerPort: 3000
@@ -30,7 +30,7 @@ spec:
         - name: DB_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
-              key: client-id
+              key: client-secret
               name: db-sync
         - name: YNAB_SECRET
           valueFrom:
