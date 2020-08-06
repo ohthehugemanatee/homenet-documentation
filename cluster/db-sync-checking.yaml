@@ -96,7 +96,7 @@ spec:
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: callout
+  name: db-sync-checking
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
@@ -107,7 +107,7 @@ spec:
       template:
         spec:
           containers:
-          - name: callout
+          - name: curl
             image: buildpack-deps:curl
             args:
             - /bin/sh
