@@ -96,7 +96,7 @@ spec:
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: db-sync-checking
+  name: db-sync-checking-cron
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
