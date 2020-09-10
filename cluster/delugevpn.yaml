@@ -13,14 +13,14 @@ spec:
         run: delugevpn
     spec:
       nodeSelector:
-        beta.kubernetes.io/arch: arm
+        beta.kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
       containers:
       - name: delugevpn
-        image: ledokun/armhf-arch-delugevpn
+        image: binhex/arch-delugevpn
         ports:
           - containerPort: 8112
           - containerPort: 58846
