@@ -84,6 +84,12 @@ spec:
             - name: nfs
               mountPath: "/data"
               subPath: "media/Downloads"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8989
+            initialDelaySeconds: 60
+            periodSeconds: 30 
 ---
 
 apiVersion: v1
