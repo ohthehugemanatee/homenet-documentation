@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflare-ddns
+spec:
+  selector:
+    matchLabels:
+      run: cloudflare-ddns
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+        labels:
+          run: cloudflare-ddns
+    spec:
+      containers:
+        - name: cloudflare-ddns
+          image: oznu/cloudflare-ddns
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-ddns
+                  key: token
+            - name: ZONE
+              value: "vertesi.com"
+            - name: SUBDOMAIN
+              value: "germany"
