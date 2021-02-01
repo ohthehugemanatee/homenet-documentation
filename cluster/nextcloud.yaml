@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: nextcloud
+  labels:
+    app: nextcloud
+spec:
+  selector:
+    matchLabels:
+      run: nextcloud
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: nextcloud
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+        - name: nextcloud
+          image: ghcr.io/linuxserver/nextcloud
+          startupProbe:
+            httpGet:
+              path: /login
+              port: 80
+            failureThreshold: 40
+            periodSeconds: 10 
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 80
+            failureThreshold: 1
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 3
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+            - name: "OVERWRITEHOST"
+              value: "nextcloud.cluster.vert"
+          ports:
+            - containerPort: 80
+              name: nextcloud
+              protocol: TCP
+          volumeMounts:
+            - name: nfs
+              mountPath: "/data"
+              subPath: "nextcloud"
+            - name: nfs
+              mountPath: "/config"
+              subPath: ".docker/config/nextcloud"
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  labels:
+    run: nextcloud
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    run: nextcloud
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nextcloud
+spec:
+  rules:
+  - host: nextcloud.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nextcloud
+          servicePort: 80
+  - host: nextcloud.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nextcloud
+          servicePort: 80
+  - host: nextcloud.germany.vertesi.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nextcloud
+          servicePort: 80
