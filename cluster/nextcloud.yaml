@@ -73,6 +73,22 @@ spec:
     run: nextcloud
 
 ---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nextcloud-dav
+  annotations:
+    traefik.ingress.kubernetes.io/rewrite-target: /remote.php/dav/
+spec:
+  rules:
+  - host: germany.vertesi.com
+    http:
+      paths:
+      - path: /.well-known/(card|cal)dav
+        backend:
+          serviceName: nextcloud
+          servicePort: http
+---
 
 apiVersion: extensions/v1beta1
 kind: Ingress
@@ -94,10 +110,12 @@ spec:
         backend:
           serviceName: nextcloud
           servicePort: 80
-  - host: nextcloud.germany.vertesi.com
+  - host: germany.vertesi.com
     http:
       paths:
       - path: /
         backend:
           serviceName: nextcloud
           servicePort: 80
+
+
