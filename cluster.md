@@ -4,14 +4,25 @@ This is a mixed-CPU k3s cluster with agents on all available servers apart from 
 
 Presently running:
 
-* Deluge + OpenVPN - connects to privateInternetAccess and torrents. Web UI at [http://deluge.cluster.vert](http://deluge.cluster.vert/)
-* NzbGet - NewsBin downloader. Web UI at [http://nzbget.cluster.vert](http://nzbget.cluster.vert)
-* Sonarr - searches iptorrents and downloads episodes of TV shows. Can "watch" series automatically to download the latest episodes. Web UI at [http://sonarr.cluster.vert](http://sonarr.cluster.vert)
-* Radarr - like Sonarr, but for movies. Web UI: [http://radarr.cluster.vert](http://radarr.cluster.vert)
-* Jackett - Translation layer beteween Sonarr and IPTorrents. Web UI: [http://jackett.cluster.vert/](http://jackett.cluster.vert/UI/Dashboard)
+* Deluge + OpenVPN - connects to privateInternetAccess and torrents. 
+* NzbGet - NewsBin downloader. 
+* Sonarr - searches iptorrents and downloads episodes of TV shows. Can "watch" series automatically to download the latest episodes. 
+* Radarr - like Sonarr, but for movies. 
+* Nextcloud - my files and collaboration in the cloud.
+* Signal photo mailer - my own script that listens to my family Signal group, and sends photos to my frame automatically
+* cloudflare-ddns - a cloudflare DNS updater to keep my DNS current
+* duplicacy - backups to Azure Blob storage
 
-None of this is accessible outside the homenet, except through the `frontdoor` instance.
+None of this is accessible outside the homenet, except for Nextcloud which gets a Letsencrypt cert.
 
-Configuration lives in `/mnt/storage/.docker/config`. All storage is shared out over NFS. 
+Configuration lives in my NFS storage under `/mnt/storage/.docker/config`. 
 
-All pods are using their latest versions with (implicit) image pull policy of "always". There's a root cronjob that runs weekly to delete all pods, forcing an image update.
+## TODO
+
+* Migrate plex
+* Migrate mariadb
+* Consider migrating Wireguard
+* Consider migrating netdata monitoring
+* Setup Organizr or similar again
+* Document necessary secrets
+
