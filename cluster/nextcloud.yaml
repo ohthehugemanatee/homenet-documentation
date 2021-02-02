@@ -80,6 +80,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/rewrite-target: /remote.php/dav/
     traefik.frontend.priority: "1"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   rules:
   - host: germany.vertesi.com
@@ -89,6 +90,10 @@ spec:
         backend:
           serviceName: nextcloud
           servicePort: http
+  tls:
+  - hosts:
+    - germany.vertesi.com
+    secretName: germany-vertesi-com-tls
 ---
 
 apiVersion: extensions/v1beta1
@@ -97,6 +102,7 @@ metadata:
   name: nextcloud
   annotations:
     traefik.frontend.priority: "2"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   rules:
   - host: nextcloud.cluster.vert
@@ -120,5 +126,8 @@ spec:
         backend:
           serviceName: nextcloud
           servicePort: 80
-
+  tls:
+  - hosts:
+    - germany.vertesi.com
+    secretName: germany-vertesi-com-tls
 
