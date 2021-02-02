@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: netdata
+subsets:
+  - addresses:
+      - ip: 192.168.1.30
+    ports:
+      - port: 19999
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netdata
+spec:
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 19999
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: netdata
+spec:
+  rules:
+  - host: netdata.vert
+    http:
+      paths:
+      - backend:
+          serviceName: netdata
+          servicePort: 80
+        path: /
+  - host: netdata.cluster.vert
+    http:
+      paths:
+      - backend:
+          serviceName: netdata
+          servicePort: 80
+        path: /
