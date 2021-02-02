@@ -79,6 +79,7 @@ metadata:
   name: nextcloud-dav
   annotations:
     traefik.ingress.kubernetes.io/rewrite-target: /remote.php/dav/
+    traefik.frontend.priority: "1"
 spec:
   rules:
   - host: germany.vertesi.com
@@ -94,6 +95,8 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: nextcloud
+  annotations:
+    traefik.frontend.priority: "2"
 spec:
   rules:
   - host: nextcloud.cluster.vert
