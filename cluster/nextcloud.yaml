@@ -27,7 +27,7 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 30
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
@@ -36,7 +36,7 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 10
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -45,7 +45,7 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 10
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
