@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+spec:
+  selector:
+    matchLabels:
+      run: mariadb
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        run: mariadb
+    spec:
+      nodeSelector:
+        beta.kubernetes.io/arch: amd64
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+      - name: mariadb
+        image: linuxserver/mariadb
+        ports:
+          - containerPort: 3306
+        env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: "Europe/Berlin"
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mariadb
+                key: rootpass
+          - name: MYSQL_USER
+            value: "nextcloud"
+          - name: MYSQL_DATABASE
+            value: "nextcloud"
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mariadb
+                key: nextcloudpass
+        volumeMounts:
+          - name: nfs
+            mountPath: "/config"
+            subPath: ".docker/config/mariadb"
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  labels:
+    run: mariadb
+spec:
+  ports:
+  - name: db
+    port: 3306
+    protocol: TCP
+  selector:
+    run: mariadb
+
