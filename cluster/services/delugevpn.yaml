@@ -21,6 +21,7 @@ spec:
       containers:
       - name: delugevpn
         image: binhex/arch-delugevpn
+        imagePullPolicy: Always
         ports:
           - containerPort: 8112
           - containerPort: 58846
