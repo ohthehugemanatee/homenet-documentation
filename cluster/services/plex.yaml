@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex
+spec:
+  selector:
+    matchLabels:
+      run: plex
+  replicas: 1 
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        run: plex
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+        - name: iscsivol
+          iscsi:
+             targetPortal: 192.168.1.50
+             iqn: "iqn.2003-01.org.linux-scsi.warehouse:plex"
+             chapAuthDiscovery: false
+             chapAuthSession: false
+             lun: 0
+             fsType: 'ext4'
+             readOnly: false
+      containers:
+        - name: plex
+          image: linuxserver/plex
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 32400
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - mountPath: /config
+              name: iscsivol
+            - name: nfs
+              mountPath: "/shared"
+            - name: nfs
+              mountPath: "/data/movies"
+              subPath: "media/Movies"
+            - name: nfs
+              mountPath: "/movies"
+              subPath: "media/Movies"
+            - name: nfs
+              mountPath: "/data/music"
+              subPath: "media/Music"
+            - name: nfs
+              mountPath: "/music"
+              subPath: "media/Music"
+            - name: nfs
+              mountPath: "/data/tv"
+              subPath: "media/TV Shows"
+            - name: nfs
+              mountPath: "/tv"
+              subPath: "media/TV Shows"
+            - name: nfs
+              mountPath: "/transcode"
+              subPath: "media/.plex-transcode"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  labels:
+    run: plex
+spec:
+  ports:
+  - port: 32400
+    protocol: TCP
+  selector:
+    run: plex
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: plex
+spec:
+  rules:
+  - host: plex.cluster.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: plex
+          servicePort: 32400
+  - host: plex.germany.vertesi.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: plex
+          servicePort: 32400
+  - host: plex.vert
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: plex
+          servicePort: 32400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex-lb
+  labels:
+    run: plex-lb
+spec:
+  type: LoadBalancer
+  selector:
+    run: plex
+  ports:
+    - protocol: TCP
+      port: 32400
