@@ -23,6 +23,19 @@ spec:
         image: linuxserver/mariadb
         ports:
           - containerPort: 3306
+        livenessProbe:
+          exec:
+            command:
+              - /bin/bash
+              - -ec
+              - |
+                password_aux="${MYSQL_ROOT_PASSWORD:-}"
+                mysqladmin status -uroot -p"${password_aux}"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
         env:
           - name: PGID
             value: "1000"
