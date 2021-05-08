@@ -20,23 +20,23 @@ spec:
             claimName: nfs-claim
       containers:
         - name: nextcloud
-          image: ghcr.io/linuxserver/nextcloud
+          image: ghcr.io/linuxserver/nextcloud:php8
           startupProbe:
             httpGet:
               path: /status.php
               port: 80
             initialDelaySeconds: 120
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 30
+            periodSeconds: 60
+            timeoutSeconds: 60
+            failureThreshold: 3
             successThreshold: 1
           readinessProbe:
             httpGet:
               path: /status.php
               port: 80
             initialDelaySeconds: 120
-            periodSeconds: 10
-            timeoutSeconds: 5
+            periodSeconds: 60
+            timeoutSeconds: 60
             failureThreshold: 3
             successThreshold: 1
           livenessProbe:
@@ -44,8 +44,8 @@ spec:
               path: /status.php
               port: 80
             initialDelaySeconds: 120
-            periodSeconds: 10
-            timeoutSeconds: 5
+            periodSeconds: 60
+            timeoutSeconds: 60 
             failureThreshold: 3
             successThreshold: 1
           env:
@@ -68,11 +68,6 @@ spec:
             - name: nfs
               mountPath: "/config"
               subPath: ".docker/config/nextcloud"
-          resources:
-            limits:
-              cpu: 500m
-          requests:
-            cpu: 200m 
 ---
 
 apiVersion: v1
