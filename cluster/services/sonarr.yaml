@@ -15,34 +15,66 @@ spec:
           run: sonarr
     spec:
       volumes:
+        - name: ramdisk
+          emptyDir:
+            sizeLimit: 400M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-        - name: iscsivol
-          iscsi:
-             targetPortal: 192.168.1.50
-             iqn: "iqn.2003-01.org.linux-scsi.warehouse:sonarr"
-             chapAuthDiscovery: false
-             chapAuthSession: false
-             lun: 0
-             fsType: 'ext4'
-             readOnly: false
+        - emptyDir: {}
+          name: sonarr-ramdisk-mount
       containers:
+        - name: sonarr-config
+          command:
+            - sh
+            - -c
+            - |-
+              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
+              mkfs.ext4 /ramdisk/image.ext4; \
+              mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
+              cp -fvpR /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
+              trap 'exit 0' 15; \
+              while true; do \
+              sleep 890; \
+              sync /mnt/sonarr-ramdisk-mount/*; \
+              fsfreeze --freeze /mnt/sonarr-ramdisk-mount; \
+              sleep 10; \
+              cp -fvp /mnt/sonarr-ramdisk-mount/*.* /sonarr-config/; \
+              fsfreeze --unfreeze /mnt/sonarr-ramdisk-mount; \
+              done;
+          image: ubuntu
+          imagePullPolicy: Always
+          resources: {}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: ramdisk
+              mountPath: /ramdisk
+            - name: nfs
+              mountPath: /sonarr-config
+              subPath: ".docker/config/sonarr"
+            - mountPath: /mnt/sonarr-ramdisk-mount
+              mountPropagation: Bidirectional
+              name: sonarr-ramdisk-mount
         - name: sonarr
+          command:
+            - sh
+            - -c
+            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
           env:
             - name: PUID
               value: "1000"
             - name: PGID
               value: "1000"
           image: linuxserver/sonarr
-          imagePullPolicy: Always
           ports:
             - containerPort: 8989
               name: sonarr
               protocol: TCP
           volumeMounts:
             - mountPath: /config
-              name: iscsivol
+              mountPropagation: HostToContainer
+              name: sonarr-ramdisk-mount
             - name: nfs
               mountPath: "/downloads"
               subPath: "media/Downloads"
