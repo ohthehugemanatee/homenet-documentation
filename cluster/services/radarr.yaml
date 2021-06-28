@@ -15,22 +15,53 @@ spec:
         run: radarr
     spec:
       volumes:
+        - name: ramdisk
+          emptyDir:
+            sizeLimit: 400M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-        - name: iscsivol
-          iscsi:
-             targetPortal: 192.168.1.50
-             iqn: "iqn.2003-01.org.linux-scsi.warehouse:radarr"
-             chapAuthDiscovery: false
-             chapAuthSession: false
-             lun: 0
-             fsType: 'ext4'
-             readOnly: false
+        - emptyDir: {}
+          name: radarr-ramdisk-mount
       containers:
-        - name: radarr
-          image: linuxserver/radarr
+        - name: radarr-config
+          command:
+            - sh
+            - -c
+            - |-
+              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
+              mkfs.ext4 /ramdisk/image.ext4; \
+              mount /ramdisk/image.ext4 /mnt/radarr-ramdisk-mount; \
+              cp -fvpR /radarr-config/* /mnt/radarr-ramdisk-mount; \
+              trap 'exit 0' 15; \
+              while true; do \
+              sleep 890; \
+              sync /mnt/radarr-ramdisk-mount/*; \
+              fsfreeze --freeze /mnt/radarr-ramdisk-mount; \
+              sleep 10; \
+              cp -fvp /mnt/radarr-ramdisk-mount/*.* /radarr-config/; \
+              fsfreeze --unfreeze /mnt/radarr-ramdisk-mount; \
+              done;
+          image: ubuntu
           imagePullPolicy: Always
+          resources: {}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: ramdisk
+              mountPath: /ramdisk
+            - name: nfs
+              mountPath: /radarr-config
+              subPath: ".docker/config/radarr"
+            - mountPath: /mnt/radarr-ramdisk-mount
+              mountPropagation: Bidirectional
+              name: radarr-ramdisk-mount
+        - name: radarr
+          command:
+            - sh
+            - -c
+            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
+          image: linuxserver/radarr
           ports:
             - containerPort: 7878
           env:
@@ -42,7 +73,8 @@ spec:
               value: "Europe/Berlin"
           volumeMounts:
             - mountPath: /config
-              name: iscsivol
+              mountPropagation: HostToContainer
+              name: radarr-ramdisk-mount
             - name: nfs
               mountPath: "/downloads"
               subPath: "media/Downloads"
