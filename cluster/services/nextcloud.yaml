@@ -39,15 +39,6 @@ spec:
             timeoutSeconds: 60
             failureThreshold: 3
             successThreshold: 1
-          livenessProbe:
-            httpGet:
-              path: /status.php
-              port: 80
-            initialDelaySeconds: 120
-            periodSeconds: 60
-            timeoutSeconds: 60 
-            failureThreshold: 3
-            successThreshold: 1
           env:
             - name: PUID
               value: "1000"
