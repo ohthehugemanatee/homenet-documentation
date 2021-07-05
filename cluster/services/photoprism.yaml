@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photoprism
+spec:
+  selector:
+    matchLabels:
+      run: photoprism
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: photoprism
+    spec:
+      volumes:
+      - name: nfs
+        persistentVolumeClaim:
+          claimName: nfs-claim
+      containers:
+      - name: photoprism
+        image: photoprism/photoprism:latest
+        env:
+        - name: PHOTOPRISM_DEBUG
+          value: "true"
+        - name: PHOTOPRISM_CACHE_PATH
+          value: /assets/cache
+        - name: PHOTOPRISM_IMPORT_PATH
+          value: /assets/photos/import
+        - name: PHOTOPRISM_EXPORT_PATH
+          value: /assets/photos/export
+        - name: PHOTOPRISM_ORIGINALS_PATH
+          value: /originals
+        - name: PHOTOPRISM_DATABASE_DRIVER
+          value: mysql
+        - name: PHOTOPRISM_SITE_URL
+          value: photos.germany.vertesi.com
+        - name: PHOTOPRISM_HTTP_PORT
+          value: "2342"
+        - name: PHOTOPRISM_DATABASE_SERVER
+          value: "mariadb"
+        - name: PHOTOPRISM_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: photoprism
+              key: admin-password
+        - name: PHOTOPRISM_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: photoprism
+              key: database-password
+        ports:
+        - containerPort: 2342
+          name: http
+          protocol: TCP
+        volumeMounts:
+        - name: nfs
+          mountPath: "/originals/archive"
+          subPath: "nextcloud/ohthehugemantee/files/archive/Photos"
+        - name: nfs
+          mountPath: "/originals/camera-roll"
+          subPath: "nextcloud/ohthehugemantee/files/Camera Uploads"
+        - name: nfs
+          mountPath: "/assets"
+          subPath: ".docker/config/photoprism"
+        readinessProbe:
+          httpGet:
+            path: /api/v1/status
+            port: http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photoprism
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http
+  selector:
+    run: photoprism
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: photoprism
+  annotations:
+    traefik.frontend.priority: "2"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+spec:
+  rules:
+  - host: photos.germany.vertesi.com
+    http:
+      paths:
+      - backend:
+          serviceName: photoprism
+          servicePort: http
+        path: /
+  tls:
+  - hosts:
+    - photos.germany.vertesi.com
+    secretName: photos-germany-vertesi-com-tls
+
+
