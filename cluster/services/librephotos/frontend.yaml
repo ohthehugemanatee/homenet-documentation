@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: librephotos
+spec:
+  selector:
+    matchLabels:
+      run: frontend
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: reallibrephotos/librephotos-frontend:dev
+        ports:
+          - containerPort: 3000
+            name: frontend
+            protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: librephotos
+spec:
+  ports:
+  - name: frontend
+    port: 3000
+    protocol: TCP
+    targetPort: frontend
+  selector:
+    run: frontend
