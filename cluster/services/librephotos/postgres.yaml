@@ -21,6 +21,13 @@ spec:
       containers:
       - name: postgres
         image: postgres:13
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
         command: 
           - docker-entrypoint.sh
           - -cfsync=false

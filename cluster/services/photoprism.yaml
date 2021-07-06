@@ -19,6 +19,13 @@ spec:
       containers:
       - name: photoprism
         image: thielepaul/photoprism:db-api
+        resources:
+          requests:
+            memory: "1500Mi"
+            cpu: "2500m"
+          limits:
+            memory: "2000Mi"
+            cpu: "4000m"
         env:
         - name: PHOTOPRISM_DEBUG
           value: "false"

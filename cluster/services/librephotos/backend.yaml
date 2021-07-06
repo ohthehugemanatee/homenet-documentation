@@ -20,6 +20,13 @@ spec:
       containers:
       - name: backend
         image: reallibrephotos/librephotos:dev
+        resources:
+          requests:
+            memory: "2700Mi"
+            cpu: "2000m"
+          limits:
+            memory: "4000Mi"
+            cpu: "4000m"
         env:
           - name: BACKEND_HOST
             value: backend

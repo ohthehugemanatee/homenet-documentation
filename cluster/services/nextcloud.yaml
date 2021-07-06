@@ -21,6 +21,13 @@ spec:
       containers:
         - name: nextcloud
           image: ghcr.io/linuxserver/nextcloud:php8
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "1250m"
+            limits:
+              memory: "2048Mi"
+              cpu: "4000m" 
           startupProbe:
             httpGet:
               path: /status.php
