@@ -18,10 +18,10 @@ spec:
           claimName: nfs-claim
       containers:
       - name: photoprism
-        image: photoprism/photoprism:latest
+        image: thielepaul/photoprism:db-api
         env:
         - name: PHOTOPRISM_DEBUG
-          value: "true"
+          value: "false"
         - name: PHOTOPRISM_CACHE_PATH
           value: /assets/cache
         - name: PHOTOPRISM_IMPORT_PATH
