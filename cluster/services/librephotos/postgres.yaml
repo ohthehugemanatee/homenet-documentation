@@ -1,0 +1,64 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: librephotos
+spec:
+  selector:
+    matchLabels:
+      run: postgres
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: postgres
+    spec:
+      volumes:
+      - name: nfs
+        persistentVolumeClaim:
+          claimName: nfs-claim
+      containers:
+      - name: postgres
+        image: postgres:13
+        command: 
+          - docker-entrypoint.sh
+          - -cfsync=false
+          - -csynchronous_commit=false 
+          - -cfull_page_writes=false 
+          - -crandom_page_cost=1.0
+        env:
+          - name: POSTGRES_DB
+            value: librephotos
+          - name: POSTGRES_USER
+            valueFrom:
+              secretKeyRef:
+                name: librephotos
+                key: db-username
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: librephotos
+                key: db-password
+        volumeMounts:
+          - name: nfs
+            mountPath: "/var/lib/postgresql/data"
+            subPath: ".docker/config/postgres"
+        ports:
+          - containerPort: 5432
+            name: postgres
+            protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: librephotos
+spec:
+  ports:
+  - name: postgres
+    port: 5432
+    protocol: TCP
+    targetPort: postgres
+  selector:
+    run: postgres

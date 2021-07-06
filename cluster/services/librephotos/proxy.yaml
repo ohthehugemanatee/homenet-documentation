@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: librephotos
+spec:
+  selector:
+    matchLabels:
+      run: proxy
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: proxy
+    spec:
+      volumes:
+      - name: nfs
+        persistentVolumeClaim:
+          claimName: nfs-claim
+      containers:
+      - name: proxy
+        image: reallibrephotos/librephotos-proxy:dev
+        volumeMounts:
+          - name: nfs
+            mountPath: "/data"
+            subPath: "nextcloud/ohthehugemantee/files/archive/Photos"
+          - name: nfs
+            mountPath: "/protected_media"
+            subPath: ".docker/config/librephotos/protected_media"
+        ports:
+          - containerPort: 80
+            name: proxy
+            protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: librephotos
+spec:
+  ports:
+  - name: proxy
+    port: 80
+    protocol: TCP
+    targetPort: proxy
+  selector:
+    run: proxy
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: librephotos
+  namespace: librephotos
+  annotations:
+    traefik.frontend.priority: "2"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+spec:
+  rules:
+  - host: librephotos.germany.vertesi.com
+    http:
+      paths:
+      - backend:
+          serviceName: proxy
+          servicePort: proxy
+        path: /
+  tls:
+  - hosts:
+    - librephotos.germany.vertesi.com
+    secretName: librephotos-germany-vertesi-com-tls
+
+
