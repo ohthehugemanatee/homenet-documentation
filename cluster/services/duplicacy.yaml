@@ -77,11 +77,4 @@ spec:
         backend:
           serviceName: duplicacy
           servicePort: 3875
-  - host: duplicacy.germany.vertesi.com
-    http:
-      paths:
-      - path: /
-        backend:
-          serviceName: duplicacy
-          servicePort: 3875
 
