@@ -73,11 +73,4 @@ spec:
         backend:
           serviceName: nzbget
           servicePort: 6789
-  - host: nzbget.germany.vertesi.com
-    http:
-      paths:
-      - path: /
-        backend:
-          serviceName: nzbget
-          servicePort: 6789
 
