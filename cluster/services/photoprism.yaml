@@ -21,11 +21,11 @@ spec:
         image: thielepaul/photoprism:db-api
         resources:
           requests:
-            memory: "1500Mi"
-            cpu: "2500m"
+            memory: "256Mi"
+            cpu: "300m"
           limits:
-            memory: "2000Mi"
-            cpu: "4000m"
+            memory: "1800Mi"
+            cpu: "2000m"
         env:
         - name: PHOTOPRISM_DEBUG
           value: "false"
