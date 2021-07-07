@@ -115,13 +115,6 @@ spec:
         backend:
           serviceName: radarr
           servicePort: 7878
-  - host: radarr.germany.vertesi.com
-    http:
-      paths:
-      - path: /
-        backend:
-          serviceName: radarr
-          servicePort: 7878
   - host: radarr.vert
     http:
       paths:
