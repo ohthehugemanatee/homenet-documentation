@@ -74,22 +74,8 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: db-sync-checking
-  annotations:
-    traefik.frontend.priority: "2"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    ingress.kubernetes.io/hsts-max-age: "15552000"
-    ingress.kubernetes.io/hsts-include-subdomains: "true"
-    ingress.kubernetes.io/hsts-preload: "true"
-    traefik.ingress.kubernetes.io/redirect-entry-point: https
 spec:
   rules:
-  - host: db-ynab-sync.germany.vertesi.com
-    http:
-      paths:
-      - backend:
-          serviceName: db-sync-checking
-          servicePort: 3000
-        path: /
   - host: db-ynab-sync.cluster.vert
     http:
       paths:
@@ -97,9 +83,4 @@ spec:
           serviceName: db-sync-checking
           servicePort: 3000
         path: /
-  tls:
-  - hosts:
-    - db-ynab-sync.germany.vertesi.com
-    secretName: db--ynab--sync-germany-vertesi-com-tls
-
 
