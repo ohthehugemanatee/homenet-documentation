@@ -37,6 +37,12 @@ spec:
           value: /assets/photos/export
         - name: PHOTOPRISM_ORIGINALS_PATH
           value: /originals
+        - name: PHOTOPRISM_ORIGINALS_LIMIT
+          value: "3000"
+        - name: PHOTOPRISM_DETECT_NSFW
+          value: "true"
+        - name: PHOTOPRISM_HTTP_COMPRESSION
+          value: "gzip"
         - name: PHOTOPRISM_DATABASE_DRIVER
           value: mysql
         - name: PHOTOPRISM_SITE_URL
