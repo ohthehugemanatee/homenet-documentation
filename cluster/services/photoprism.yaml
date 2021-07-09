@@ -29,8 +29,8 @@ spec:
         env:
         - name: PHOTOPRISM_DEBUG
           value: "false"
-        - name: PHOTOPRISM_CACHE_PATH
-          value: /assets/cache
+        - name: PHOTOPRISM_STORAGE_PATH
+          value: /assets
         - name: PHOTOPRISM_IMPORT_PATH
           value: /assets/photos/import
         - name: PHOTOPRISM_EXPORT_PATH
