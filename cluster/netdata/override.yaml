@@ -1,0 +1,28 @@
+parent:
+  claiming:
+    enabled: true
+    token: "token-here"
+    rooms: "rooms-here"
+
+child:
+  claiming:
+    enabled: true
+    token: "token-here"
+    rooms: "rooms-here"
+  configs:
+    netdata:
+      data: |
+        [global]
+          memory mode = ram
+          history = 7200
+        [health]
+          enabled = yes
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: ""
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - netdata.k8s.local
+    - netdata.cluster.vert
+
