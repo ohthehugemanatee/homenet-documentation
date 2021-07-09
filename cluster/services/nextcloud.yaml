@@ -24,10 +24,10 @@ spec:
           resources:
             requests:
               memory: "512Mi"
-              cpu: "1250m"
+              cpu: "250m"
             limits:
               memory: "2048Mi"
-              cpu: "4000m" 
+              cpu: "2000m" 
           startupProbe:
             httpGet:
               path: /status.php
