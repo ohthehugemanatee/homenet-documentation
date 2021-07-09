@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: 
+  name: photoprism-index
+spec:
+  schedule: "0 */1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          volumes:
+            - name: nfs
+              persistentVolumeClaim:
+                claimName: nfs-claim
+          containers:
+            - name: photoprism
+              image: photoprism/photoprism
+              command: ["photoprism", "index"]
+              env:
+              - name: PHOTOPRISM_CACHE_PATH
+                value: /assets/cache
+              - name: PHOTOPRISM_IMPORT_PATH
+                value: /assets/photos/import
+              - name: PHOTOPRISM_EXPORT_PATH
+                value: /assets/photos/export
+              - name: PHOTOPRISM_ORIGINALS_PATH
+                value: /originals
+              - name: PHOTOPRISM_DATABASE_DRIVER
+                value: mysql
+              - name: PHOTOPRISM_SITE_URL
+                value: photos.germany.vertesi.com
+              - name: PHOTOPRISM_HTTP_PORT
+                value: "2342"
+              - name: PHOTOPRISM_DATABASE_SERVER
+                value: "mariadb"
+              - name: PHOTOPRISM_ADMIN_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: photoprism
+                    key: admin-password
+              - name: PHOTOPRISM_DATABASE_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: photoprism
+                    key: database-password
+              volumeMounts:
+                - name: nfs
+                  mountPath: "/originals/archive"
+                  subPath: "nextcloud/ohthehugemantee/files/archive/Photos"
+                - name: nfs
+                  mountPath: "/originals/camera-roll"
+                  subPath: "nextcloud/ohthehugemantee/files/Camera Uploads"
+                - name: nfs
+                  mountPath: "/assets"
+                  subPath: ".docker/config/photoprism"
+
