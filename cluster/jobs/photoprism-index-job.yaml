@@ -18,17 +18,32 @@ spec:
                 claimName: nfs-claim
           containers:
             - name: photoprism
-              image: photoprism/photoprism
+              image: photoprism/photoprism:preview
               command: ["photoprism", "index"]
+              resources:
+                requests:
+                  memory: "1000Mi"
+                  cpu: "1100m"
+                limits:
+                  memory: "1800Mi"
+                  cpu: "2000m"
               env:
-              - name: PHOTOPRISM_CACHE_PATH
-                value: /assets/cache
+              - name: PHOTOPRISM_DEBUG
+                value: "false"
+              - name: PHOTOPRISM_STORAGE_PATH
+                value: /assets
               - name: PHOTOPRISM_IMPORT_PATH
                 value: /assets/photos/import
               - name: PHOTOPRISM_EXPORT_PATH
                 value: /assets/photos/export
               - name: PHOTOPRISM_ORIGINALS_PATH
                 value: /originals
+              - name: PHOTOPRISM_ORIGINALS_LIMIT
+                value: "2000"
+              - name: PHOTOPRISM_DETECT_NSFW
+                value: "false"
+              - name: PHOTOPRISM_HTTP_COMPRESSION
+                value: "gzip"
               - name: PHOTOPRISM_DATABASE_DRIVER
                 value: mysql
               - name: PHOTOPRISM_SITE_URL
