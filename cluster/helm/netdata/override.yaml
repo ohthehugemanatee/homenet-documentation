@@ -13,8 +13,9 @@ child:
     netdata:
       data: |
         [global]
-          memory mode = ram
-          history = 7200
+          memory mode = dbengine
+          page cache size = 32
+          dbengine multihost disk space = 256
         [health]
           enabled = yes
 ingress:
