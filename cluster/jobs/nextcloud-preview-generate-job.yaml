@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: 
+  name: nextcloud-preview-generate
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          volumes:
+            - name: nfs
+              persistentVolumeClaim:
+                claimName: nfs-claim
+          containers:
+            - name: nextcloud
+              image: ghcr.io/linuxserver/nextcloud
+              command: ["/bin/sh", "-c"]
+              args:
+                - /init;
+                  apt update && apt install ffmpeg -y;
+                  sudo -u abc occ preview:pre-generate;
+                  echo done;
+              env:
+                - name: PUID
+                  value: "1000"
+                - name: PGID
+                  value: "1000"
+                - name: TZ
+                  value: "Europe/Berlin"
+              volumeMounts:
+                - name: nfs
+                  mountPath: "/data"
+                  subPath: "nextcloud"
+                - name: nfs
+                  mountPath: "/config"
+                  subPath: ".docker/config/nextcloud"
