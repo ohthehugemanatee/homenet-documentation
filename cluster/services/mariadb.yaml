@@ -15,6 +15,11 @@ spec:
       nodeSelector:
         beta.kubernetes.io/arch: amd64
       volumes:
+        - name: ramdisk
+          emptyDir:
+            sizeLimit: 500M
+            medium: Memory
+
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
@@ -68,6 +73,8 @@ spec:
           - name: nfs
             mountPath: "/config"
             subPath: ".docker/config/mariadb"
+          - name: ramdisk
+            mountPath: "/ramdisk"
 ---
 
 apiVersion: v1
