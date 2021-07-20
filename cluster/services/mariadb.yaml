@@ -81,13 +81,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mariadb
-  labels:
-    run: mariadb
 spec:
-  ports:
-  - name: db
-    port: 3306
-    protocol: TCP
+  type: LoadBalancer
   selector:
     run: mariadb
-
+  ports:
+    - port: 3306
+      targetPort: 3306
