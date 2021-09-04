@@ -32,18 +32,18 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 120
-            periodSeconds: 60
-            timeoutSeconds: 60
+            initialDelaySeconds: 20 
+            periodSeconds: 10
+            timeoutSeconds: 30
             failureThreshold: 3
             successThreshold: 1
           readinessProbe:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 120
-            periodSeconds: 60
-            timeoutSeconds: 60
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 30
             failureThreshold: 3
             successThreshold: 1
           livenessProbe:
@@ -51,8 +51,8 @@ spec:
               path: /status.php
               port: 80
             initialDelaySeconds: 120
-            periodSeconds: 30
-            timeoutSeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 30
             failureThreshold: 3
             successThreshold: 1
           env:
