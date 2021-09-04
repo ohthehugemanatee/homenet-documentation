@@ -32,7 +32,7 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 20 
+            initialDelaySeconds: 120 
             periodSeconds: 10
             timeoutSeconds: 30
             failureThreshold: 3
@@ -84,6 +84,7 @@ metadata:
   labels:
     run: nextcloud
 spec:
+  sessionAffinity: "ClientIP"
   ports:
   - port: 80
     protocol: TCP
