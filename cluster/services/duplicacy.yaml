@@ -26,6 +26,11 @@ spec:
           env:
             - name: "TZ"
               value: "Europe/Berlin"
+            - name: "DWE_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: duplicacy
+                  key: password
           image: erichough/duplicacy
           ports:
             - containerPort: 3875
