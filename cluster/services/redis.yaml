@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        name: redis
+    spec:
+      containers:
+      - name: redis-server
+        image: redis
+        args: ["--appendonly", "yes"]
+        ports:
+          - name: redis-server
+            containerPort: 6379
+        volumeMounts:
+          - name: nfs
+            subPath: ".docker/config/redis"
+            mountPath: "/data"
+        env:
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      protocol: TCP
+      port: 6379
+      targetPort: 6379
