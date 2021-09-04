@@ -22,11 +22,11 @@ spec:
               command: ["photoprism", "index"]
               resources:
                 requests:
-                  memory: "1000Mi"
-                  cpu: "1100m"
+                  memory: "2000Mi"
+                  cpu: "1500m"
                 limits:
-                  memory: "1800Mi"
-                  cpu: "2000m"
+                  memory: "3000Mi"
+                  cpu: "3000m"
               env:
               - name: PHOTOPRISM_DEBUG
                 value: "false"
@@ -41,7 +41,7 @@ spec:
               - name: PHOTOPRISM_ORIGINALS_PATH
                 value: /originals
               - name: PHOTOPRISM_ORIGINALS_LIMIT
-                value: "3000"
+                value: "2000"
               - name: PHOTOPRISM_DETECT_NSFW
                 value: "false"
               - name: PHOTOPRISM_HTTP_COMPRESSION
