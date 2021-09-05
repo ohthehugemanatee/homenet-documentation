@@ -19,7 +19,7 @@ jobs:
       - name: available platforms
         run: echo ${{ steps.buildx.outputs.platforms }}
       - name: Log in to the Container registry
-        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login index.docker.io -u ${{ github.actor }} --password-stdin
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: build the image and push
         run: |
           cd cluster/Dockerfiles/nextcloud && 
