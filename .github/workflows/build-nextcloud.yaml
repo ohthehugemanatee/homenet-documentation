@@ -25,18 +25,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: build the image (arch64)
+      - name: build the image and push
         run: |
           cd cluster/Dockerfiles/nextcloud && 
           docker buildx build \
           --push \
           --tag ${{ github.actor }}/docker-nextcloud:latest \
-          --platform linux/arm64 . 
-      - name: build the image (amd64)
-        run: |
-          cd cluster/Dockerfiles/nextcloud && 
-          docker buildx build \
-          --push \
-          --tag ${{ github.actor }}/docker-nextcloud:latest \
-          --platform linux/amd64 . 
-          
+          --platform linux/arm64,linux/amd64 . 
