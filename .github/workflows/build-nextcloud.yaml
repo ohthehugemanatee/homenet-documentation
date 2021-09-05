@@ -26,4 +26,4 @@ jobs:
           docker buildx build \
           --push \
           --tag ghcr.io/${{ github.actor }}/docker-nextcloud:latest \
-          --platform linux/arm64,linux/amd64 . 
+          --platform linux/arm64,linux/amd64,linux/arm/v7 . 
