@@ -25,5 +25,5 @@ jobs:
           cd cluster/Dockerfiles/nextcloud && 
           docker buildx build \
           --push \
-          --tag ghcr.io/${{ github.actor }}/docker-nextcloud:latest \
+          --tag ghcr.io/${{ github.actor }}/docker-nextcloud:multiarch \
           --platform linux/arm64,linux/amd64,linux/arm/v7 . 
