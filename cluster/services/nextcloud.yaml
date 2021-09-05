@@ -32,7 +32,7 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 120 
+            initialDelaySeconds: 240
             periodSeconds: 10
             timeoutSeconds: 30
             failureThreshold: 5 
