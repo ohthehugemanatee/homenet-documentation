@@ -26,12 +26,4 @@ jobs:
           docker buildx build \
           --push \
           --tag ghcr.io/${{ github.actor }}/docker-nextcloud:multiarch \
-          --platform linux/arm64 \
-          -f Dockerfile.arm64 .
-      - name: build the image and push
-        run: |
-          cd cluster/Dockerfiles/nextcloud && 
-          docker buildx build \
-          --push \
-          --tag ghcr.io/${{ github.actor }}/docker-nextcloud:multiarch \
-          --platform linux/amd64 . 
+          --platform linux/amd64,linux/arm64,linux/arm/v7 . 
