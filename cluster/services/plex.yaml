@@ -31,6 +31,13 @@ spec:
         - name: plex
           image: linuxserver/plex
           imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "2048Mi"
+              cpu: "3000m"
+            limits:
+              memory: "2048Mi"
+              cpu: "3000m" 
           ports:
             - containerPort: 32400
           env:
