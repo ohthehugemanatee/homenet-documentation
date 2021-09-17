@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: nzbget
+      run: nzbget
   replicas: 1 
   template:
     metadata:
       labels:
-        app: nzbget
+        run: nzbget
     spec:
       volumes:
         - name: nfs
@@ -43,13 +43,13 @@ kind: Service
 metadata:
   name: nzbget
   labels:
-    app: nzbget
+    run: nzbget
 spec:
   ports:
   - port: 6789
     protocol: TCP
   selector:
-    app: nzbget
+    run: nzbget
 
 ---
 

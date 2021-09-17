@@ -5,14 +5,14 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: duplicacy
+      run: duplicacy
   replicas: 1
   strategy:
     type: Recreate
   template:
     metadata:
         labels:
-          app: duplicacy
+          run: duplicacy
     spec:
       hostname: duplicacy-pod
       nodeSelector:
@@ -52,13 +52,13 @@ kind: Service
 metadata:
   name: duplicacy
   labels:
-    app: duplicacy
+    run: duplicacy
 spec:
   ports:
   - port: 3875
     protocol: TCP
   selector:
-    app: duplicacy
+    run: duplicacy
 
 ---
 

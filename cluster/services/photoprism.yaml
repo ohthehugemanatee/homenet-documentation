@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: photoprism
+      run: photoprism
   replicas: 1
   template:
     metadata:
       labels:
-        app: photoprism
+        run: photoprism
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
@@ -94,7 +94,7 @@ spec:
     protocol: TCP
     targetPort: http
   selector:
-    app: photoprism
+    run: photoprism
 ---
 
 apiVersion: extensions/v1beta1

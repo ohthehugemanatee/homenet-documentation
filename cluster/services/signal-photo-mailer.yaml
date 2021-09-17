@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: signal-photo-mail
+      run: signal-photo-mail
   replicas: 1 
   template:
     metadata:
       labels:
-        app: signal-photo-mail
+        run: signal-photo-mail
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64

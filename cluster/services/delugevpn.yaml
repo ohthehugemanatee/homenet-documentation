@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: delugevpn
+      run: delugevpn
   replicas: 1 
   template:
     metadata:
       labels:
-        app: delugevpn
+        run: delugevpn
     spec:
       nodeSelector:
         beta.kubernetes.io/arch: amd64
@@ -74,7 +74,7 @@ kind: Service
 metadata:
   name: delugevpn
   labels:
-    app: delugevpn
+    run: delugevpn
 spec:
   ports:
   - name: http
@@ -84,7 +84,7 @@ spec:
     port: 58846
     protocol: TCP
   selector:
-    app: delugevpn
+    run: delugevpn
 
 ---
 
