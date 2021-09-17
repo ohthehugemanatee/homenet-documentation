@@ -40,7 +40,7 @@ spec:
         - name: DB_API_ENDPOINT_HOSTNAME
           value: https://api.db.com/
         - name: REDIRECT_BASE_URL
-          value: https://db-ynab-sync.germany.vertesi.com/
+          value: https://db-ynab-sync.cluster.vert/
         - name: DB_ACCOUNT
           value: "9320"
         - name: YNAB_BUDGET_ID
@@ -76,7 +76,7 @@ metadata:
   name: db-sync-checking
   annotations:
     traefik.frontend.priority: "2"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    cert-manager.io/cluster-issuer: selfsigned
     traefik.ingress.kubernetes.io/redirect-entry-point: https
 spec:
   rules:
@@ -89,7 +89,7 @@ spec:
         path: /
   tls:
   - hosts:
-    - db-ynab-sync.germany.vertesi.com
-    secretName: db--ynab--sync-germany-vertesi-com-tls
+    - db-ynab-sync.cluster.vert
+    secretName: db--ynab--sync-cluster-vert--tls
 
 
