@@ -1,0 +1,80 @@
+kubePlex:
+  image:
+    repository: ghcr.io/ressu/kube-plex
+  resources:
+    requests:
+      memory: "2048Mi"
+      cpu: "3000m"
+      # gpu.intel.com/i915: 1
+    limits:
+      memory: "2048Mi"
+      cpu: "3000m"
+
+# Override this with the plex claim token from plex.tv/claim
+#claimToken: ""
+
+# Set the timezone of the plex server
+timezone: Europe/Berlin
+
+#service:
+  # type: ClusterIP
+  # port: 32400
+  ## Specify the nodePort value for the LoadBalancer and NodePort service types.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+  ##
+  # nodePort:
+  ## Provide any additional annotations which may be required. This can be used to
+  ## set the LoadBalancer service type to internal only.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
+  ##
+  #annotations: {}
+  #labels: {}
+  ## Use loadBalancerIP to request a specific static IP,
+  ## otherwise leave blank
+  ##
+# loadBalancerIP:
+  # loadBalancerSourceRanges: []
+  ## Set the externalTrafficPolicy in the Service to either Cluster or Local
+  # externalTrafficPolicy: Cluster
+
+ingress:
+  enabled: true
+  hosts:
+    - plex.vert
+    - plex.germany.vertesi.com
+    - plex.cluster.vert
+
+nodeSelector:
+  beta.kubernetes.io/arch: amd64
+
+persistence:
+  transcode:
+    enabled: true
+    # Optionally specify claimName to manually override the PVC to be used for
+    # the transcode directory. If claimName is specified, storageClass and size
+    # are ignored.
+    claimName: "plex-nfs-claim"
+    subPath: "plex/transcode"
+    # The requested size of the volume to be used when creating a
+    # PersistentVolumeClaim.
+    storageClass: "nfs-client"
+    size: 20Gi
+    # Access mode for this volume
+    accessMode: ReadWriteMany
+  data:
+    claimName: "plex-nfs-claim"
+    subPath: "plex/transcode"
+    storageClass: "nfs-client"
+
+resources: 
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  #  limits:
+  #    cpu: 100m
+  #    memory: 128Mi
+  #  requests:
+  #    cpu: 100m
+  #    memory: 128Mi
+
