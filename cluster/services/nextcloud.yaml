@@ -3,7 +3,7 @@ kind: Deployment
 metadata: 
   name: nextcloud
   labels:
-    app: nextcloud
+    run: nextcloud
 spec:
   selector:
     matchLabels:
