@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: mariadb
+      app: mariadb
   replicas: 1 
   template:
     metadata:
       labels:
-        run: mariadb
+        app: mariadb
     spec:
       nodeSelector:
         beta.kubernetes.io/arch: amd64
@@ -84,7 +84,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    run: mariadb
+    app: mariadb
   ports:
     - port: 3306
       targetPort: 3306

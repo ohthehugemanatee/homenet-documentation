@@ -5,14 +5,14 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: cloudflare-ddns
+      app: cloudflare-ddns
   replicas: 1
   strategy:
     type: Recreate
   template:
     metadata:
         labels:
-          run: cloudflare-ddns
+          app: cloudflare-ddns
     spec:
       containers:
         - name: cloudflare-ddns

@@ -7,12 +7,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: nextcloud
+      app: nextcloud
   replicas: 1
   template:
     metadata:
       labels:
-        run: nextcloud
+        app: nextcloud
     spec:
       volumes:
         - name: nfs
@@ -83,7 +83,7 @@ kind: Service
 metadata:
   name: nextcloud
   labels:
-    run: nextcloud
+    app: nextcloud
   annotations:
     traefik.ingress.kubernetes.io/affinity: "true"
     traefik.ingress.kubernetes.io/session-cookie-name: "sticky"
@@ -92,7 +92,7 @@ spec:
   - port: 80
     protocol: TCP
   selector:
-    run: nextcloud
+    app: nextcloud
 
 ---
 

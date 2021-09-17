@@ -5,14 +5,14 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: sonarr
+      app: sonarr
   replicas: 1
   strategy:
     type: Recreate
   template:
     metadata:
         labels:
-          run: sonarr
+          app: sonarr
     spec:
       volumes:
         - name: ramdisk
@@ -97,13 +97,13 @@ kind: Service
 metadata:
   name: sonarr
   labels:
-    run: sonarr
+    app: sonarr
 spec:
   ports:
   - port: 8989
     protocol: TCP
   selector:
-    run: sonarr
+    app: sonarr
 
 ---
 

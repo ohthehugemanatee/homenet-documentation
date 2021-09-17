@@ -5,14 +5,14 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: radarr
+      app: radarr
   replicas: 1 
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        run: radarr
+        app: radarr
     spec:
       volumes:
         - name: ramdisk
@@ -92,13 +92,13 @@ kind: Service
 metadata:
   name: radarr
   labels:
-    run: radarr
+    app: radarr
 spec:
   ports:
   - port: 7878
     protocol: TCP
   selector:
-    run: radarr
+    app: radarr
 
 ---
 

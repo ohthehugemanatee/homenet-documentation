@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: db-sync-checking
+      app: db-sync-checking
   replicas: 1
   template:
     metadata:
       labels:
-        run: db-sync-checking
+        app: db-sync-checking
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
@@ -58,7 +58,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    run: db-sync-checking
+    app: db-sync-checking
   name: db-sync-checking
 spec:
   ports:
@@ -66,7 +66,7 @@ spec:
     protocol: TCP
     targetPort: 3000
   selector:
-    run: db-sync-checking
+    app: db-sync-checking
 
 ---
 

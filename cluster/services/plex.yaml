@@ -5,14 +5,14 @@ metadata:
 spec:
   selector:
     matchLabels:
-      run: plex
+      app: plex
   replicas: 1 
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        run: plex
+        app: plex
     spec:
       nodeSelector:
         k3s.io/hostname: nextcloud
@@ -122,13 +122,13 @@ kind: Service
 metadata:
   name: plex
   labels:
-    run: plex
+    app: plex
 spec:
   ports:
   - port: 32400
     protocol: TCP
   selector:
-    run: plex
+    app: plex
 
 ---
 
@@ -165,11 +165,11 @@ kind: Service
 metadata:
   name: plex-lb
   labels:
-    run: plex-lb
+    app: plex-lb
 spec:
   type: LoadBalancer
   selector:
-    run: plex
+    app: plex
   ports:
     - protocol: TCP
       port: 32400
