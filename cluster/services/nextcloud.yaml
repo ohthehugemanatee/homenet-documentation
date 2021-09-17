@@ -8,7 +8,7 @@ spec:
   selector:
     matchLabels:
       run: nextcloud
-  replicas: 2
+  replicas: 1
   template:
     metadata:
       labels:
@@ -35,7 +35,7 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 180
+            initialDelaySeconds: 300
             periodSeconds: 30
             timeoutSeconds: 30
             failureThreshold: 5 
