@@ -84,8 +84,10 @@ metadata:
   name: nextcloud
   labels:
     run: nextcloud
+  annotations:
+    traefik.ingress.kubernetes.io/affinity: "true"
+    traefik.ingress.kubernetes.io/session-cookie-name: "sticky"
 spec:
-  sessionAffinity: "ClientIP"
   ports:
   - port: 80
     protocol: TCP
