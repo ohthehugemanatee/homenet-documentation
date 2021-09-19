@@ -8,7 +8,11 @@ spec:
   selector:
     matchLabels:
       run: nextcloud
-  replicas: 1
+  replicas: 2 
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   template:
     metadata:
       labels:
@@ -35,10 +39,10 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 300
-            periodSeconds: 30
-            timeoutSeconds: 30
-            failureThreshold: 5 
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 15
+            failureThreshold: 10 
             successThreshold: 1
           readinessProbe:
             httpGet:
@@ -73,6 +77,9 @@ spec:
             - name: nfs
               mountPath: "/data"
               subPath: "nextcloud"
+            - name: nfs
+              mountPath: "/www"
+              subPath: ".docker/config/nextcloud-www"
             - name: nfs
               mountPath: "/config"
               subPath: ".docker/config/nextcloud"
