@@ -9,7 +9,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
   name: certificaterequests.cert-manager.io
@@ -814,7 +814,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
   name: certificates.cert-manager.io
@@ -2503,7 +2503,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
   name: challenges.acme.cert-manager.io
@@ -8528,7 +8528,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
   name: clusterissuers.cert-manager.io
@@ -16485,7 +16485,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
   name: issuers.cert-manager.io
@@ -24438,7 +24438,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
   name: orders.acme.cert-manager.io
@@ -25356,7 +25356,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
-    app: cainjector
+    run: cainjector
     app.kubernetes.io/component: cainjector
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cainjector
@@ -25367,7 +25367,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25378,7 +25378,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook
@@ -25389,7 +25389,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cainjector
+    run: cainjector
     app.kubernetes.io/component: cainjector
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cainjector
@@ -25462,7 +25462,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25506,7 +25506,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25550,7 +25550,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25616,7 +25616,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25680,7 +25680,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25772,7 +25772,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25824,7 +25824,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25857,7 +25857,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25891,7 +25891,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cainjector
+    run: cainjector
     app.kubernetes.io/component: cainjector
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cainjector
@@ -25909,7 +25909,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25927,7 +25927,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25945,7 +25945,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25963,7 +25963,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25981,7 +25981,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -25999,7 +25999,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -26017,7 +26017,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
-    app: cainjector
+    run: cainjector
     app.kubernetes.io/component: cainjector
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cainjector
@@ -26046,7 +26046,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -26074,7 +26074,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook
@@ -26103,7 +26103,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    app: cainjector
+    run: cainjector
     app.kubernetes.io/component: cainjector
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cainjector
@@ -26122,7 +26122,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -26142,7 +26142,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook
@@ -26162,7 +26162,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -26183,7 +26183,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook
@@ -26204,7 +26204,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: cainjector
+    run: cainjector
     app.kubernetes.io/component: cainjector
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cainjector
@@ -26220,7 +26220,7 @@ spec:
   template:
     metadata:
       labels:
-        app: cainjector
+        run: cainjector
         app.kubernetes.io/component: cainjector
         app.kubernetes.io/instance: cert-manager
         app.kubernetes.io/name: cainjector
@@ -26244,7 +26244,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: cert-manager
+    run: cert-manager
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -26264,7 +26264,7 @@ spec:
         prometheus.io/port: "9402"
         prometheus.io/scrape: "true"
       labels:
-        app: cert-manager
+        run: cert-manager
         app.kubernetes.io/component: controller
         app.kubernetes.io/instance: cert-manager
         app.kubernetes.io/name: cert-manager
@@ -26292,7 +26292,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook
@@ -26308,7 +26308,7 @@ spec:
   template:
     metadata:
       labels:
-        app: webhook
+        run: webhook
         app.kubernetes.io/component: webhook
         app.kubernetes.io/instance: cert-manager
         app.kubernetes.io/name: webhook
@@ -26360,7 +26360,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook
@@ -26396,7 +26396,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
   labels:
-    app: webhook
+    run: webhook
     app.kubernetes.io/component: webhook
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/name: webhook

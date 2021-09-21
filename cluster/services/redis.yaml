@@ -6,11 +6,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: redis
+      run: redis
   template:
     metadata:
       labels:
-        app: redis
+        run: redis
         name: redis
     spec:
       containers:
@@ -39,7 +39,7 @@ metadata:
   name: redis
 spec:
   selector:
-    app: redis
+    run: redis
   ports:
     - name: redis
       protocol: TCP
