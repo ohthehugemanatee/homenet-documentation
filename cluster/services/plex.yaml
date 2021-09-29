@@ -15,7 +15,7 @@ spec:
         run: plex
     spec:
       nodeSelector:
-        k3s.io/hostname: nextcloud
+        kubernetes.io/arch: amd64
       volumes:
         - name: ramdisk
           emptyDir:
@@ -68,11 +68,11 @@ spec:
             - until [ -f "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.blobs.db" ]; do sleep 1; done; /init
           resources:
             requests:
-              memory: "2048Mi"
-              cpu: "3000m"
+              memory: "1024Mi"
+              cpu: "2000m"
             limits:
               memory: "2048Mi"
-              cpu: "3000m" 
+              cpu: "2000m" 
           ports:
             - containerPort: 32400
           env:
