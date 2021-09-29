@@ -16,7 +16,7 @@ spec:
       containers:
       - name: redis-server
         image: redis
-        args: ["--appendonly", "yes"]
+        args: ["--appendonly", "no", "--maxmemory", "16mb", "--maxmemory-policy", "allkeys-lru"]
         ports:
           - name: redis-server
             containerPort: 6379
