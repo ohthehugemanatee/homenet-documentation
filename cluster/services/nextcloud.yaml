@@ -18,6 +18,8 @@ spec:
       labels:
         run: nextcloud
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
