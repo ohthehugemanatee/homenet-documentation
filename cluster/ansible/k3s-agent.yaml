@@ -1,0 +1,17 @@
+----
+- name: Playbook to setup k3s agent nodes
+  hosts: agents
+  become: true
+  tasks:
+    - name: Apt installs
+      apt:
+        update_cache: yes
+        pkg:
+          - nfs-client
+          - vim
+    - name: Install k3s-agent
+      command: curl -sfL https://get.k3s.io | K3S_URL=https://cluster.vert:6443 K3S_TOKEN={{ k3s_token }} sh -
+      become: yes
+      args:
+        chdir: /tmp/ledcontrol
+        creates: /usr/local/bin/ledcontrol
