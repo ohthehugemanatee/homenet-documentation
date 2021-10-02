@@ -9,6 +9,14 @@
         pkg:
           - nfs-client
           - vim
+		- name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
+			shell: |
+				swapoff -a
+		- name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
+			replace:
+				path: /etc/fstab
+				regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+				replace: '# \1'
     - name: Install k3s-agent
       command: curl -sfL https://get.k3s.io | K3S_URL=https://cluster.vert:6443 K3S_TOKEN={{ k3s_token }} sh -
       become: yes
