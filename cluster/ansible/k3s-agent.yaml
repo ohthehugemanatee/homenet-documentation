@@ -9,6 +9,8 @@
         pkg:
           - nfs-client
           - vim
+          - intel-media-va-driver-non-free
+          - libmfx1
 		- name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
 			shell: |
 				swapoff -a
