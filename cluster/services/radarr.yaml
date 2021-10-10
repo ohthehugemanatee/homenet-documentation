@@ -32,14 +32,15 @@ spec:
               dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
               mkfs.ext4 /ramdisk/image.ext4; \
               mount /ramdisk/image.ext4 /mnt/radarr-ramdisk-mount; \
-              cp -fvpR /radarr-config/* /mnt/radarr-ramdisk-mount; \
+              cp -fvp /radarr-config/* /mnt/radarr-ramdisk-mount; \
+              find /radarr-config -mindepth 1 -maxdepth 1 -type d -exec ln -sf {} /mnt/radarr-ramdisk-mount/ \;
               trap 'exit 0' 15; \
               while true; do \
               sleep 890; \
               sync /mnt/radarr-ramdisk-mount/*; \
               fsfreeze --freeze /mnt/radarr-ramdisk-mount; \
               sleep 10; \
-              cp -fvp /mnt/radarr-ramdisk-mount/*.* /radarr-config/; \
+              cp -fvp /mnt/radarr-ramdisk-mount/* /radarr-config/; \
               fsfreeze --unfreeze /mnt/radarr-ramdisk-mount; \
               done;
           image: ubuntu
@@ -75,6 +76,9 @@ spec:
             - mountPath: /config
               mountPropagation: HostToContainer
               name: radarr-ramdisk-mount
+            - name: nfs
+              mountPath: /radarr-config
+              subPath: ".docker/config/radarr"
             - name: nfs
               mountPath: "/downloads"
               subPath: "media/Downloads"

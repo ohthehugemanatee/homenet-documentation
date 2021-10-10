@@ -32,14 +32,15 @@ spec:
               dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
               mkfs.ext4 /ramdisk/image.ext4; \
               mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
-              cp -fvpR /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
+              cp -fvp /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
+              find /radarr-config -mindepth 1 -maxdepth 1 -type d -exec ln -sf {} /mnt/radarr-ramdisk-mount/ \;
               trap 'exit 0' 15; \
               while true; do \
               sleep 890; \
               sync /mnt/sonarr-ramdisk-mount/*; \
               fsfreeze --freeze /mnt/sonarr-ramdisk-mount; \
               sleep 10; \
-              cp -fvp /mnt/sonarr-ramdisk-mount/*.* /sonarr-config/; \
+              cp -fvpP /mnt/sonarr-ramdisk-mount/* /sonarr-config/; \
               fsfreeze --unfreeze /mnt/sonarr-ramdisk-mount; \
               done;
           image: ubuntu
@@ -75,6 +76,9 @@ spec:
             - mountPath: /config
               mountPropagation: HostToContainer
               name: sonarr-ramdisk-mount
+            - name: nfs
+              mountPath: /sonarr-config
+              subPath: ".docker/config/sonarr"
             - name: nfs
               mountPath: "/downloads"
               subPath: "media/Downloads"
