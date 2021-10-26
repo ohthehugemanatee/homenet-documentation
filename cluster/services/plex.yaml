@@ -17,51 +17,16 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       volumes:
-        - name: ramdisk
-          emptyDir:
-            sizeLimit: 1G 
-            medium: Memory
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-        - emptyDir: {}
-          name: plex-ramdisk-mount
       containers:
-        - name: plex-config
-          command:
-            - sh
-            - -c
-            - |-
-              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=1G; \
-              mkfs.ext4 /ramdisk/image.ext4; \
-              mount /ramdisk/image.ext4 /mnt/plex-ramdisk-mount; \
-              cp -fvpR /plex-config/* /mnt/plex-ramdisk-mount; \
-              trap 'exit 0' 15; \
-              while true; do \
-              sleep 43200; \
-              sync /mnt/plex-ramdisk-mount/*; \
-              fsfreeze --freeze /mnt/plex-ramdisk-mount; \
-              sleep 10; \
-              rsync -a /mnt/plex-ramdisk-mount/ /plex-config/; \
-              fsfreeze --unfreeze /mnt/plex-ramdisk-mount; \
-              done;
-          image: ubuntu
-          imagePullPolicy: Always
-          resources: {}
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: ramdisk
-              mountPath: /ramdisk
-            - name: nfs
-              mountPath: /plex-config
-              subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases.backup"
-            - mountPath: /mnt/plex-ramdisk-mount
-              mountPropagation: Bidirectional
-              name: plex-ramdisk-mount
         - name: plex
           image: linuxserver/plex
           imagePullPolicy: Always
+          resources:
+            limits:
+              gpu.intel.com/i915: 1
           command:
             - sh
             - -c
@@ -88,9 +53,6 @@ spec:
             - mountPath: /config
               name: nfs
               subPath: ".docker/config/plex"
-            - mountPath: "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
-              mountPropagation: HostToContainer
-              name: plex-ramdisk-mount
             - name: nfs
               mountPath: "/shared"
             - name: nfs
