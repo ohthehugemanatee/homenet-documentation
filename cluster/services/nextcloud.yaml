@@ -8,7 +8,7 @@ spec:
   selector:
     matchLabels:
       run: nextcloud
-  replicas: 2 
+  replicas: 1 
   strategy:
     rollingUpdate:
       maxUnavailable: 0
@@ -28,7 +28,7 @@ spec:
         - name: ghcr
       containers:
         - name: nextcloud
-          image: ghcr.io/ohthehugemanatee/docker-nextcloud:multiarch
+          image: lscr.io/linuxserver/nextcloud:php8
           imagePullPolicy: Always
           resources:
             requests:
@@ -51,7 +51,7 @@ spec:
               path: /status.php
               port: 80
             initialDelaySeconds: 0
-            periodSeconds: 10
+            periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 6
             successThreshold: 1
@@ -60,7 +60,7 @@ spec:
               path: /status.php
               port: 80
             initialDelaySeconds: 0
-            periodSeconds: 10
+            periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 6 
             successThreshold: 1
