@@ -23,6 +23,11 @@ spec:
             claimName: nfs-claim
       containers:
         - name: duplicacy
+          resources:
+            requests:
+              memory: "4Gi"
+            limits:
+              memory: "4Gi"
           env:
             - name: "TZ"
               value: "Europe/Berlin"
@@ -31,6 +36,11 @@ spec:
                 secretKeyRef:
                   name: duplicacy
                   key: password
+            - name: "MACHINE_ID"
+              valueFrom:
+                secretKeyRef:
+                  name: duplicacy
+                  key: machine-id
           image: erichough/duplicacy
           ports:
             - containerPort: 3875
