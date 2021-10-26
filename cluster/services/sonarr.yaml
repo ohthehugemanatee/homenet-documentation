@@ -33,7 +33,7 @@ spec:
               mkfs.ext4 /ramdisk/image.ext4; \
               mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
               cp -fvp /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
-              find /radarr-config -mindepth 1 -maxdepth 1 -type d -exec ln -sf {} /mnt/radarr-ramdisk-mount/ \;
+              find /sonarr-config -mindepth 1 -maxdepth 1 -type d -exec ln -sf {} /mnt/sonarr-ramdisk-mount/ \;
               trap 'exit 0' 15; \
               while true; do \
               sleep 890; \
