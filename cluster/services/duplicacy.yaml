@@ -15,8 +15,6 @@ spec:
           run: duplicacy
     spec:
       hostname: duplicacy-pod
-      nodeSelector:
-        kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
@@ -31,6 +29,8 @@ spec:
           env:
             - name: "TZ"
               value: "Europe/Berlin"
+            - name: "DUPLICACY_WEB_VERSION"
+              value: "Latest"
             - name: "DWE_PASSWORD"
               valueFrom:
                 secretKeyRef:
@@ -41,16 +41,19 @@ spec:
                 secretKeyRef:
                   name: duplicacy
                   key: machine-id
-          image: erichough/duplicacy
+          image: saspus/duplicacy-web:mini 
           ports:
             - containerPort: 3875
               name: duplicacy
               protocol: TCP
           volumeMounts:
-            - mountPath: "/etc/duplicacy"
+            - mountPath: "/logs"
+              name: nfs
+              subPath: ".docker/config/duplicacy/logs"
+            - mountPath: "/config"
               name: nfs
               subPath: ".docker/config/duplicacy"
-            - mountPath: "/var/cache/duplicacy"
+            - mountPath: "/cache"
               name: nfs
               subPath: ".docker/cache/duplicacy"
             - name: nfs
