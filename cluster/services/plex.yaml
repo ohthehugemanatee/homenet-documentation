@@ -24,9 +24,6 @@ spec:
         - name: plex
           image: linuxserver/plex
           imagePullPolicy: Always
-          resources:
-            limits:
-              gpu.intel.com/i915: 1
           command:
             - sh
             - -c
@@ -38,6 +35,7 @@ spec:
             limits:
               memory: "2048Mi"
               cpu: "2000m" 
+              gpu.intel.com/i915: 1
           ports:
             - containerPort: 32400
           env:
