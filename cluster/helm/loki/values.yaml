@@ -1,0 +1,20 @@
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+  plugins:
+    - devopsprodigy-kubegraf-app
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      storageClass: "local-path"
+  alertmanager:
+    persistentVolume:
+      storageClass: "local-path"
+loki:
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClass: "local-path" 
+
