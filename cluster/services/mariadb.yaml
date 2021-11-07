@@ -44,7 +44,7 @@ spec:
                 password_aux="${MYSQL_ROOT_PASSWORD:-}"
                 mysqladmin status -uroot -p"${password_aux}"
           initialDelaySeconds: 30
-          periodSeconds: 10
+          periodSeconds: 60 
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1
