@@ -38,9 +38,20 @@ spec:
               memory: "2048Mi"
               cpu: "2000m" 
           startupProbe:
-            httpGet:
-              path: /status.php
-              port: 80
+            exec:
+              command:
+                - pgrep
+                - nginx
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 5
+            successThreshold: 1
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - nginx
             initialDelaySeconds: 60
             periodSeconds: 15
             timeoutSeconds: 15
@@ -50,19 +61,10 @@ spec:
             httpGet:
               path: /status.php
               port: 80
-            initialDelaySeconds: 0
-            periodSeconds: 30
+            initialDelaySeconds: 30
+            periodSeconds: 60
             timeoutSeconds: 10
-            failureThreshold: 6
-            successThreshold: 1
-          livenessProbe:
-            httpGet:
-              path: /status.php
-              port: 80
-            initialDelaySeconds: 0
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 6 
+            failureThreshold: 3
             successThreshold: 1
           env:
             - name: PUID
