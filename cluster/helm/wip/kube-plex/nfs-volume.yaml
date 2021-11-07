@@ -1,13 +1,12 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: nfs
-  namespace: plex
+  name: plex-nfs
   annotations:
     pv.beta.kubernetes.io/gid: "1000"
 spec:
   capacity:
-    storage: 8Ti
+    storage: 10Ti
   accessModes:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
@@ -28,4 +27,5 @@ spec:
   resources:
     requests:
       storage: 8Ti
+  volumeName: "plex-nfs"
   storageClassName: ""

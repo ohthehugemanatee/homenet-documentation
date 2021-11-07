@@ -1,0 +1,35 @@
+kubePlex:
+  image:
+    repository: ghcr.io/ressu/kube-plex
+    tag: latest
+    pullPolicy: Always
+  resources:
+    requests:
+      memory: "2048Mi"
+      cpu: "3000m"
+    limits:
+      memory: "2048Mi"
+      cpu: "3000m"
+
+# Override this with the plex claim token from plex.tv/claim
+#claimToken: ""
+
+timezone: Europe/Berlin
+
+ingress:
+  enabled: true
+  hosts:
+    - plex.vert
+    - plex.germany.vertesi.com
+    - plex.cluster.vert
+
+nodeSelector:
+  beta.kubernetes.io/arch: amd64
+
+persistence:
+  transcode:
+    enabled: true
+    accessMode: ReadWriteMany
+  data:
+    claimName: "nfs-claim"
+    subPath: "media"
