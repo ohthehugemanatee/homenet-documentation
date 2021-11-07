@@ -1,0 +1,36 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: mariadb-backup
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          volumes:
+            - name: nfs
+              persistentVolumeClaim:
+                claimName: nfs-claim
+          containers:
+            - name: mysqldump
+              image: linuxserver/mariadb
+              command: 
+                - sh
+                - -c
+                - mysqldump -u nextcloud --password=$BACKUP_DB_PASSWORD nextcloud | gzip > /backups/$(date --iso-8601)-$(date +"%T")-nextcloud.sql.gz
+              env:
+                - name: BACKUP_DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mariadb
+                      key: nextcloudpass
+              volumeMounts:
+                - name: nfs
+                  mountPath: "/backups"
+                  subPath: ".docker/config/mariadb/backups"
+
