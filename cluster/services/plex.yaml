@@ -20,7 +20,43 @@ spec:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
+        - name: plex-ramdisk-mount
+          emptyDir: {}
+        - name: ramdisk
+          emptyDir:
+            sizeLimit: 1550M
       containers:
+        - name: plex-config
+          command:
+            - sh
+            - -c
+            - |-
+              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=1500M; \
+              mkfs.ext4 /ramdisk/image.ext4; \
+              mount /ramdisk/image.ext4 /mnt/plex-ramdisk-mount; \
+              cp -fvp /plex-db/* /mnt/plex-ramdisk-mount; \
+              while true; do \
+              sleep 172800; \
+              sync /mnt/plex-ramdisk-mount/*; \
+              fsfreeze --freeze /mnt/plex-ramdisk-mount; \
+              sleep 10; \
+              cp -fvp /mnt/plex-ramdisk-mount/* /plex-db/; \
+              fsfreeze --unfreeze /mnt/plex-ramdisk-mount; \
+              done;
+          image: ubuntu
+          imagePullPolicy: Always
+          resources: {}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: ramdisk
+              mountPath: /ramdisk
+            - name: nfs
+              mountPath: /plex-db
+              subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
+            - name: plex-ramdisk-mount
+              mountPath: /mnt/plex-ramdisk-mount
+              mountPropagation: Bidirectional
         - name: plex
           image: linuxserver/plex
           imagePullPolicy: Always
@@ -51,6 +87,9 @@ spec:
             - mountPath: /config
               name: nfs
               subPath: ".docker/config/plex"
+            - mountPath: "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
+              mountPropagation: HostToContainer
+              name: plex-ramdisk-mount
             - name: nfs
               mountPath: "/shared"
             - name: nfs
