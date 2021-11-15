@@ -18,13 +18,20 @@ spec:
                 claimName: nfs-claim
           containers:
             - name: nextcloud
-              image: ghcr.io/linuxserver/nextcloud
+              image: lscr.io/linuxserver/nextcloud:php8
               command: ["/bin/sh", "-c"]
               args:
                 - /init;
                   apt update && apt install ffmpeg -y;
                   sudo -u abc occ preview:pre-generate;
                   echo done;
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "2048Mi"
+                  cpu: "2000m" 
               env:
                 - name: PUID
                   value: "1000"

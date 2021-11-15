@@ -1,6 +1,6 @@
 #!/bin/sh
 
-HELPTEXT="\n
+HELPTEXT="Here goes:\n
 # Small script to mount a loopback filesystem and use it for active storage,\n
 # periodically syncing it back to a more durable storage.\n
 # \n

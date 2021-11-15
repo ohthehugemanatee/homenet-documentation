@@ -22,13 +22,13 @@ spec:
               command: 
                 - sh
                 - -c
-                - mysqldump -u nextcloud --password=$BACKUP_DB_PASSWORD nextcloud | gzip > /backups/$(date --iso-8601)-$(date +"%T")-nextcloud.sql.gz
+                - mysqldump -u root --password=$MYSQL_ROOT_PASSWORD -h mariadb --all-databases  | gzip > /backups/$(date --iso-8601)-$(date +"%T")-all-databases.sql.gz
               env:
-                - name: BACKUP_DB_PASSWORD
+                - name: MYSQL_ROOT_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: mariadb
-                      key: nextcloudpass
+                      key: rootpass
               volumeMounts:
                 - name: nfs
                   mountPath: "/backups"

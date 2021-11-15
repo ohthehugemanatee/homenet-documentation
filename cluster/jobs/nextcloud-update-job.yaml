@@ -12,11 +12,11 @@ spec:
             claimName: nfs-claim
       containers:
         - name: nextcloud
-          image: ghcr.io/linuxserver/nextcloud
+          image: lscr.io/linuxserver/nextcloud:php8
           command: ["/bin/sh", "-c"]
           args:
             - /init;
-              sudo -u abc php $NEXTCLOUD_PATH/updater/updater.phar;
+              sudo -u abc php8 $NEXTCLOUD_PATH/updater/updater.phar;
               echo done;
           env:
             - name: PUID
