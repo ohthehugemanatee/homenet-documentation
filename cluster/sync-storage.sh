@@ -1,5 +1,15 @@
 #!/bin/sh
 
+# Small script to mount a filesystem from a ramdisk and use it for active storage,
+# periodically syncing it back to a more durable storage.
+#
+# This is mostly useful for situations where your software doesn't support your
+# long term storage mechanism, ie Sqlite3 WAL databases with NFS storage.
+#
+# Usage: sync-storage -s [durable storage path] -r [active storage path] -s [active storage size] -p [sync period in seconds]
+#
+
+
 STORAGE=/tmp/sonarr-config
 RAMDISK_MOUNTPOINT=/mnt/sonarr-ramdisk-mount
 RAMDISK=/tmp/ramdisk
