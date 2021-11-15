@@ -31,18 +31,10 @@ spec:
             - sh
             - -c
             - |-
-              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=1500M; \
-              mkfs.ext4 /ramdisk/image.ext4; \
-              mount /ramdisk/image.ext4 /mnt/plex-ramdisk-mount; \
-              cp -fvp /plex-db/* /mnt/plex-ramdisk-mount; \
-              while true; do \
-              sleep 172800; \
-              sync /mnt/plex-ramdisk-mount/*; \
-              fsfreeze --freeze /mnt/plex-ramdisk-mount; \
-              sleep 10; \
-              cp -fvp /mnt/plex-ramdisk-mount/* /plex-db/; \
-              fsfreeze --unfreeze /mnt/plex-ramdisk-mount; \
-              done;
+              apt update && apt install wget -y
+              wget https://raw.githubusercontent.com/ohthehugemanatee/homenet-documentation/master/cluster/sync-storage.sh
+              chmod +x sync-storage.sh
+              ./sync-storage.sh --storage=/plex-db --active_storage=/mnt/plex-ramdisk-mount --image=/ramdisk --size=1500M --period=172800
           image: ubuntu
           imagePullPolicy: Always
           resources: {}
