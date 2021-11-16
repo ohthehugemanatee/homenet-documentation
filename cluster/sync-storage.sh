@@ -83,7 +83,8 @@ sync_to_storage()
 # Clean up and exit.
 cleanup()
 {
-  echo "EXIT called."
+  echo "EXIT called. Waiting 15 seconds for the other containers to exit..."
+  sleep 15
   sync_to_storage
   echo "unmounting disk"
   umount "${RAMDISK_MOUNTPOINT}"
