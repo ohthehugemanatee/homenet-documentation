@@ -66,6 +66,7 @@ startup()
   mount "${RAMDISK}"/image.ext4 "${RAMDISK_MOUNTPOINT}"
   cp -fvpR "${STORAGE}"/* "${RAMDISK_MOUNTPOINT}"
   printf "Image mounted and prepared.\n"
+  touch "${RAMDISK_MOUNTPOINT}"/ready
 }
 
 # Synchronize from active to durable storage.
@@ -83,8 +84,9 @@ sync_to_storage()
 # Clean up and exit.
 cleanup()
 {
-  echo "EXIT called. Waiting 15 seconds for the other containers to exit..."
-  sleep 15
+  echo "EXIT called. Waiting 40 seconds for the other containers to exit..."
+  sleep 40
+  rm -rf "${RAMDISK_MOUNTPOINT}"/ready
   sync_to_storage
   echo "unmounting disk"
   umount "${RAMDISK_MOUNTPOINT}"
