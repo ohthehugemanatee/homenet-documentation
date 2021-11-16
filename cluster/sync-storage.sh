@@ -93,7 +93,7 @@ cleanup()
   exit 0
 }
 
-trap "cleanup" SIGTERM
+trap "cleanup" TERM 
 
 ## Program execution
 
