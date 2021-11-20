@@ -21,11 +21,11 @@ HELPTEXT="\n
 # period=172800\n
 #\n"
 
-STORAGE=${STORAGE:/tmp/durable-storage}
-RAMDISK_MOUNTPOINT=${RAMDISK_MOUNTPOINT:/mnt/active-storage}
-RAMDISK=${RAMDISK:/tmp/ramdisk}
-SIZE=${SIZE:400M}
-SYNCPERIOD=${SYNCPERIOD:172800}
+STORAGE=${STORAGE:-'/tmp/durable-storage'}
+RAMDISK_MOUNTPOINT=${RAMDISK_MOUNTPOINT:-'/mnt/active-storage'}
+RAMDISK=${RAMDISK:-'/tmp/ramdisk'}
+SIZE=${SIZE:-'400M'}
+SYNCPERIOD=${SYNCPERIOD:-'172800'}
 
 # Get CLI arguments.
 while [ $# -gt 0 ]; do
