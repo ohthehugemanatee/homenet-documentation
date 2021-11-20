@@ -91,7 +91,7 @@ sync_to_storage()
 # Clean up and exit.
 cleanup()
 {
-  echo "EXIT called. Waiting 10 seconds for the other containers to exit..."
+  echo "Received SIGTERM. Waiting 10 seconds for the other containers to exit..."
   sleep 10
   rm -rf "${RAMDISK_MOUNTPOINT}"/ready
   sync_to_storage
@@ -103,9 +103,11 @@ cleanup()
 
 ## Program execution
 
+trap "cleanup" TERM
+
+
 startup
 while true; do 
-  trap "cleanup" TERM EXIT
   sleep "${SYNCPERIOD}"
   echo "waking for periodic sync"
   sync_to_storage
