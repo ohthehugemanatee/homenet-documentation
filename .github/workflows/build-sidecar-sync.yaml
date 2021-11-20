@@ -1,4 +1,4 @@
-name: ci
+name: buildx-sidecar-sync
 on:
   push:
     branches: ['master']
