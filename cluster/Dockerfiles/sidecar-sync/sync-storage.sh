@@ -92,6 +92,7 @@ cleanup()
   sync_to_storage
   echo "unmounting disk"
   umount "${RAMDISK_MOUNTPOINT}"
+  echo "Done"
 }
 
 trap "cleanup" TERM EXIT
@@ -101,6 +102,7 @@ trap "cleanup" TERM EXIT
 startup
 while true; do 
   sleep "${SYNCPERIOD}"
+  echo "waking for periodic sync"
   sync_to_storage
 done
 
