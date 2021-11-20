@@ -86,13 +86,12 @@ sync_to_storage()
 # Clean up and exit.
 cleanup()
 {
-  echo "EXIT called. Waiting 15 seconds for the other containers to exit..."
-  sleep 15
+  echo "EXIT called. Waiting 10 seconds for the other containers to exit..."
+  sleep 10
   rm -rf "${RAMDISK_MOUNTPOINT}"/ready
   sync_to_storage
   echo "unmounting disk"
   umount "${RAMDISK_MOUNTPOINT}"
-  exit 0
 }
 
 trap "cleanup" TERM EXIT
