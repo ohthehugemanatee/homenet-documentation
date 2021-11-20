@@ -25,43 +25,39 @@ spec:
         - name: ramdisk
           emptyDir:
             sizeLimit: 1550M
+      terminationGracePeriodSeconds: 60
       containers:
         - name: plex-config
-          command:
-            - sh
-            - -c
-            - |-
-              apt update && apt install wget -y
-              wget https://raw.githubusercontent.com/ohthehugemanatee/homenet-documentation/master/cluster/sync-storage.sh
-              chmod +x sync-storage.sh
-              ./sync-storage.sh --storage=/plex-db --active_storage=/mnt/plex-ramdisk-mount --image=/ramdisk --size=1500M --period=172800
-          image: ubuntu
+          image: ghcr.io/ohthehugemanatee/sidecar-sync:multiarch
           imagePullPolicy: Always
           resources: {}
+          env:
+            - name: SIZE
+              value: '1550M'
           securityContext:
             privileged: true
           volumeMounts:
             - name: ramdisk
-              mountPath: /ramdisk
+              mountPath: /tmp/ramdisk
             - name: nfs
-              mountPath: /plex-db
+              mountPath: /tmp/durable-storage
               subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
             - name: plex-ramdisk-mount
-              mountPath: /mnt/plex-ramdisk-mount
+              mountPath: /mnt/active-storage
               mountPropagation: Bidirectional
         - name: plex
           image: linuxserver/plex
           imagePullPolicy: Always
           command:
-            - sh
+            - /bin/bash
             - -c
-            - until [ -f "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.blobs.db" ]; do sleep 1; done; /init
+            - until [ -f "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/ready" ]; do sleep 1; done; exec /init
           resources:
             requests:
               memory: "1024Mi"
               cpu: "2000m"
             limits:
-              memory: "2048Mi"
+              memory: "3Gi"
               cpu: "2000m" 
               gpu.intel.com/i915: 1
           ports:
