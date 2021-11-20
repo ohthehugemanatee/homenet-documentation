@@ -1,5 +1,9 @@
 #!/bin/bash
 
+set -o errexit
+set -o pipefail
+set -o nounset
+
 HELPTEXT="\n
 # Small script to mount a loopback filesystem and use it for active storage,\n
 # periodically syncing it back to a more durable storage.\n
