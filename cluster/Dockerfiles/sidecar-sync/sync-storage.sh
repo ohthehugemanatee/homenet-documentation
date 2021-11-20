@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 HELPTEXT="\n
 # Small script to mount a loopback filesystem and use it for active storage,\n
@@ -11,6 +11,8 @@ HELPTEXT="\n
 # \n
 # Usage: sync-storage --storage=[durable storage path] --active_storage=[active storage path] --image=[path for active storage image] --size=[active storage size] --period=[sync period in seconds] \n
 # \n
+# Alternatively, you can set the same settings with environment variables $STORAGE, $RAMDISK_MOUNTPOINT, $RAMDISK, $SIZE, and $INTERVAL. Command flags overrule environment vars.\n
+# \n
 # Default parameters:\n
 # storage=/tmp/durable-storage\n
 # active_storage=/mnt/active-storage\n
@@ -19,11 +21,11 @@ HELPTEXT="\n
 # period=172800\n
 #\n"
 
-STORAGE=/tmp/durable-storage
-RAMDISK_MOUNTPOINT=/mnt/active-storage
-RAMDISK=/tmp/ramdisk
-SIZE=400M
-SYNCPERIOD=172800
+STORAGE=${STORAGE:/tmp/durable-storage}
+RAMDISK_MOUNTPOINT=${RAMDISK_MOUNTPOINT:/mnt/active-storage}
+RAMDISK=${RAMDISK:/tmp/ramdisk}
+SIZE=${SIZE:400M}
+SYNCPERIOD=${SYNCPERIOD:172800}
 
 # Get CLI arguments.
 while [ $# -gt 0 ]; do
