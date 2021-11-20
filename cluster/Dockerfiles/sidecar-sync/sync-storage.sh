@@ -95,12 +95,12 @@ cleanup()
   echo "Done"
 }
 
-trap "cleanup" TERM EXIT
 
 ## Program execution
 
 startup
 while true; do 
+  trap "cleanup" TERM EXIT
   sleep "${SYNCPERIOD}"
   echo "waking for periodic sync"
   sync_to_storage
