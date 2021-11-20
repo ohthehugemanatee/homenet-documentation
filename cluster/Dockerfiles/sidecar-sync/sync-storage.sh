@@ -1,8 +1,5 @@
 #!/bin/bash
 
-set -o errexit
-set -o pipefail
-set -o nounset
 
 HELPTEXT="\n
 # Small script to mount a loopback filesystem and use it for active storage,\n
@@ -58,6 +55,10 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+set -o errexit
+set -o pipefail
+set -o nounset
 
 printf "Creating a ${SIZE} image at ${RAMDISK}, mounting it at ${RAMDISK_MOUNTPOINT}.\n"
 printf "It will sync to ${STORAGE} every ${SYNCPERIOD} seconds.\n"
