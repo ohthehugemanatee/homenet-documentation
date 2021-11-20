@@ -1,6 +1,6 @@
 #!/bin/sh
 
-HELPTEXT="Here goes:\n
+HELPTEXT="\n
 # Small script to mount a loopback filesystem and use it for active storage,\n
 # periodically syncing it back to a more durable storage.\n
 # \n
@@ -66,6 +66,7 @@ startup()
   mount "${RAMDISK}"/image.ext4 "${RAMDISK_MOUNTPOINT}"
   cp -fvpR "${STORAGE}"/* "${RAMDISK_MOUNTPOINT}"
   printf "Image mounted and prepared.\n"
+  touch "${RAMDISK_MOUNTPOINT}"/ready
 }
 
 # Synchronize from active to durable storage.
@@ -83,14 +84,16 @@ sync_to_storage()
 # Clean up and exit.
 cleanup()
 {
-  echo "EXIT called."
+  echo "EXIT called. Waiting 15 seconds for the other containers to exit..."
+  sleep 15
+  rm -rf "${RAMDISK_MOUNTPOINT}"/ready
   sync_to_storage
   echo "unmounting disk"
   umount "${RAMDISK_MOUNTPOINT}"
   exit 0
 }
 
-trap "cleanup" EXIT
+trap "cleanup" TERM EXIT
 
 ## Program execution
 
