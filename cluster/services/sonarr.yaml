@@ -25,43 +25,28 @@ spec:
           name: sonarr-ramdisk-mount
       containers:
         - name: sonarr-config
-          command:
-            - sh
-            - -c
-            - |-
-              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
-              mkfs.ext4 /ramdisk/image.ext4; \
-              mount /ramdisk/image.ext4 /mnt/sonarr-ramdisk-mount; \
-              cp -fvp /sonarr-config/* /mnt/sonarr-ramdisk-mount; \
-              find /sonarr-config -mindepth 1 -maxdepth 1 -type d -exec ln -sf {} /mnt/sonarr-ramdisk-mount/ \;
-              trap 'exit 0' 15; \
-              while true; do \
-              sleep 890; \
-              sync /mnt/sonarr-ramdisk-mount/*; \
-              fsfreeze --freeze /mnt/sonarr-ramdisk-mount; \
-              sleep 10; \
-              cp -fvpP /mnt/sonarr-ramdisk-mount/* /sonarr-config/; \
-              fsfreeze --unfreeze /mnt/sonarr-ramdisk-mount; \
-              done;
-          image: ubuntu
+          image: ghcr.io/ohthehugemanatee/sidecar-sync:multiarch
           imagePullPolicy: Always
           resources: {}
+          env:
+            - name: SIZE
+              value: '400M'
           securityContext:
             privileged: true
           volumeMounts:
             - name: ramdisk
-              mountPath: /ramdisk
+              mountPath: /tmp/ramdisk
             - name: nfs
-              mountPath: /sonarr-config
+              mountPath: /tmp/durable-storage
               subPath: ".docker/config/sonarr"
-            - mountPath: /mnt/sonarr-ramdisk-mount
+            - name: sonarr-ramdisk-mount
+              mountPath: /mnt/active-storage
               mountPropagation: Bidirectional
-              name: sonarr-ramdisk-mount
         - name: sonarr
           command:
             - sh
             - -c
-            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
+            - until [ -f "/config/ready" ]; do sleep 1; done; /init
           env:
             - name: PUID
               value: "1000"
