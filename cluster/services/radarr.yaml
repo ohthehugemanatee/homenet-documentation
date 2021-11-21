@@ -17,7 +17,7 @@ spec:
       volumes:
         - name: ramdisk
           emptyDir:
-            sizeLimit: 400M
+            sizeLimit: 800M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
@@ -25,43 +25,34 @@ spec:
           name: radarr-ramdisk-mount
       containers:
         - name: radarr-config
-          command:
-            - sh
-            - -c
-            - |-
-              dd if=/dev/zero of=/ramdisk/image.ext4 count=0 bs=1 seek=400M; \
-              mkfs.ext4 /ramdisk/image.ext4; \
-              mount /ramdisk/image.ext4 /mnt/radarr-ramdisk-mount; \
-              cp -fvp /radarr-config/* /mnt/radarr-ramdisk-mount; \
-              find /radarr-config -mindepth 1 -maxdepth 1 -type d -exec ln -sf {} /mnt/radarr-ramdisk-mount/ \;
-              trap 'exit 0' 15; \
-              while true; do \
-              sleep 890; \
-              sync /mnt/radarr-ramdisk-mount/*; \
-              fsfreeze --freeze /mnt/radarr-ramdisk-mount; \
-              sleep 10; \
-              cp -fvp /mnt/radarr-ramdisk-mount/* /radarr-config/; \
-              fsfreeze --unfreeze /mnt/radarr-ramdisk-mount; \
-              done;
-          image: ubuntu
+          image: ghcr.io/ohthehugemanatee/sidecar-sync:multiarch
           imagePullPolicy: Always
           resources: {}
+          env:
+            - name: SIZE
+              value: '800M'
+            - name: STORAGE
+              value: /tmp/radarr-durable-storage
+            - name: RAMDISK_MOUNTPOINT
+              value: /mnt/radarr-active-storage
+            - name: RAMDISK
+              value: /tmp/radarr-ramdisk
           securityContext:
             privileged: true
           volumeMounts:
             - name: ramdisk
-              mountPath: /ramdisk
+              mountPath: /tmp/radarr-ramdisk
             - name: nfs
-              mountPath: /radarr-config
+              mountPath: /tmp/radarr-durable-storage
               subPath: ".docker/config/radarr"
-            - mountPath: /mnt/radarr-ramdisk-mount
+            - name: radarr-ramdisk-mount
+              mountPath: /mnt/radarr-active-storage
               mountPropagation: Bidirectional
-              name: radarr-ramdisk-mount
         - name: radarr
           command:
             - sh
             - -c
-            - until [ -f "/config/config.xml" ]; do sleep 1; done; /init
+            - until [ -f "/config/ready" ]; do sleep 1; done; /init
           image: linuxserver/radarr
           ports:
             - containerPort: 7878
