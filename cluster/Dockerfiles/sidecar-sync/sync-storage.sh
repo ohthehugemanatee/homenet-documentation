@@ -12,7 +12,7 @@ HELPTEXT="\n
 # \n
 # Usage: sync-storage --storage=[durable storage path] --active_storage=[active storage path] --image=[path for active storage image] --size=[active storage size] --period=[sync period in seconds] \n
 # \n
-# Alternatively, you can set the same settings with environment variables $STORAGE, $RAMDISK_MOUNTPOINT, $RAMDISK, $SIZE, and $INTERVAL. Command flags overrule environment vars.\n
+# Alternatively, you can set the same settings with environment variables \$STORAGE, \$RAMDISK_MOUNTPOINT, \$RAMDISK, \$SIZE, and \$INTERVAL. Command flags overrule environment vars.\n
 # \n
 # Default parameters:\n
 # storage=/tmp/durable-storage\n
