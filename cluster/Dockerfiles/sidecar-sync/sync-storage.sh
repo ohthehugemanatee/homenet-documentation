@@ -63,6 +63,7 @@ set -o nounset
 printf "Creating a ${SIZE} image at ${RAMDISK}, mounting it at ${RAMDISK_MOUNTPOINT}.\n"
 printf "It will sync to ${STORAGE} every ${SYNCPERIOD} seconds.\n"
 
+trap "cleanup" TERM
 
 # Startup. Create the image file, mount it, copy contents from durable to active storage.
 startup()
@@ -103,7 +104,6 @@ cleanup()
 
 ## Program execution
 
-trap "cleanup" TERM
 
 
 startup
