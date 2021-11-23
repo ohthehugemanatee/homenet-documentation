@@ -51,7 +51,7 @@ spec:
           command:
             - /bin/bash
             - -c
-            - until [ -f "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/ready" ]; do sleep 1; done; exec /init
+            - until [ -f "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases/ready" ]; do sleep 1; done; chown -R 1000:1000 "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases";  exec /init
           resources:
             requests:
               memory: "1024Mi"
