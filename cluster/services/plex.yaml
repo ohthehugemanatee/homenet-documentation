@@ -62,6 +62,20 @@ spec:
               gpu.intel.com/i915: 1
           ports:
             - containerPort: 32400
+          startupProbe:
+            tcpSocket:
+              port: 32400
+            initialDelaySeconds: 15 
+            periodSeconds: 5 
+            successThreshold: 1
+          livenessProbe:
+            tcpSocket:
+              port: 32400
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 1 
+            successThreshold: 1
           env:
             - name: PGID
               value: "1000"
