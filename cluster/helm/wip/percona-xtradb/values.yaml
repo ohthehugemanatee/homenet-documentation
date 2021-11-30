@@ -1,0 +1,10 @@
+backup:
+  schedule:
+    - storageName: "percona-backup"
+  storages:
+    percona-backup:
+      persistentVolumeClaim:
+        type: "nfs-client"
+pxc:
+  nodeSelector:
+    kubernetes.io/arch: amd64
