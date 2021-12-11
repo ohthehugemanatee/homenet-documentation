@@ -28,10 +28,10 @@ spec:
         image: linuxserver/mariadb
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "1000m"
+            memory: "2Gi"
+            cpu: "1500m"
           limits:
-            memory: "1024Mi"
+            memory: "2500Mi"
             cpu: "2000m"
         ports:
           - containerPort: 3306
