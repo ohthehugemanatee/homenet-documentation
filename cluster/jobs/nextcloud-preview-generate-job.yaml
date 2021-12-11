@@ -44,5 +44,10 @@ spec:
                   mountPath: "/data"
                   subPath: "nextcloud"
                 - name: nfs
+                  mountPath: "/nfs"
+                - name: nfs
+                  mountPath: "/www"
+                  subPath: ".docker/config/nextcloud-www"
+                - name: nfs
                   mountPath: "/config"
                   subPath: ".docker/config/nextcloud"
