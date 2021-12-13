@@ -16,6 +16,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
+        kubernetes.io/hostname: celery
       volumes:
         - name: nfs
           persistentVolumeClaim:
@@ -55,10 +56,10 @@ spec:
           resources:
             requests:
               memory: "1024Mi"
-              cpu: "2000m"
+              cpu: "1000m"
             limits:
-              memory: "3Gi"
-              cpu: "2000m" 
+              memory: "2Gi"
+              cpu: "1000m" 
               gpu.intel.com/i915: 1
           ports:
             - containerPort: 32400
