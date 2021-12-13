@@ -162,6 +162,10 @@ spec:
         backend:
           serviceName: plex
           servicePort: 32400
+  tls:
+  - hosts:
+    - plex.germany.vertesi.com
+    secretName: plex-germany-vertesi-com-tls
 ---
 apiVersion: v1
 kind: Service
