@@ -43,9 +43,9 @@ spec:
                 - pgrep
                 - nginx
             initialDelaySeconds: 60
-            periodSeconds: 5
+            periodSeconds: 10 
             timeoutSeconds: 10
-            failureThreshold: 5
+            failureThreshold: 6 
             successThreshold: 1
           livenessProbe:
             exec:
@@ -59,10 +59,10 @@ spec:
             successThreshold: 1
           readinessProbe:
             httpGet:
-              path: /status.php
+              path: /
               port: 80
             initialDelaySeconds: 30
-            periodSeconds: 60
+            periodSeconds: 300
             timeoutSeconds: 10
             failureThreshold: 3
             successThreshold: 1
