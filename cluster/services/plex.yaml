@@ -29,7 +29,12 @@ spec:
         - name: promtail-config
           configMap:
             name: sidecar-promtail
+        - name: plex-logs
+          emptyDir:
+            medium: Memory
       terminationGracePeriodSeconds: 60
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: plex-config
           image: ghcr.io/ohthehugemanatee/sidecar-sync:multiarch
@@ -53,9 +58,8 @@ spec:
           image: grafana/promtail:2.1.0
           imagePullPolicy: IfNotPresent
           volumeMounts:
-            - name: nfs
+            - name: plex-logs
               mountPath: /sidecar-logs
-              subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Logs"
             - mountPath: /etc/promtail
               name: promtail-config
         - name: plex
@@ -91,14 +95,14 @@ spec:
             failureThreshold: 5 
             successThreshold: 1
           env:
-            - name: PGID
-              value: "1000"
-            - name: PUID
-              value: "1000"
             - name: TZ
               value: "Europe/Berlin"
             - name: VERSION
               value: "latest"
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
           volumeMounts:
             - mountPath: /config
               name: nfs
@@ -106,6 +110,8 @@ spec:
             - mountPath: "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
               mountPropagation: HostToContainer
               name: plex-ramdisk-mount
+            - name: plex-logs
+              mountPath: "/config/Library/Application Support/Plex Media Server/Logs"
             - name: nfs
               mountPath: "/shared"
             - name: nfs
