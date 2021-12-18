@@ -19,7 +19,37 @@ spec:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
+        - name: promtail-config
+          configMap:
+            name: sidecar-promtail
+        - name: sidecar-promtail-logs
+          emptyDir:
+            medium: Memory 
       containers:
+        - name: promtail-sidecar
+          image: grafana/promtail:2.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-config.file=/etc/promtail/config.yml"
+            - '--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)' 
+          env:
+            - name: POD_RUN
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['run']
+            - name: POD_NAMESPACE 
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: sidecar-promtail-logs
+              mountPath: /sidecar-logs
+            - mountPath: /etc/promtail
+              name: promtail-config
         - name: duplicacy
           resources:
             requests:
