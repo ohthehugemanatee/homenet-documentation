@@ -28,7 +28,7 @@ spec:
             sizeLimit: 1550M
         - name: promtail-config
           configMap:
-            name: loki-promtail
+            name: sidecar-promtail
       terminationGracePeriodSeconds: 60
       containers:
         - name: plex-config
