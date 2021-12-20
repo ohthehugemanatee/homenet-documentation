@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: dns-bg-check
+  namespace: dns-bg-check
+spec:
+  selector:
+    matchLabels:
+      debug: dns-bg-check
+  template:
+    metadata:
+      labels:
+        debug: dns-bg-check
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: dns-bg-check
+          image: gcr.io/kubernetes-e2e-test-images/dnsutils:1.3
+          command: [ "/bin/sh"]
+          args:
+            - "-c"
+            - |
+              while sleep 5; do
+                RESULT=$(nslookup redis.default.svc.cluster.local)
+                if [ $? -ne 1 ]; then
+                  echo 'DEBUG: lookup successful'
+                else
+                  echo "ERROR: lookup failed with output: $(echo ${RESULT} | tr '\n' '\t')"
+                fi
+              done
