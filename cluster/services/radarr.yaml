@@ -14,6 +14,7 @@ spec:
       labels:
         run: radarr
     spec:
+      terminationGracePeriodSeconds: 300
       volumes:
         - name: ramdisk
           emptyDir: {}
@@ -29,7 +30,7 @@ spec:
           resources: {}
           env:
             - name: SIZE
-              value: '800M'
+              value: '1200M'
             - name: STORAGE
               value: /tmp/radarr-durable-storage
             - name: RAMDISK_MOUNTPOINT
