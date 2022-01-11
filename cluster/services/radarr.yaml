@@ -16,8 +16,7 @@ spec:
     spec:
       volumes:
         - name: ramdisk
-          emptyDir:
-            sizeLimit: 800M
+          emptyDir: {}
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
