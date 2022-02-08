@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: radarr
 spec:
@@ -7,14 +7,12 @@ spec:
     matchLabels:
       run: radarr
   replicas: 1 
-  strategy:
-    type: Recreate
+  serviceName: radarr
   template:
     metadata:
       labels:
         run: radarr
     spec:
-      terminationGracePeriodSeconds: 300
       volumes:
         - name: nfs
           persistentVolumeClaim:
