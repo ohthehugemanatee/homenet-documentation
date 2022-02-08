@@ -16,43 +16,13 @@ spec:
     spec:
       terminationGracePeriodSeconds: 300
       volumes:
-        - name: ramdisk
-          emptyDir: {}
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
         - emptyDir: {}
-          name: radarr-ramdisk-mount
+          name: radarr-db
       containers:
-        - name: radarr-config
-          image: ghcr.io/ohthehugemanatee/sidecar-sync:multiarch
-          imagePullPolicy: Always
-          resources: {}
-          env:
-            - name: SIZE
-              value: '1200M'
-            - name: STORAGE
-              value: /tmp/radarr-durable-storage
-            - name: RAMDISK_MOUNTPOINT
-              value: /mnt/radarr-active-storage
-            - name: RAMDISK
-              value: /tmp/radarr-ramdisk
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: ramdisk
-              mountPath: /tmp/radarr-ramdisk
-            - name: nfs
-              mountPath: /tmp/radarr-durable-storage
-              subPath: ".docker/config/radarr"
-            - name: radarr-ramdisk-mount
-              mountPath: /mnt/radarr-active-storage
-              mountPropagation: Bidirectional
         - name: radarr
-          command:
-            - sh
-            - -c
-            - until [ -f "/config/ready" ]; do sleep 1; done; /init
           image: linuxserver/radarr
           ports:
             - containerPort: 7878
@@ -64,11 +34,10 @@ spec:
             - name: TZ
               value: "Europe/Berlin"
           volumeMounts:
-            - mountPath: /config
-              mountPropagation: HostToContainer
-              name: radarr-ramdisk-mount
+            - mountPath: /db
+              name: radarr-db
             - name: nfs
-              mountPath: /radarr-config
+              mountPath: /config
               subPath: ".docker/config/radarr"
             - name: nfs
               mountPath: "/downloads"
