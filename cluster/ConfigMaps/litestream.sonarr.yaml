@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    run: sonarr
+  name: sonarr-litestream
+data:
+  litestream.yml: |
+    dbs:
+      - path: /db/sonarr.db
+        replicas:
+          - path: /db.backup/sonarr.db
