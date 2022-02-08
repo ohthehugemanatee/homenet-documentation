@@ -22,13 +22,25 @@ spec:
         - name: litestream-config
           configMap:
             name: radarr-litestream
+      initContainers:
+        - name: init-litestream
+          image: litestream/litestream:0.3.7
+          args: ['restore', '-if-db-not-exists', '-if-replica-exists', '-v', '/db/radarr.db']
+          volumeMounts:
+          - name: radarr-db
+            mountPath: /db
+          - name: nfs
+            subPath: ".docker/config/radarr/db-backup.litestream"
+            mountPath: /db.backup
+          - name: litestream-config
+            mountPath: /etc/litestream.yml
+            subPath: litestream.yml
       containers:
         - name: radarr-litestream
           image: litestream/litestream:0.3.7
           args: ['replicate']
           volumeMounts:
-          - name: nfs
-            subPath: ".docker/config/radarr"
+          - name: radarr-db
             mountPath: /db
           - name: nfs
             subPath: ".docker/config/radarr/db-backup.litestream"
