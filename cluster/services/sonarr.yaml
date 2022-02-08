@@ -15,38 +15,13 @@ spec:
           run: sonarr
     spec:
       volumes:
-        - name: ramdisk
-          emptyDir:
-            sizeLimit: 400M
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
         - emptyDir: {}
-          name: sonarr-ramdisk-mount
+          name: sonarr-db
       containers:
-        - name: sonarr-config
-          image: ghcr.io/ohthehugemanatee/sidecar-sync:multiarch
-          imagePullPolicy: Always
-          resources: {}
-          env:
-            - name: SIZE
-              value: '400M'
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: ramdisk
-              mountPath: /tmp/ramdisk
-            - name: nfs
-              mountPath: /tmp/durable-storage
-              subPath: ".docker/config/sonarr"
-            - name: sonarr-ramdisk-mount
-              mountPath: /mnt/active-storage
-              mountPropagation: Bidirectional
         - name: sonarr
-          command:
-            - sh
-            - -c
-            - until [ -f "/config/ready" ]; do sleep 1; done; /init
           env:
             - name: PUID
               value: "1000"
@@ -58,11 +33,10 @@ spec:
               name: sonarr
               protocol: TCP
           volumeMounts:
-            - mountPath: /config
-              mountPropagation: HostToContainer
-              name: sonarr-ramdisk-mount
+            - mountPath: /db
+              name: sonarr-db
             - name: nfs
-              mountPath: /sonarr-config
+              mountPath: /config
               subPath: ".docker/config/sonarr"
             - name: nfs
               mountPath: "/downloads"
