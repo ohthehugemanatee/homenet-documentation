@@ -19,7 +19,23 @@ spec:
             claimName: nfs-claim
         - emptyDir: {}
           name: radarr-db
+        - name: litestream-config
+          configMap:
+            name: radarr-litestream
       containers:
+        - name: radarr-litestream
+          image: litestream/litestream:0.3.7
+          args: ['replicate']
+          volumeMounts:
+          - name: nfs
+            subPath: ".docker/config/radarr"
+            mountPath: /db
+          - name: nfs
+            subPath: ".docker/config/radarr/db-backup.litestream"
+            mountPath: /db.backup
+          - name: litestream-config
+            mountPath: /etc/litestream.yml
+            subPath: litestream.yml
         - name: radarr
           image: linuxserver/radarr
           ports:

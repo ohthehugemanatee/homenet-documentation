@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    run: radarr
+  name: radarr-litestream
+data:
+  litestream.yml: |
+    dbs:
+      - path: /db/radarr.db
+        replicas:
+          - path: /db.backup/radarr.db
