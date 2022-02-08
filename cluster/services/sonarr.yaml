@@ -24,13 +24,25 @@ spec:
         - name: litestream-config
           configMap:
             name: sonarr-litestream
+      initContainers:
+        - name: init-litestream
+          image: litestream/litestream:0.3.7
+          args: ['restore', '-if-db-not-exists', '-if-replica-exists', '-v', '/db/sonarr.db']
+          volumeMounts:
+          - name: sonarr-db
+            mountPath: /db
+          - name: nfs
+            subPath: ".docker/config/sonarr/db-backup.litestream"
+            mountPath: /db.backup
+          - name: litestream-config
+            mountPath: /etc/litestream.yml
+            subPath: litestream.yml
       containers:
         - name: sonarr-litestream
           image: litestream/litestream:0.3.7
           args: ['replicate']
           volumeMounts:
-          - name: nfs
-            subPath: ".docker/config/sonarr"
+          - name: sonarr-db
             mountPath: /db
           - name: nfs
             subPath: ".docker/config/sonarr/db-backup.litestream"
