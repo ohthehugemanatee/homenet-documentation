@@ -13,13 +13,31 @@ spec:
         labels:
           run: sonarr
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
         - emptyDir: {}
           name: sonarr-db
+        - name: litestream-config
+          configMap:
+            name: sonarr-litestream
       containers:
+        - name: sonarr-litestream
+          image: litestream/litestream:0.3.7
+          args: ['replicate']
+          volumeMounts:
+          - name: nfs
+            subPath: ".docker/config/sonarr"
+            mountPath: /db
+          - name: nfs
+            subPath: ".docker/config/sonarr/db-backup.litestream"
+            mountPath: /db.backup
+          - name: litestream-config
+            mountPath: /etc/litestream.yml
+            subPath: litestream.yml
         - name: sonarr
           env:
             - name: PUID
