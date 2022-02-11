@@ -1,27 +1,54 @@
-----
-- name: Playbook to setup k3s agent nodes
-  hosts: agents
-  become: true
-  tasks:
-    - name: Apt installs
-      apt:
-        update_cache: yes
-        pkg:
-          - nfs-client
-          - vim
-          - intel-media-va-driver-non-free
-          - libmfx1
-		- name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
-			shell: |
-				swapoff -a
-		- name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
-			replace:
-				path: /etc/fstab
-				regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
-				replace: '# \1'
-    - name: Install k3s-agent
-      command: curl -sfL https://get.k3s.io | K3S_URL=https://cluster.vert:6443 K3S_TOKEN={{ k3s_token }} sh -
-      become: yes
-      args:
-        chdir: /tmp/ledcontrol
-        creates: /usr/local/bin/ledcontrol
+---
+  - name: "Playbook to setup k3s agent nodes"
+    hosts: all
+    become: true
+    tasks:
+      - name: Set the hostname
+        ansible.builtin.hostname:
+          name: '{{ new_hostname }}'
+        when: new_hostname is defined
+      - name: Append kernel command line params
+        become: true
+        ansible.builtin.lineinfile:
+          path: /boot/firmware/cmdline.txt
+          backrefs: yes
+          regexp: '^(.*)$'
+          line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+        when: new_hostname is defined
+      - name: Reboot
+        reboot:
+      - name: Apt installs
+        apt:
+          update_cache: yes
+          pkg:
+            - nfs-client
+            - vim
+      - name: x86-only apt installs
+        when: ansible_architecture == "x86_64"
+        apt:
+          pkg:
+            - intel-media-va-driver-non-free
+            - libmfx1
+      - name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
+        shell: |
+          swapoff -a
+      - name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
+        replace:
+          path: /etc/fstab
+          regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+          replace: '# \1'
+      - name: Download k3s agent installer
+        tags: 
+          - k3s
+        get_url:
+          url: https://get.k3s.io
+          dest: /tmp/k3s-setup.sh
+          mode: 0755
+      - name: Run k3s agent installer
+        tags: 
+          - k3s
+        shell: /tmp/k3s-setup.sh
+        become: yes
+        environment:
+          K3S_URL: https://10.10.10.10:6443 
+          K3S_TOKEN: "{{ k3s_token }}"
