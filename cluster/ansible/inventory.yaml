@@ -1,0 +1,15 @@
+all:
+  hosts:
+  agents:
+    cluster2:
+      ip: 10.10.10.11
+      ansible_user: ubuntu
+      new_hostname: "cluster2"
+    cluster3:
+      ip: 10.10.10.12
+      ansible_user: ubuntu
+      new_hostname: "cluster3"
+    cluster4:
+      ip: 10.10.10.15
+      ansible_user: ubuntu
+      new_hostname: "cluster4"
