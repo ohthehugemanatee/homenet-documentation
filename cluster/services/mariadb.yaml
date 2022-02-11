@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: mariadb
 spec:
@@ -7,19 +7,21 @@ spec:
     matchLabels:
       run: mariadb
   replicas: 1 
+  serviceName: mariadb
   template:
     metadata:
       labels:
         run: mariadb
     spec:
       nodeSelector:
-        beta.kubernetes.io/arch: amd64
+        kubernetes.io/arch: amd64
       volumes:
         - name: ramdisk
           emptyDir:
             sizeLimit: 500M
             medium: Memory
-
+        - name: databases
+          emptyDir: {}
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
@@ -73,6 +75,8 @@ spec:
           - name: nfs
             mountPath: "/config"
             subPath: ".docker/config/mariadb"
+          - name: databases
+            mountPath: "/config/databases"
           - name: ramdisk
             mountPath: "/ramdisk"
 ---
