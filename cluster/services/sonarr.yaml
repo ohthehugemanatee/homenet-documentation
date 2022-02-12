@@ -13,8 +13,6 @@ spec:
         labels:
           run: sonarr
     spec:
-      nodeSelector:
-        kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
@@ -99,7 +97,7 @@ spec:
 
 ---
 
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: sonarr
@@ -108,14 +106,20 @@ spec:
   - host: sonarr.cluster.vert
     http:
       paths:
-      - path: /
-        backend:
-          serviceName: sonarr
-          servicePort: 8989
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: sonarr
+              port: 
+                number: 8989
   - host: sonarr.vert
     http:
       paths:
-      - path: /
-        backend:
-          serviceName: sonarr
-          servicePort: 8989
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: sonarr
+              port:
+                number: 8989
