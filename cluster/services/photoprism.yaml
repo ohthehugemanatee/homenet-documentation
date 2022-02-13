@@ -26,8 +26,8 @@ spec:
             memory: "256Mi"
             cpu: "300m"
           limits:
-            memory: "4000Mi"
-            cpu: "2000m"
+            memory: "512Mi"
+            cpu: "1000m"
         env:
         - name: PHOTOPRISM_DEBUG
           value: "false"
