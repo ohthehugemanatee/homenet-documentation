@@ -55,7 +55,7 @@ spec:
             requests:
               memory: "4Gi"
             limits:
-              memory: "5Gi"
+              memory: "6Gi"
           env:
             - name: "TZ"
               value: "Europe/Berlin"
