@@ -20,7 +20,7 @@ spec:
           claimName: nfs-claim
       containers:
       - name: photoprism
-        image: thielepaul/photoprism:db-api
+        image: photoprism/photoprism:latest
         resources:
           requests:
             memory: "256Mi"
@@ -48,7 +48,7 @@ spec:
         - name: PHOTOPRISM_DATABASE_DRIVER
           value: mysql
         - name: PHOTOPRISM_SITE_URL
-          value: photos.germany.vertesi.com
+          value: "https://photos.germany.vertesi.com/"
         - name: PHOTOPRISM_HTTP_PORT
           value: "2342"
         - name: PHOTOPRISM_DATABASE_SERVER
