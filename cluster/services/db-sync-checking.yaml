@@ -70,7 +70,7 @@ spec:
 
 ---
 
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: db-sync-checking
@@ -84,9 +84,12 @@ spec:
     http:
       paths:
       - backend:
-          serviceName: db-sync-checking
-          servicePort: 3000
+          service:
+            name: db-sync-checking
+            port: 
+              number: 3000
         path: /
+        pathType: Prefix
   tls:
   - hosts:
     - db-ynab-sync.cluster.vert
