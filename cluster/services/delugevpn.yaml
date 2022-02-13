@@ -88,7 +88,7 @@ spec:
 
 ---
 
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: delugevpn
@@ -98,13 +98,19 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: delugevpn
-          servicePort: 8112
+          service:
+            name: delugevpn
+            port: 
+              number: 8112
   - host: deluge.vert
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: delugevpn
-          servicePort: 8112
+          service:
+            name: delugevpn
+            port: 
+              number: 8112
