@@ -21,7 +21,8 @@ spec:
             sizeLimit: 500M
             medium: Memory
         - name: databases
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: mariadb-local-path
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
@@ -79,6 +80,18 @@ spec:
             mountPath: "/config/databases"
           - name: ramdisk
             mountPath: "/ramdisk"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-local-path
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 3Gi
 ---
 
 apiVersion: v1
