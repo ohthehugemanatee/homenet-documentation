@@ -1,5 +1,5 @@
 # ingress only, loki-grafana from the loki-stack helmchart does the rest.
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: grafana
@@ -10,7 +10,10 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: loki-grafana
-          servicePort: 80
+          service: 
+            name: loki-grafana
+            port:
+              number: 80
 

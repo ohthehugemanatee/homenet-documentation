@@ -105,7 +105,7 @@ spec:
 
 ---
 
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: duplicacy
@@ -115,14 +115,20 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: duplicacy
-          servicePort: 3875
+          service:
+            name: duplicacy
+            port:
+              number: 3875
   - host: duplicacy.vert
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: duplicacy
-          servicePort: 3875
+          service:
+            name: duplicacy
+            port:
+              number: 3875
 
