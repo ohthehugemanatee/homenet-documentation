@@ -42,6 +42,8 @@ spec:
                 value: /originals
               - name: PHOTOPRISM_ORIGINALS_LIMIT
                 value: "2000"
+              - name: PHOTOPRISM_FACE_SCORE
+                value: "8"
               - name: PHOTOPRISM_DETECT_NSFW
                 value: "false"
               - name: PHOTOPRISM_HTTP_COMPRESSION

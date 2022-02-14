@@ -45,6 +45,8 @@ spec:
           value: "false"
         - name: PHOTOPRISM_HTTP_COMPRESSION
           value: "gzip"
+        - name: PHOTOPRISM_FACE_SCORE
+          value: "8"
         - name: PHOTOPRISM_DATABASE_DRIVER
           value: mysql
         - name: PHOTOPRISM_SITE_URL
