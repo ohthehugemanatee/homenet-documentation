@@ -31,6 +31,8 @@ spec:
         env:
         - name: PHOTOPRISM_DEBUG
           value: "false"
+        - name: PHOTOPRISM_SPONSOR
+          value: "true"
         - name: PHOTOPRISM_STORAGE_PATH
           value: /assets
         - name: PHOTOPRISM_IMPORT_PATH
@@ -104,12 +106,9 @@ kind: Ingress
 metadata:
   name: photoprism
   annotations:
-    traefik.frontend.priority: "2"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     ingress.kubernetes.io/hsts-max-age: "15552000"
-    ingress.kubernetes.io/hsts-include-subdomains: "true"
-    ingress.kubernetes.io/hsts-preload: "true"
-    traefik.ingress.kubernetes.io/redirect-entry-point: https
 spec:
   rules:
   - host: photos.germany.vertesi.com
