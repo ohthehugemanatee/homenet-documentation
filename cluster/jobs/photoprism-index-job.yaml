@@ -3,7 +3,7 @@ kind: CronJob
 metadata: 
   name: photoprism-index
 spec:
-  schedule: "*/10 * * * *"
+  schedule: "* * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
@@ -30,7 +30,9 @@ spec:
               env:
               - name: PHOTOPRISM_DEBUG
                 value: "false"
-              - name: PHOTOPRISM_EXPERIMENTAL
+              - name: PHOTOPRISM_WORKERS
+                value: "1"
+              - name: PHOTOPRISM_SPONSOR
                 value: "true"
               - name: PHOTOPRISM_STORAGE_PATH
                 value: /assets
@@ -41,9 +43,7 @@ spec:
               - name: PHOTOPRISM_ORIGINALS_PATH
                 value: /originals
               - name: PHOTOPRISM_ORIGINALS_LIMIT
-                value: "2000"
-              - name: PHOTOPRISM_FACE_SCORE
-                value: "8"
+                value: "11000"
               - name: PHOTOPRISM_DETECT_NSFW
                 value: "false"
               - name: PHOTOPRISM_HTTP_COMPRESSION
