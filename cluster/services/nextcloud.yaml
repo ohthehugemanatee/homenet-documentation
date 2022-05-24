@@ -112,7 +112,6 @@ kind: Ingress
 metadata:
   name: nextcloud
   annotations:
-    traefik.frontend.priority: "2"
     cert-manager.io/cluster-issuer: letsencrypt-prod
     ingress.kubernetes.io/hsts-max-age: "15552000"
     ingress.kubernetes.io/hsts-include-subdomains: "true"
