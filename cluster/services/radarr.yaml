@@ -24,7 +24,7 @@ spec:
             name: radarr-litestream
       initContainers:
         - name: init-litestream
-          image: litestream/litestream:0.3.7
+          image: litestream/litestream:0.4.0-beta.2
           args: ['restore', '-if-db-not-exists', '-if-replica-exists', '-v', '/db/radarr.db']
           volumeMounts:
           - name: radarr-db
@@ -37,7 +37,7 @@ spec:
             subPath: litestream.yml
       containers:
         - name: radarr-litestream
-          image: litestream/litestream:0.3.7
+          image: litestream/litestream:0.4.0-beta.2
           args: ['replicate']
           volumeMounts:
           - name: radarr-db
