@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       run: mariadb
-  replicas: 1 
+  replicas: 2 
   serviceName: mariadb
   template:
     metadata:
