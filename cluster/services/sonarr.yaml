@@ -13,6 +13,8 @@ spec:
         labels:
           run: sonarr
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       volumes:
         - name: nfs
           persistentVolumeClaim:
@@ -24,8 +26,8 @@ spec:
             name: sonarr-litestream
       initContainers:
         - name: init-litestream
-          image: litestream/litestream:0.4.0-beta.2
-          args: ['restore', '-if-db-not-exists', '-if-replica-exists', '/db/sonarr.db']
+          image: litestream/litestream:0.3.8
+          args: ['restore', '-if-db-not-exists', '-if-replica-exists', '-v', '/db/sonarr.db']
           volumeMounts:
           - name: sonarr-db
             mountPath: /db
@@ -37,7 +39,7 @@ spec:
             subPath: litestream.yml
       containers:
         - name: sonarr-litestream
-          image: litestream/litestream:0.4.0-beta.2
+          image: litestream/litestream:0.3.8
           args: ['replicate']
           volumeMounts:
           - name: sonarr-db
