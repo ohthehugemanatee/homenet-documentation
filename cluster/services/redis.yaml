@@ -24,7 +24,7 @@ spec:
           - "--maxmemory-policy"
           - "allkeys-lru"
           - "--save"
-          - "\"\""
+          - ""
         ports:
           - name: redis-server
             containerPort: 6379
