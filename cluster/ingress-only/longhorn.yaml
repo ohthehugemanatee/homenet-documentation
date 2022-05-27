@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: longhorn-ingress
+  namespace: longhorn-system
+  annotations:
+    ingress.kubernetes.io/protocol: http
+    traefik.ingress.kubernetes.io/rule-type: PathPrefixStrip
+spec:
+  rules:
+    - host: longhorn.cluster.vert
+      http:
+        paths:
+        - pathType: Prefix
+          path: "/"
+          backend:
+            service:
+              name: longhorn-frontend
+              port:
+                number: 80
+
+    - host: longhorn.germany.vertesi.com
+      http:
+        paths:
+        - pathType: Prefix
+          path: "/"
+          backend:
+            service:
+              name: longhorn-frontend
+              port:
+                number: 80
+
+--- 
+apiVersion: v1
+kind: Service
+metadata:
+  name: longhorn-lb
+  namespace: longhorn-system
+  labels:
+    run: longhorn-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: longhorn-ui
+  ports:
+    - protocol: TCP
+      port: 8088
+      targetPort: 80
