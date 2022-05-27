@@ -6,8 +6,17 @@ spec:
   selector:
     matchLabels:
       run: mariadb
-  replicas: 2 
+  replicas: 1 
   serviceName: mariadb
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "local-path"
+        resources:
+          requests:
+            storage: 3Gi
   template:
     metadata:
       labels:
@@ -20,9 +29,6 @@ spec:
           emptyDir:
             sizeLimit: 500M
             medium: Memory
-        - name: databases
-          persistentVolumeClaim:
-            claimName: mariadb-local-path
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
@@ -76,22 +82,10 @@ spec:
           - name: nfs
             mountPath: "/config"
             subPath: ".docker/config/mariadb"
-          - name: databases
+          - name: datadir
             mountPath: "/config/databases"
           - name: ramdisk
             mountPath: "/ramdisk"
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mariadb-local-path
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 3Gi
 ---
 
 apiVersion: v1
