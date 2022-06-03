@@ -17,6 +17,7 @@
         when: new_hostname is defined
       - name: Reboot
         reboot:
+        when: new_hostname is defined
       - name: Apt installs
         apt:
           update_cache: yes
