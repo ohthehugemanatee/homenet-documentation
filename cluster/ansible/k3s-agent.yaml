@@ -38,6 +38,29 @@
           path: /etc/fstab
           regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
           replace: '# \1'
+      - name: get PARTUUID
+        ansible.builtin.command: 'lsblk {{ usb_disk }} -no PARTUUID'
+        register: partuuid
+        when: usb_disk is defined
+      - name: Mount up USB disk
+        ansible.posix.mount:
+          path: /mnt/usb
+          src: 'PARTUUID={{ partuuid.stdout }}'
+          fstype: ext4
+          opts: noatime
+          state: mounted
+        when: usb_disk is defined
+      - name: Create k3s directory on usb device
+        file:
+          path: /mnt/usb/k3s
+          state: directory
+        when: usb_disk is defined
+      - name: Create symbolic link for usb dir
+        file:
+          dest: "/var/lib/rancher/k3s"
+          src: "/mnt/usb/k3s"
+          state: link
+        when: usb_disk is defined
       - name: Download k3s agent installer
         tags: 
           - k3s
