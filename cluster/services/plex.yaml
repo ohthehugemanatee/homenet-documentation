@@ -15,7 +15,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
-        kubernetes.io/hostname: celery
+        kubernetes.io/hostname: fuji
       volumes:
         - name: nfs
           persistentVolumeClaim:
