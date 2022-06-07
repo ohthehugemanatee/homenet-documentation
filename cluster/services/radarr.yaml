@@ -8,6 +8,15 @@ spec:
       run: radarr
   replicas: 1 
   serviceName: radarr
+  volumeClaimTemplates:
+    - metadata:
+        name: radarr-db
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 3Gi
   template:
     metadata:
       labels:
@@ -19,8 +28,6 @@ spec:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-        - emptyDir: {}
-          name: radarr-db
         - name: litestream-config
           configMap:
             name: radarr-litestream
