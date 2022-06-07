@@ -1,0 +1,50 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata: 
+  name: nextcloud-update
+spec:
+  schedule: "0 3 */14 * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          volumes:
+            - name: nfs
+              persistentVolumeClaim:
+                claimName: nfs-claim
+          containers:
+            - name: nextcloud
+              image: lscr.io/linuxserver/nextcloud:php8
+              command: ["/bin/sh", "-c"]
+              args:
+                - /init & 
+                  sleep 180;
+                  sudo -u abc php8 $NEXTCLOUD_PATH/updater/updater.phar;
+                  sudo -u abc php8 /usr/bin/occ db:add-missing-indices -n -v;
+                  sudo -u abc php8 /usr/bin/occ db:add-missing-columns -n -v;
+                  sudo -u abc php8 /usr/bin/occ db:add-missing-primary-keys -n -v;
+                  sudo -u abc php8 /usr/bin/occ db:convert-filecache-bigint -n -v;
+                  echo done;
+              env:
+                - name: PUID
+                  value: "1000"
+                - name: PGID
+                  value: "1000"
+                - name: TZ
+                  value: "Europe/Berlin"
+              volumeMounts:
+                - name: nfs
+                  mountPath: "/data"
+                  subPath: "nextcloud"
+                - name: nfs
+                  mountPath: "/nfs"
+                - name: nfs
+                  mountPath: "/www"
+                  subPath: ".docker/config/nextcloud-www"
+                - name: nfs
+                  mountPath: "/config"
+                  subPath: ".docker/config/nextcloud"
