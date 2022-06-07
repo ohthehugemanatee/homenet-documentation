@@ -15,7 +15,8 @@ spec:
           image: lscr.io/linuxserver/nextcloud:php8
           command: ["/bin/sh", "-c"]
           args:
-            - /init;
+            - /init & 
+              sleep 180;
               sudo -u abc php8 $NEXTCLOUD_PATH/updater/updater.phar;
               echo done;
           env:
@@ -29,6 +30,11 @@ spec:
             - name: nfs
               mountPath: "/data"
               subPath: "nextcloud"
+            - name: nfs
+              mountPath: "/nfs"
+            - name: nfs
+              mountPath: "/www"
+              subPath: ".docker/config/nextcloud-www"
             - name: nfs
               mountPath: "/config"
               subPath: ".docker/config/nextcloud"
