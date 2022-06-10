@@ -55,6 +55,11 @@
           path: /mnt/usb/k3s
           state: directory
         when: usb_disk is defined
+      - name: Create longhorn directory on usb device
+        file:
+          path: /mnt/usb/longhorn
+          state: directory
+        when: usb_disk is defined
       - name: Create symbolic link for usb dir
         file:
           dest: "/var/lib/rancher/k3s"
