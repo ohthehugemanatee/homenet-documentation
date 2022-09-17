@@ -155,9 +155,6 @@ spec:
             - name: nfs
               mountPath: "/tv"
               subPath: "media/TV Shows"
-            - name: nfs
-              mountPath: "/transcode"
-              subPath: "media/.plex-transcode"
 
 ---
 apiVersion: v1
