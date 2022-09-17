@@ -22,10 +22,10 @@ spec:
         resources:
           requests:
             memory: "256Mi"
-            cpu: "300m"
+            cpu: "500m"
           limits:
-            memory: "512Mi"
-            cpu: "1000m"
+            memory: "1Gi"
+            cpu: "1500m"
         env:
         - name: PHOTOPRISM_DEBUG
           value: "false"
@@ -45,8 +45,6 @@ spec:
           value: "false"
         - name: PHOTOPRISM_HTTP_COMPRESSION
           value: "gzip"
-        - name: PHOTOPRISM_FACE_SCORE
-          value: "8"
         - name: PHOTOPRISM_DATABASE_DRIVER
           value: mysql
         - name: PHOTOPRISM_SITE_URL
