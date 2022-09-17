@@ -54,11 +54,15 @@ spec:
             - name: nfs
               mountPath: "/data"
               subPath: "media/Downloads"
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8989
+            periodSeconds: 30 
           livenessProbe:
             httpGet:
               path: /
               port: 8989
-            initialDelaySeconds: 60
             periodSeconds: 30 
 ---
 
