@@ -41,7 +41,7 @@ spec:
           - name: plex-live-db
             mountPath: /db.live
           - name: nfs
-            subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
+            subPath: ".docker/config/plex/plex-config/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
             mountPath: /db.backup
           - name: litestream-config
             mountPath: /etc/litestream.yml
@@ -53,7 +53,7 @@ spec:
           - name: plex-live-db
             mountPath: /db.live
           - name: nfs
-            subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
+            subPath: ".docker/config/plex/plex-config/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
             mountPath: /db.backup
           - name: litestream-config
             mountPath: /etc/litestream.yml
@@ -66,7 +66,7 @@ spec:
           - name: plex-live-db
             mountPath: /db.live
           - name: nfs
-            subPath: ".docker/config/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
+            subPath: ".docker/config/plex/plex-config/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
             mountPath: /db.backup
           - name: litestream-config
             mountPath: /etc/litestream.yml
@@ -130,11 +130,17 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: nfs
-              subPath: ".docker/config/plex"
+              subPath: ".docker/config/plex/plex-config"
             - mountPath: "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
               name: plex-live-db
             - name: plex-logs
               mountPath: "/config/Library/Application Support/Plex Media Server/Logs"
+            - mountPath: /custom-cont-init.d
+              name: nfs
+              subPath: ".docker/config/plex/custom-cont-init.d"
+            - mountPath: /custom-services.d
+              name: nfs
+              subPath: ".docker/config/plex/custom-services.d"
             - name: nfs
               mountPath: "/shared"
             - name: nfs
