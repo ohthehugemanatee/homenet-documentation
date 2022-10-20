@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ombi
+spec:
+  selector:
+    matchLabels:
+      run: ombi
+  replicas: 1 
+  serviceName: ombi
+  volumeClaimTemplates:
+    - metadata:
+        name: ombi-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 3Gi
+  template:
+    metadata:
+      labels:
+        run: ombi
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+        - name: ombi
+          image: lscr.io/linuxserver/ombi:latest
+          ports:
+            - containerPort: 3579
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - name: ombi-config
+              mountPath: /config
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ombi
+  labels:
+    run: ombi
+spec:
+  ports:
+  - port: 3579
+    protocol: TCP
+  selector:
+    run: ombi
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ombi
+spec:
+  rules:
+  - host: ombi.cluster.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ombi
+            port:
+              number: 3579
+  - host: ombi.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ombi
+            port:
+              number: 3579
+
