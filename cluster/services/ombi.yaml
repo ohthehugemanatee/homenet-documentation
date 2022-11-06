@@ -63,6 +63,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ombi
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   rules:
   - host: ombi.cluster.vert
@@ -85,4 +87,18 @@ spec:
             name: ombi
             port:
               number: 3579
+  - host: requests.germany.vertesi.com
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: ombi
+              port:
+                number: 3579
+  tls:
+  - hosts:
+    - requests.germany.vertesi.com
+    secretName: requests-germany-vertesi-com-tls
 
