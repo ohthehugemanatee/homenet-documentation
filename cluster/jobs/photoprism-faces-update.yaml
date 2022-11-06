@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: Job
+metadata: 
+  name: photoprism-faces-update
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: nfs-claim
+      containers:
+        - name: photoprism
+          image: photoprism/photoprism:latest
+          command: ["photoprism", "--face-cluster-dist", "1", "--face-match-dist", "1", "--sponsor", "faces", "index"]
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "2000m"
+            limits:
+              gpu.intel.com/i915: 1
+              memory: "3Gi"
+              cpu: "3000m"
+          env:
+          - name: PHOTOPRISM_DEBUG
+            value: "false"
+          - name: PHOTOPRISM_SPONSOR
+            value: "true"
+          - name: PHOTOPRISM_STORAGE_PATH
+            value: /assets
+          - name: PHOTOPRISM_IMPORT_PATH
+            value: /assets/photos/import
+          - name: PHOTOPRISM_EXPORT_PATH
+            value: /assets/photos/export
+          - name: PHOTOPRISM_ORIGINALS_PATH
+            value: /originals
+          - name: PHOTOPRISM_DETECT_NSFW
+            value: "false"
+          - name: PHOTOPRISM_HTTP_COMPRESSION
+            value: "gzip"
+          - name: PHOTOPRISM_DATABASE_DRIVER
+            value: mysql
+          - name: PHOTOPRISM_SITE_URL
+            value: photos.germany.vertesi.com
+          - name: PHOTOPRISM_HTTP_PORT
+            value: "2342"
+          - name: PHOTOPRISM_DATABASE_SERVER
+            value: "mariadb"
+          - name: PHOTOPRISM_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: photoprism
+                key: admin-password
+          - name: PHOTOPRISM_DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: photoprism
+                key: database-password
+          volumeMounts:
+            - name: nfs
+              mountPath: "/originals/archive"
+              subPath: "nextcloud/ohthehugemantee/files/archive/Photos"
+            - name: nfs
+              mountPath: "/originals/camera-roll"
+              subPath: "nextcloud/ohthehugemantee/files/Camera Uploads"
+            - name: nfs
+              mountPath: "/assets"
+              subPath: ".docker/config/photoprism"
+
