@@ -1,15 +1,21 @@
 all:
-  hosts:
-  agents:
-    cluster2:
-      ip: 10.10.10.11
-      ansible_user: ubuntu
-      new_hostname: "cluster2"
-    cluster3:
-      ip: 10.10.10.12
-      ansible_user: ubuntu
-      new_hostname: "cluster3"
-    cluster4:
-      ip: 10.10.10.15
-      ansible_user: ubuntu
-      new_hostname: "cluster4"
+  vars:
+    ansible_user: ubuntu
+    usb_disk: "/dev/sda1"
+  children:
+    masters:
+      hosts:
+        cluster1:
+          ip: 10.10.10.10
+          new_hostname: "cluster1"
+    agents:
+      hosts:
+        cluster2:
+          ip: 10.10.10.11
+          new_hostname: "cluster2"
+        cluster3:
+          ip: 10.10.10.12
+          new_hostname: "cluster3"
+        cluster4:
+          ip: 10.10.10.15
+          new_hostname: "cluster4"
