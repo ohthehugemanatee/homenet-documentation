@@ -18,6 +18,9 @@ spec:
       labels:
         run: nextcloud
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/hostname: celery
       volumes:
         - name: nfs
           persistentVolumeClaim:
@@ -26,7 +29,7 @@ spec:
         - name: ghcr
       containers:
         - name: nextcloud
-          image: lscr.io/linuxserver/nextcloud:php8
+          image: lscr.io/linuxserver/nextcloud:latest
           imagePullPolicy: Always
           resources:
             requests:
@@ -43,7 +46,7 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 10 
             timeoutSeconds: 10
-            failureThreshold: 6 
+            failureThreshold: 120 
             successThreshold: 1
           livenessProbe:
             exec:
@@ -79,6 +82,9 @@ spec:
             - name: nfs
               mountPath: "/data"
               subPath: "nextcloud"
+            - name: nfs
+              mountPath: "/custom-cont-init.d"
+              subPath: "nextcloud/custom-init"
             - name: nfs
               mountPath: "/nfs"
             - name: nfs
