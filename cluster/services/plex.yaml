@@ -198,9 +198,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: plex
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+  name: plex-internal
 spec:
   rules:
   - host: plex.cluster.vert
@@ -213,7 +211,7 @@ spec:
             name: plex
             port:
               number: 32400
-  - host: plex.germany.vertesi.com
+  - host: plex.vert
     http:
       paths:
       - path: /
@@ -223,7 +221,18 @@ spec:
             name: plex
             port:
               number: 32400
-  - host: plex.vert
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plex-external
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+spec:
+  rules:
+  - host: plex.germany.vertesi.com
     http:
       paths:
       - path: /
