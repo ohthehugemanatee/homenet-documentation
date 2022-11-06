@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    haproxy.org/backend-config-snippet: |
+      mode http
+      balance leastconn
+      stick-table type string len 2048 size 1k store conn_cur
+      http-request set-var(txn.wopisrcconns) url_param(WOPISrc),table_conn_cur()
+      http-request track-sc1 url_param(WOPISrc)
+      stick match url_param(WOPISrc) if { var(txn.wopisrcconns) -m int gt 0 }
+      stick store-request url_param(WOPISrc)
+    haproxy.org/timeout-tunnel: 3600s
+    meta.helm.sh/release-name: collabora-online
+    meta.helm.sh/release-namespace: default
+    nginx.ingress.kubernetes.io/upstream-hash-by: $arg_WOPISrc
+  creationTimestamp: "2022-10-14T11:54:54Z"
+  generation: 3
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: collabora-online
+  namespace: collabora
+  resourceVersion: "149005720"
+  uid: e7472122-e76d-41dc-af69-dd1e07fb784a
+spec:
+  rules:
+  - host: collabora.germany.vertesi.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: collabora-online
+            port:
+              number: 9980
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - collabora.germany.vertesi.com
+    secretName: collabora-germany-vertesi-com-tls
+status:
+  loadBalancer:
+    ingress:
+    - ip: 10.10.10.10
+    - ip: 2a02:8109:a280:2288::1e2

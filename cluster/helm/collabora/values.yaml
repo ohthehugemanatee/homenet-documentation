@@ -1,2 +1,7 @@
+environmentVariablesCool:
+  - name: extra_params
+    value: --o:ssl.enable=false --o:ssl.termination=true
+
 hosts:
   host: collabora.germany.vertesi.com
+
