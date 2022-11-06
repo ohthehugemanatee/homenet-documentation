@@ -2,7 +2,9 @@
 - name: Show facts
   become: true
   hosts: all
+  vars_files:
+    - 'secrets.yaml'
   tasks:
-    - name: Show facts available on the system
+    - name: Show variables and facts available on the system
       ansible.builtin.debug:
-        var: ansible_facts
+        var: hostvars[inventory_hostname]
