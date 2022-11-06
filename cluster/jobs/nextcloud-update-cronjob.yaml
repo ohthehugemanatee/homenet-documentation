@@ -24,10 +24,10 @@ spec:
                 - /init & 
                   sleep 180;
                   sudo -u abc php8 $NEXTCLOUD_PATH/updater/updater.phar;
-                  sudo -u abc php8 /usr/bin/occ db:add-missing-indices -n -v;
-                  sudo -u abc php8 /usr/bin/occ db:add-missing-columns -n -v;
-                  sudo -u abc php8 /usr/bin/occ db:add-missing-primary-keys -n -v;
-                  sudo -u abc php8 /usr/bin/occ db:convert-filecache-bigint -n -v;
+                  sudo -u abc -s /bin/bash -c "php8 $NEXTCLOUD_PATH/occ db:add-missing-indices -n -v";
+                  sudo -u abc -s /bin/bash -c "php8 $NEXTCLOUD_PATH/occ db:add-missing-columns -n -v";
+                  sudo -u abc -s /bin/bash -c "php8 $NEXTCLOUD_PATH/occ db:add-missing-primary-keys -n -v";
+                  sudo -u abc -s /bin/bash -c "php8 $NEXTCLOUD_PATH/occ db:convert-filecache-bigint -n -v";
                   echo done;
               env:
                 - name: PUID
