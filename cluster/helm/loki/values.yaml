@@ -2,19 +2,22 @@ grafana:
   enabled: true
   persistence:
     enabled: true
-  plugins:
-    - devopsprodigy-kubegraf-app
+  ingress:
+    enabled: true
+    hosts:
+      - grafana.cluster.vert
+  nodeSelector:
+    # because some grafana plugins don't support arm64 yet.
+    kubernetes.io/arch: amd64
 prometheus:
   enabled: true
   server:
     persistentVolume:
-      storageClass: "local-path"
+      storageClass: "longhorn"
   alertmanager:
     persistentVolume:
-      storageClass: "local-path"
+      storageClass: "longhorn"
 loki:
   persistence:
-    enabled: true
-    size: "10Gi"
-    storageClass: "local-path" 
+    enabled: false
 
