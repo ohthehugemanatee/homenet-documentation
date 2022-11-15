@@ -6,14 +6,11 @@ grafana:
     enabled: true
     hosts:
       - grafana.cluster.vert
-  nodeSelector:
+        #nodeSelector:
     # because some grafana plugins don't support arm64 yet.
-    kubernetes.io/arch: amd64
+    #kubernetes.io/arch: amd64
 prometheus:
   enabled: true
-  server:
-    persistentVolume:
-      storageClass: "longhorn"
   alertmanager:
     persistentVolume:
       storageClass: "longhorn"
