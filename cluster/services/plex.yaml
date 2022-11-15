@@ -127,6 +127,8 @@ spec:
               value: "1000"
             - name: PUID
               value: "1000"
+            - name: LIBVA_DRIVER_NAME
+              value: "i965"
           volumeMounts:
             - mountPath: /config
               name: nfs
