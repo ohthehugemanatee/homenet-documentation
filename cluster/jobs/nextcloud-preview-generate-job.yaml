@@ -18,7 +18,7 @@ spec:
                 claimName: nfs-claim
           containers:
             - name: nextcloud
-              image: lscr.io/linuxserver/nextcloud:php8
+              image: lscr.io/linuxserver/nextcloud:latest
               command: ["/bin/sh", "-c"]
               args:
                 - /init;
@@ -43,6 +43,9 @@ spec:
                 - name: nfs
                   mountPath: "/data"
                   subPath: "nextcloud"
+                - name: nfs
+                  mountPath: "/custom-cont-init.d"
+                  subPath: "nextcloud/custom-init"
                 - name: nfs
                   mountPath: "/nfs"
                 - name: nfs
