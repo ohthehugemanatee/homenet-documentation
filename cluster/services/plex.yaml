@@ -8,69 +8,34 @@ spec:
       run: plex
   replicas: 1 
   serviceName: plex
+  volumeClaimTemplates:
+    - metadata:
+        name: plex-live-db
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 3Gi
   template:
     metadata:
       labels:
         run: plex
     spec:
       nodeSelector:
-        kubernetes.io/arch: amd64
         kubernetes.io/hostname: fuji
       volumes:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-        - name: plex-live-db
-          emptyDir: {}
         - name: promtail-config
           configMap:
             name: sidecar-promtail
         - name: plex-logs
-          emptyDir:
-            medium: Memory
-        - name: litestream-config
-          configMap:
-            name: plex-litestream
+          emptyDir: {}
       securityContext:
         fsGroup: 1000
-      initContainers:
-        - name: init-litestream
-          image: litestream/litestream:0.3.7
-          args: ['restore', '-if-db-not-exists', '-if-replica-exists', '-v', '/db.live/com.plexapp.plugins.library.db']
-          volumeMounts:
-          - name: plex-live-db
-            mountPath: /db.live
-          - name: nfs
-            subPath: ".docker/config/plex/plex-config/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
-            mountPath: /db.backup
-          - name: litestream-config
-            mountPath: /etc/litestream.yml
-            subPath: litestream.yml
-        - name: init-litestream-blob
-          image: litestream/litestream:0.3.7
-          args: ['restore', '-if-db-not-exists', '-if-replica-exists', '-v', '/db.live/com.plexapp.plugins.library.blobs.db']
-          volumeMounts:
-          - name: plex-live-db
-            mountPath: /db.live
-          - name: nfs
-            subPath: ".docker/config/plex/plex-config/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
-            mountPath: /db.backup
-          - name: litestream-config
-            mountPath: /etc/litestream.yml
-            subPath: litestream.yml
       containers:
-        - name: plex-litestream
-          image: litestream/litestream:0.3.7
-          args: ['replicate']
-          volumeMounts:
-          - name: plex-live-db
-            mountPath: /db.live
-          - name: nfs
-            subPath: ".docker/config/plex/plex-config/Library/Application Support/Plex Media Server/Plug-in Support/Databases.storage"
-            mountPath: /db.backup
-          - name: litestream-config
-            mountPath: /etc/litestream.yml
-            subPath: litestream.yml
         - name: plex-promtail
           image: grafana/promtail:2.1.0
           imagePullPolicy: IfNotPresent
@@ -164,22 +129,6 @@ spec:
               mountPath: "/tv"
               subPath: "media/TV Shows"
 
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    run: radarr
-  name: plex-litestream
-data:
-  litestream.yml: |
-    dbs:
-      - path: /db.live/com.plexapp.plugins.library.db
-        replicas:
-          - path: /db.backup/com.plexapp.plugins.library.db
-      - path: /db.live/com.plexapp.plugins.library.blobs.db
-        replicas:
-          - path: /db.backup/com.plexapp.plugins.library.blobs.db
 ---
 
 apiVersion: v1
