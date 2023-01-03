@@ -194,9 +194,34 @@ spec:
             port:
               number: 32400
   tls:
-  - hosts:
-    - plex.germany.vertesi.com
-    secretName: plex-germany-vertesi-com-tls
+    - hosts:
+      - plex.germany.vertesi.com
+      secretName: plex-germany-vertesi-com-tls
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plex-external-cloudflare
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+spec:
+  rules:
+  - host: plex.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: plex
+            port:
+              number: 32400
+  tls:
+    - hosts:
+      - plex.vertesi.com
+      secretName: plex-vertesi-com-tls
 
 ---
 apiVersion: v1
