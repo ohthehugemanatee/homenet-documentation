@@ -177,31 +177,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: plex-external
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    traefik.ingress.kubernetes.io/redirect-entry-point: https
-spec:
-  rules:
-  - host: plex.germany.vertesi.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: plex
-            port:
-              number: 32400
-  tls:
-    - hosts:
-      - plex.germany.vertesi.com
-      secretName: plex-germany-vertesi-com-tls
----
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
   name: plex-external-cloudflare
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -223,17 +198,3 @@ spec:
       - plex.vertesi.com
       secretName: plex-vertesi-com-tls
 
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: plex-lb
-  labels:
-    run: plex-lb
-spec:
-  type: LoadBalancer
-  selector:
-    run: plex
-  ports:
-    - protocol: TCP
-      port: 32400
