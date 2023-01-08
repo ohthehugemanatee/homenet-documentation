@@ -57,6 +57,10 @@ spec:
             limits:
               memory: "6Gi"
           env:
+            - name: "GRP_ID"
+              value: "1000"
+            - name: "USR_ID"
+              value: "1000"
             - name: "TZ"
               value: "Europe/Berlin"
             - name: "DUPLICACY_WEB_VERSION"
