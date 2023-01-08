@@ -38,6 +38,7 @@ spec:
             cpu: "1000m"
         ports:
           - containerPort: 3306
+            name: mysql-svc
         livenessProbe:
           exec:
             command:
@@ -85,9 +86,25 @@ kind: Service
 metadata:
   name: mariadb
 spec:
+  selector:
+    run: mariadb
+  ports:
+    - port: 3306
+      name: mariadb-svc-port
+      protocol: TCP
+      targetPort: mysql-svc
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-ext
+spec:
   type: LoadBalancer
   selector:
     run: mariadb
   ports:
     - port: 3306
-      targetPort: 3306
+      protocol: TCP
+      targetPort: mysql-svc
