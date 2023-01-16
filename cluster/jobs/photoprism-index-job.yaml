@@ -22,8 +22,8 @@ spec:
               command: ["photoprism", "index"]
               resources:
                 requests:
-                  memory: "2000Mi"
-                  cpu: "1500m"
+                  memory: "3000Mi"
+                  cpu: "3000m"
                 limits:
                   memory: "3000Mi"
                   cpu: "3000m"
