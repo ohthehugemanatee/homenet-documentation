@@ -53,7 +53,7 @@ spec:
         - name: duplicacy
           resources:
             requests:
-              memory: "4Gi"
+              memory: "6Gi"
             limits:
               memory: "6Gi"
           env:

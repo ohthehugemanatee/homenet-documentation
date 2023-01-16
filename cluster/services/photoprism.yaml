@@ -21,8 +21,8 @@ spec:
         image: photoprism/photoprism:latest
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1500m"
           limits:
             memory: "1Gi"
             cpu: "1500m"
