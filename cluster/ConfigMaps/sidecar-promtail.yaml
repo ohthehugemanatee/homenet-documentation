@@ -41,4 +41,4 @@ data:
           - localhost
           labels:
             container: "promtail-sidecar"
-            __path__: "/sidecar-logs/*.log"
+            __path__: "/sidecar-logs/**/*.log"
