@@ -78,6 +78,8 @@ spec:
       labels:
         run: minecraft
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       volumes:
       - name: allowlist
         configMap:
