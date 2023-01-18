@@ -14,7 +14,6 @@
           backrefs: yes
           regexp: '^(.*)$'
           line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
-        when: new_hostname is defined
       - name: Reboot
         reboot:
         when: new_hostname is defined
@@ -60,6 +59,10 @@
           path: /mnt/usb/longhorn
           state: directory
         when: usb_disk is defined
+      - name: Create rancher root directory
+        file:
+          path: /var/lib/rancher
+          state: directory
       - name: Create symbolic link for usb dir
         file:
           dest: "/var/lib/rancher/k3s"
