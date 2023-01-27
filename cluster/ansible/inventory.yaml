@@ -10,6 +10,7 @@ all:
           new_hostname: "cluster1"
     agents:
       hosts:
+        nucnuc:
         cluster2:
           ip: 10.10.10.11
           new_hostname: "cluster2"

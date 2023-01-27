@@ -8,6 +8,7 @@
           name: '{{ new_hostname }}'
         when: new_hostname is defined
       - name: Append kernel command line params
+        when: ansible_architecture == "arm64"
         become: true
         ansible.builtin.lineinfile:
           path: /boot/firmware/cmdline.txt
