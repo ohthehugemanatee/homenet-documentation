@@ -35,6 +35,11 @@ spec:
             - name: PGID
               value: "1000"
           image: lscr.io/linuxserver/sonarr:latest
+          resources:
+            requests:
+              memory: 1Gi
+            limits:
+              memory: 1Gi
           ports:
             - containerPort: 8989
               name: sonarr
