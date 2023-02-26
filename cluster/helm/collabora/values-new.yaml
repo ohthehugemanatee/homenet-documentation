@@ -1,0 +1,33 @@
+collabora:
+  extra_params: --o:ssl.enable=false --o:ssl.termination=true
+  
+  # External hostname:port of the server running coolwsd. 
+  # If empty, it's derived from the request (please set it if this doesn't work). 
+  # May be specified when behind a reverse-proxy or when the hostname is not reachable directly.
+  # server_name: null
+  
+  # existingSecret:
+  #   enabled: false
+  #   secretName: ""
+  #   usernameKey: "username"
+  #   passwordKey: "password"
+  # password: examplepass
+  # username: admin
+
+service:
+  annotations: 
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+
+ingress:
+  enabled: true
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: collabora.germany.vertesi.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: collabora-germany-vertesi-com-tls
+      hosts:
+        - collabora.germany.vertesi.com
