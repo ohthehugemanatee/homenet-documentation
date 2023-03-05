@@ -1,5 +1,5 @@
 ---
-  - name: "Playbook to setup k3s multi-master nodes"
+  - name: "Playbook to setup k3s multi-master masters after the first one"
     hosts: all
     become: true
     tasks:
