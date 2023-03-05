@@ -1,8 +1,6 @@
 ---
-  - name: "Playbook to setup a k3s first multi-master master node"
-    hosts: masters
-    vars_files:
-      - secrets.enc
+  - name: "Playbook to setup k3s multi-master nodes"
+    hosts: all
     become: true
     tasks:
       - name: Set the hostname
@@ -10,13 +8,13 @@
           name: '{{ new_hostname }}'
         when: new_hostname is defined
       - name: Append kernel command line params
+        when: ansible_architecture == "arm64"
         become: true
         ansible.builtin.lineinfile:
           path: /boot/firmware/cmdline.txt
           backrefs: yes
           regexp: '^(.*)$'
           line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
-        when: new_hostname is defined
       - name: Reboot
         reboot:
         when: new_hostname is defined
@@ -62,6 +60,10 @@
           path: /mnt/usb/longhorn
           state: directory
         when: usb_disk is defined
+      - name: Create rancher root directory
+        file:
+          path: /var/lib/rancher
+          state: directory
       - name: Create symbolic link for usb dir
         file:
           dest: "/var/lib/rancher/k3s"
@@ -81,5 +83,6 @@
         shell: /tmp/k3s-setup.sh
         become: yes
         environment:
+          K3S_URL: https://10.10.10.10:6443 
           K3S_TOKEN: "{{ k3s_token }}"
-          INSTALL_K3S_EXEC: "--bind-address 10.10.10.10 --kube-apiserver-arg default-not-ready-toleration-seconds=300 --kube-apiserver-arg default-unreachable-toleration-seconds=300 --kube-controller-arg node-monitor-period=5s --kube-controller-arg node-monitor-grace-period=40s --kubelet-arg node-status-update-frequency=10s server --cluster-init"
+          INSTALL_K3S_EXEC: "server --server https://10.10.10.10:6443"
