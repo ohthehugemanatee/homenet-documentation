@@ -70,6 +70,19 @@
           src: "/mnt/usb/k3s"
           state: link
         when: usb_disk is defined
+      - name: Make journalctl log to memory
+        become: true
+        ansible.builtin.lineinfile:
+          path: /etc/systemd/journald.conf
+          insertbefore: '^#Storage=auto'
+          line: 'Storage=volatile'
+          firstmatch: true
+      - name: Restart journald service
+        ansible.builtin.systemd:
+          state: restarted
+          name: systemd-journald.service
+      - name: Pre-installation reboot
+        reboot:
       - name: Download k3s agent installer
         tags: 
           - k3s
