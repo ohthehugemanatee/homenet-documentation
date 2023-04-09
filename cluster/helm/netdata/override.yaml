@@ -3,12 +3,17 @@ parent:
     enabled: true
     token: "token-here"
     rooms: "rooms-here"
+  database:
+    volumesize: 4Gi
 
 child:
   claiming:
     enabled: true
     token: "token-here"
     rooms: "rooms-here"
+  resources:
+    limits:
+      memory: 200Mi
   configs:
     netdata:
       data: |
@@ -19,6 +24,16 @@ child:
           update every = 5
         [health]
           enabled = yes
+
+k8sState:
+  enabled: false
+
+ml:
+  enabled: false
+
+restarter:
+  enabled: false
+
 ingress:
   enabled: true
   annotations:
