@@ -64,6 +64,7 @@
         register: partuuid
         when: usb_disk is defined
       - name: Mount up USB disk
+        become: true
         ansible.posix.mount:
           path: /mnt/usb
           src: 'PARTUUID={{ partuuid.stdout }}'
