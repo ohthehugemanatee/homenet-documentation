@@ -11,6 +11,7 @@ all:
     agents:
       hosts:
         nucnuc:
+        fuji:
         cluster2:
           ip: 10.10.10.11
           new_hostname: "cluster2"
