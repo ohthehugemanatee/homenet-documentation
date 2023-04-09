@@ -104,10 +104,12 @@
           line: 'Storage=volatile'
           firstmatch: true
       - name: Restart journald service
+        become: true
         ansible.builtin.systemd:
           state: restarted
           name: systemd-journald.service
       - name: Pre-installation reboot
+        become: true
         reboot:
       - name: Download k3s agent installer
         tags: 
