@@ -12,6 +12,7 @@ all:
       hosts:
         nucnuc:
         fuji:
+        celery:
         cluster2:
           ip: 10.10.10.11
           new_hostname: "cluster2"
