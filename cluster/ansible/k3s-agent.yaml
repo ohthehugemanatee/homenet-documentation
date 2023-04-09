@@ -21,7 +21,7 @@
         async: 1
         poll: 0
 
-  - name: "Setup k3s agent node"
+  - name: "Setup k3s node"
     hosts: all:!ubuntu
     tasks:
       - name: "Wait for the target to reboot before probing it is up and running"
@@ -119,6 +119,7 @@
           dest: /tmp/k3s-setup.sh
           mode: 0755
       - name: Run k3s agent installer
+        when: cluster_role == "agent"
         tags: 
           - k3s
         shell: /tmp/k3s-setup.sh
@@ -126,3 +127,22 @@
         environment:
           K3S_URL: https://10.10.10.10:6443 
           K3S_TOKEN: "{{ k3s_token }}"
+      - name: Run k3s multi-master installer
+        when: cluster_role == "multi-master"
+        tags: 
+          - k3s
+        shell: /tmp/k3s-setup.sh
+        become: yes
+        environment:
+          K3S_URL: https://10.10.10.10:6443 
+          K3S_TOKEN: "{{ k3s_token }}"
+          INSTALL_K3S_EXEC: "server --server https://10.10.10.10:6443"
+      - name: Run k3s first master installer
+        when: cluster_role == "first-master"
+        tags: 
+          - k3s
+        shell: /tmp/k3s-setup.sh
+        become: yes
+        environment:
+          K3S_TOKEN: "{{ k3s_token }}"
+          INSTALL_K3S_EXEC: "server --cluster-init"
