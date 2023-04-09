@@ -38,6 +38,7 @@
         become: true
         apt:
           update_cache: yes
+          lock_timeout: 300
           pkg:
             - nfs-client
             - vim
