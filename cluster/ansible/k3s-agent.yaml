@@ -1,6 +1,6 @@
 ---
-  - name: "Playbook to setup k3s agent nodes"
-    hosts: all
+  - name: "Set hostname"
+    hosts: ubuntu
     become: true
     tasks:
       - name: Set the hostname
@@ -16,9 +16,27 @@
           regexp: '^(.*)$'
           line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
       - name: Reboot
-        reboot:
         when: new_hostname is defined
+        ansible.builtin.shell: "reboot"
+        async: 1
+        poll: 0
+
+  - name: "Setup k3s agent node"
+    gather_facts: false
+    hosts: all:!ubuntu
+    tasks:
+      - name: "Wait for the target to reboot before probing it is up and running"
+        ansible.builtin.wait_for:
+          timeout: 60
+        delegate_to: localhost
+      - name: "wait for boot up"
+        ansible.builtin.wait_for_connection:
+          connect_timeout: 5
+          sleep: 5
+          delay: 30
+          timeout: 600
       - name: Apt installs
+        become: true
         apt:
           update_cache: yes
           pkg:
@@ -26,14 +44,17 @@
             - vim
       - name: x86-only apt installs
         when: ansible_architecture == "x86_64"
+        become: true
         apt:
           pkg:
             - intel-media-va-driver-non-free
             - libmfx1
       - name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
+        become: true
         shell: |
           swapoff -a
       - name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
+        become: true
         replace:
           path: /etc/fstab
           regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
@@ -51,20 +72,24 @@
           state: mounted
         when: usb_disk is defined
       - name: Create k3s directory on usb device
+        become: true
         file:
           path: /mnt/usb/k3s
           state: directory
         when: usb_disk is defined
       - name: Create longhorn directory on usb device
+        become: true
         file:
           path: /mnt/usb/longhorn
           state: directory
         when: usb_disk is defined
       - name: Create rancher root directory
+        become: true
         file:
           path: /var/lib/rancher
           state: directory
       - name: Create symbolic link for usb dir
+        become: true
         file:
           dest: "/var/lib/rancher/k3s"
           src: "/mnt/usb/k3s"
@@ -94,7 +119,7 @@
         tags: 
           - k3s
         shell: /tmp/k3s-setup.sh
-        become: yes
+        become: true
         environment:
           K3S_URL: https://10.10.10.10:6443 
           K3S_TOKEN: "{{ k3s_token }}"
