@@ -22,7 +22,6 @@
         poll: 0
 
   - name: "Setup k3s agent node"
-    gather_facts: false
     hosts: all:!ubuntu
     tasks:
       - name: "Wait for the target to reboot before probing it is up and running"
