@@ -46,7 +46,7 @@ spec:
               - -ec
               - |
                 password_aux="${MYSQL_ROOT_PASSWORD:-}"
-                mysqladmin status -uroot -p"${password_aux}"
+                mysqladmin status -uroot -p"${password_aux}" -h127.0.0.1
           initialDelaySeconds: 30
           periodSeconds: 60 
           timeoutSeconds: 5
