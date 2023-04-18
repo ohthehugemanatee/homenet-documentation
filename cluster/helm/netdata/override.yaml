@@ -18,12 +18,13 @@ child:
     netdata:
       data: |
         [global]
-          memory mode = dbengine
-          page cache size = 32
-          dbengine multihost disk space = 256
           update every = 5
+        [db]
+          mode = ram
         [health]
-          enabled = yes
+          enabled = no
+        [ml]
+          enabled = no
 
 k8sState:
   enabled: false
