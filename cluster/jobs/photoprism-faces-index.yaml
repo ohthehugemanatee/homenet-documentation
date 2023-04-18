@@ -13,7 +13,7 @@ spec:
       containers:
         - name: photoprism
           image: photoprism/photoprism:latest
-          command: ["photoprism", "--face-cluster-dist", "1", "--face-match-dist", "1", "--sponsor", "faces", "index"]
+          command: ["photoprism", "--sponsor", "faces", "index"]
           resources:
             requests:
               memory: "2Gi"
