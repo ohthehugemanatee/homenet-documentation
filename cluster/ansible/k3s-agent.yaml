@@ -108,6 +108,20 @@
         ansible.builtin.systemd:
           state: restarted
           name: systemd-journald.service
+      - name: Disable multipath for additional volumes
+        become: true
+        ansible.builtin.blockinfile:
+          path: /etc/multipath.conf
+          insertafter: "EOF"
+          block: |
+            blacklist {
+              devnode "^sd[b-z0-9]+"
+            }
+      - name: Restart multipath service
+        become: true
+        ansible.builtin.systemd:
+          state: restarted
+          name: multipathd.service
       - name: Pre-installation reboot
         become: true
         reboot:
