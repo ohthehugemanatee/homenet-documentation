@@ -23,8 +23,6 @@ spec:
               memory: "3Gi"
               cpu: "3000m"
           env:
-          - name: PHOTOPRISM_FACE_CLUSTER_DIST
-            value: "0.7"
           - name: PHOTOPRISM_DEBUG
             value: "false"
           - name: PHOTOPRISM_WORKERS
