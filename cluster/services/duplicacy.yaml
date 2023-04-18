@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: duplicacy
 spec:
@@ -7,8 +7,16 @@ spec:
     matchLabels:
       run: duplicacy
   replicas: 1
-  strategy:
-    type: Recreate
+  serviceName: duplicacy
+  volumeClaimTemplates:
+    - metadata:
+        name: duplicacy-db
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 500Mi
   template:
     metadata:
         labels:
@@ -82,14 +90,14 @@ spec:
               protocol: TCP
           volumeMounts:
             - mountPath: "/logs"
-              name: nfs
-              subPath: ".docker/config/duplicacy/logs"
+              name: duplicacy-db
+              subPath: "logs"
             - mountPath: "/config"
-              name: nfs
-              subPath: ".docker/config/duplicacy"
+              name: duplicacy-db
+              subPath: "config"
             - mountPath: "/cache"
               name: nfs
-              subPath: ".docker/cache/duplicacy"
+              subPath: ".duplicacy-cache"
             - name: nfs
               mountPath: "/storage"
 ---
