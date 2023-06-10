@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata: 
   name: nextcloud
   labels:
@@ -9,10 +9,16 @@ spec:
     matchLabels:
       run: nextcloud
   replicas: 1 
-  strategy:
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+  serviceName: nextcloud
+  volumeClaimTemplates:
+    - metadata:
+        name: nextcloud-www
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 1Gi
   template:
     metadata:
       labels:
@@ -87,12 +93,14 @@ spec:
               subPath: "nextcloud/custom-init"
             - name: nfs
               mountPath: "/nfs"
-            - name: nfs
+            - name: nextcloud-www
               mountPath: "/www"
-              subPath: ".docker/config/nextcloud-www"
+            - name: nfs
+              mountPath: "/www/nextcloud/config"
+              subPath: ".docker/config/nextcloud-config"
             - name: nfs
               mountPath: "/config"
-              subPath: ".docker/config/nextcloud"
+              subPath: ".docker/config/nextcloud-data"
             - name: nextcloud-logs
               mountPath: "/config/log"
         - name: nextcloud-promtail
