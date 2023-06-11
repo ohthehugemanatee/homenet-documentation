@@ -23,7 +23,7 @@ spec:
         run: plex
     spec:
       nodeSelector:
-        kubernetes.io/hostname: nucnuc
+        kubernetes.io/hostname: nuc1
       volumes:
         - name: nfs
           persistentVolumeClaim:
