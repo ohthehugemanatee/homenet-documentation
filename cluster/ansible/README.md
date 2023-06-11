@@ -16,6 +16,10 @@ Usage:
 
 ```
 # Set up a new ubuntu node as an agent
-ansible-playbook -i cluster2,ubuntu -e new_hostname=cluster2 -e ansible_user=ubuntu -e k3s_token="${K3S_TOKEN}" -e usb_disk='/dev/sda1' -e cluster_role="agent" k3s-node.yaml 
+ansible-playbook -i cluster2,ubuntu -e new_hostname=cluster2 -e ansible_user=ubuntu -e k3s_token="${K3S_TOKEN}" -e usb_disk='/dev/sda1' -e cluster_role="agent" --ask-become-pass k3s-node.yaml 
 ```
 
+Notes from the example:
+
+- we apply to both the OOTB hostname ("ubuntu") and the final hostname ("cluster2"). If an "ubuntu" host exists, the playbook will automatically change hostname and reboot before applying the agent config to "cluster2".
+- Since it needs sudo access, `--ask-become-pass` is important 
