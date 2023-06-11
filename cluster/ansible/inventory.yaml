@@ -10,9 +10,10 @@ all:
           new_hostname: "cluster1"
     agents:
       hosts:
-        nucnuc:
+        nuc1:
         fuji:
         celery:
+        airbook:
         cluster2:
           ip: 10.10.10.11
           new_hostname: "cluster2"
