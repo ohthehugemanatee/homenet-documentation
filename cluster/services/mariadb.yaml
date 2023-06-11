@@ -28,7 +28,7 @@ spec:
             claimName: nfs-claim
       containers:
       - name: mariadb
-        image: linuxserver/mariadb
+        image: linuxserver/mariadb:10.6.13
         resources:
           requests:
             memory: "2Gi"
