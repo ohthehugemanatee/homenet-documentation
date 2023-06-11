@@ -24,15 +24,11 @@
   - name: "Setup k3s node"
     hosts: all:!ubuntu
     tasks:
-      - name: "Wait for the target to reboot before probing it is up and running"
-        ansible.builtin.wait_for:
-          timeout: 60
-        delegate_to: localhost
       - name: "wait for boot up"
         ansible.builtin.wait_for_connection:
-          connect_timeout: 5
-          sleep: 5
-          delay: 30
+          connect_timeout: 10 
+          sleep: 10
+          delay: 60
           timeout: 600
       - name: Apt installs
         become: true
