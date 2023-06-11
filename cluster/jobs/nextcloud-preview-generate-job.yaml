@@ -19,10 +19,9 @@ spec:
           containers:
             - name: nextcloud
               image: lscr.io/linuxserver/nextcloud:latest
-              command: ["/bin/sh", "-c"]
+              command: ["/init"]
               args:
-                - /init;
-                  apk add --no-cache ffmpeg;
+                - apk add --no-cache ffmpeg;
                   sudo -u abc /usr/bin/occ preview:pre-generate;
                   echo done;
               resources:
