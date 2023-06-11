@@ -105,6 +105,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.tls: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     ingress.kubernetes.io/hsts-max-age: "15552000"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
 spec:
   rules:
   - host: photos.germany.vertesi.com
