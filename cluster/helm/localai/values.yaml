@@ -1,0 +1,17 @@
+deployment:
+  image: quay.io/go-skynet/local-ai:latest
+# Optionally create a PVC, mount the PV to the LocalAI Deployment,
+# and download a model to prepopulate the models directory
+resources:
+  limits:
+    gpu.intel.com/i915: 1
+    memory: 2Gi
+models:
+  persistence:
+    pvc:
+      enabled: true
+      size: 10Gi
+      accessModes:
+        - ReadWriteOnce
+      storageClass: "longhorn"
+
