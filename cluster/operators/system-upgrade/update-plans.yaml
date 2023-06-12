@@ -14,6 +14,10 @@ spec:
       values:
       - "true"
   serviceAccountName: system-upgrade
+  tolerations:
+    - key: "node-role.kubernetes.io/master"
+      effect: "NoSchedule"
+      operator: "Exists"
   upgrade:
     image: rancher/k3s-upgrade
   channel: https://update.k3s.io/v1-release/channels/stable
