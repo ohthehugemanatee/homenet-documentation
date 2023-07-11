@@ -1,7 +1,7 @@
 all:
   vars:
     ansible_user: ubuntu
-    usb_disk: "" # Override on the command line if an external disk is in use.
+    # usb_disk: "" # Set this var on the command line if an external disk is in use.
   children:
     masters:
       hosts:
