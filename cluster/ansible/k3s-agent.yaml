@@ -9,10 +9,9 @@
         when: new_hostname is defined
       - name: Append kernel command line params
         when: ansible_architecture == "aarch64"
-        become: true
         ansible.builtin.lineinfile:
           path: /boot/firmware/cmdline.txt
-          backrefs: yes
+          backrefs: true
           regexp: '^(.*)$'
           line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
       - name: Record that a reboot happened
@@ -20,42 +19,36 @@
           __rebooted: true
       - name: Reboot
         when: new_hostname is defined
-        ansible.builtin.shell: "reboot"
-        async: 1
-        poll: 0
+        ansible.builtin.reboot:
 
   - name: "Setup k3s node"
     hosts: all:!ubuntu
+    become: true
     tasks:
       - name: "wait for boot up"
-        when: __rebooted == true
+        when: __rebooted
         ansible.builtin.wait_for_connection:
-          connect_timeout: 10 
+          connect_timeout: 10
           sleep: 10
-          delay: 60
           timeout: 600
       - name: Apt installs
-        become: true
-        apt:
-          update_cache: yes
+        ansible.builtin.apt:
+          update_cache: true
           lock_timeout: 300
           pkg:
             - nfs-client
             - vim
       - name: x86-only apt installs
         when: ansible_architecture == "x86_64"
-        become: true
-        apt:
+        ansible.builtin.apt:
           pkg:
             - intel-media-va-driver-non-free
             - libmfx1
       - name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
-        become: true
-        shell: |
+        ansible.builtin.shell: |
           swapoff -a
       - name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
-        become: true
-        replace:
+        ansible.builtin.replace:
           path: /etc/fstab
           regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
           replace: '# \1'
@@ -64,7 +57,6 @@
         register: partuuid
         when: usb_disk is defined
       - name: Mount up USB disk
-        become: true
         ansible.posix.mount:
           path: /mnt/usb
           src: 'PARTUUID={{ partuuid.stdout }}'
@@ -73,43 +65,46 @@
           state: mounted
         when: usb_disk is defined
       - name: Create k3s directory on usb device
-        become: true
-        file:
+        ansible.builtin.file:
           path: /mnt/usb/k3s
           state: directory
+          owner: root
+          group: root
+          mode: '0755'
+
         when: usb_disk is defined
       - name: Create longhorn directory on usb device
-        become: true
-        file:
+        ansible.builtin.file:
           path: /mnt/usb/longhorn
           state: directory
+          owner: root
+          group: root
+          mode: '0755'
         when: usb_disk is defined
       - name: Create rancher root directory
-        become: true
-        file:
+        ansible.builtin.file:
           path: /var/lib/rancher
           state: directory
+          owner: root
+          group: root
+          mode: '0755'
       - name: Create symbolic link for usb dir
-        become: true
-        file:
+        ansible.builtin.file:
           dest: "/var/lib/rancher/k3s"
           src: "/mnt/usb/k3s"
           state: link
         when: usb_disk is defined
       - name: Make journalctl log to memory
-        become: true
         ansible.builtin.lineinfile:
           path: /etc/systemd/journald.conf
           insertbefore: '^#Storage=auto'
           line: 'Storage=volatile'
           firstmatch: true
       - name: Restart journald service
-        become: true
         ansible.builtin.systemd:
           state: restarted
           name: systemd-journald.service
       - name: Disable multipath for additional volumes
-        become: true
         ansible.builtin.blockinfile:
           path: /etc/multipath.conf
           insertafter: "EOF"
@@ -118,45 +113,40 @@
               devnode "^sd[b-z0-9]+"
             }
       - name: Restart multipath service
-        become: true
         ansible.builtin.systemd:
           state: restarted
           name: multipathd.service
       - name: Pre-installation reboot
-        become: true
-        reboot:
+        ansible.builtin.reboot:
       - name: Download k3s agent installer
-        tags: 
+        tags:
           - k3s
-        get_url:
+        ansible.builtin.get_url:
           url: https://get.k3s.io
           dest: /tmp/k3s-setup.sh
           mode: 0755
       - name: Run k3s agent installer
         when: cluster_role == "agent"
-        tags: 
+        tags:
           - k3s
-        shell: /tmp/k3s-setup.sh
-        become: true
+        ansible.builtin.shell: /tmp/k3s-setup.sh
         environment:
-          K3S_URL: https://10.10.10.10:6443 
+          K3S_URL: https://10.10.10.10:6443
           K3S_TOKEN: "{{ k3s_token }}"
       - name: Run k3s multi-master installer
         when: cluster_role == "multi-master"
-        tags: 
+        tags:
           - k3s
-        shell: /tmp/k3s-setup.sh
-        become: yes
+        ansible.builtin.shell: /tmp/k3s-setup.sh
         environment:
-          K3S_URL: https://10.10.10.10:6443 
+          K3S_URL: https://10.10.10.10:6443
           K3S_TOKEN: "{{ k3s_token }}"
           INSTALL_K3S_EXEC: "server --server https://10.10.10.10:6443"
       - name: Run k3s first master installer
         when: cluster_role == "first-master"
-        tags: 
+        tags:
           - k3s
-        shell: /tmp/k3s-setup.sh
-        become: yes
+        ansible.builtin.shell: /tmp/k3s-setup.sh
         environment:
           K3S_TOKEN: "{{ k3s_token }}"
           INSTALL_K3S_EXEC: "server --cluster-init"
