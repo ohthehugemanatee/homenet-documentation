@@ -1,25 +1,30 @@
 all:
   vars:
     ansible_user: ubuntu
-    usb_disk: "/dev/sda1"
+    usb_disk: "" # Override on the command line if an external disk is in use.
   children:
     masters:
       hosts:
         cluster1:
           ip: 10.10.10.10
           new_hostname: "cluster1"
+    multi-masters:
+      hosts:
+        cluster3:
+          ip: 10.10.10.11
+          new_hostname: "cluster2"
+        cluster4:
+          ip: 10.10.10.15
+          new_hostname: "cluster4"
+      vars: 
+        cluster_role: "multi-master"
     agents:
       hosts:
         nuc1:
+        nuc2:
         fuji:
         celery:
         airbook:
         cluster2:
-          ip: 10.10.10.11
-          new_hostname: "cluster2"
-        cluster3:
-          ip: 10.10.10.12
-          new_hostname: "cluster3"
-        cluster4:
-          ip: 10.10.10.15
-          new_hostname: "cluster4"
+      vars:
+        cluster_role: "agent"

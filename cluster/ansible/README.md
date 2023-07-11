@@ -15,8 +15,10 @@ This playbook creates masters or agent nodes for my home k3s cluster. It uses an
 Usage:
 
 ```
-# Set up a new ubuntu node as an agent
-ansible-playbook -i cluster2,ubuntu -e new_hostname=cluster2 -e ansible_user=ubuntu -e k3s_token="${K3S_TOKEN}" -e usb_disk='/dev/sda1' -e cluster_role="agent" --ask-become-pass k3s-node.yaml 
+# Set up a new ubuntu node as an agent called cluster2, with a USB disk attached.
+ansible-playbook -i cluster2,ubuntu -e usb_disk='/dev/sda1' --ask-vault-pass --ask-become-pass k3s-node.yaml
+# The same, but manually specify available variables.
+ansible-playbook -i cluster2,ubuntu -e new_hostname=cluster2 -e ansible_user=ubuntu -e k3s_token="${K3S_TOKEN}" -e usb_disk='/dev/sda1' -e cluster_role="agent" --ask-become-pass --ask-vault-pass k3s-node.yaml 
 ```
 
 Notes from the example:
