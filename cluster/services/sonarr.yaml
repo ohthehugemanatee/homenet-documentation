@@ -26,7 +26,6 @@ spec:
         - name: nfs
           persistentVolumeClaim:
             claimName: nfs-claim
-      initContainers:
       containers:
         - name: sonarr
           env:
