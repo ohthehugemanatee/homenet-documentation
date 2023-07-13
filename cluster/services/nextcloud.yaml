@@ -37,13 +37,14 @@ spec:
         - name: ghcr
       containers:
         - name: nextcloud
-          image: lscr.io/linuxserver/nextcloud:26.0.0-ls238
+          image: lscr.io/linuxserver/nextcloud:27.0.0-ls255
           imagePullPolicy: Always
           resources:
             requests:
               cpu: "1000m" 
             limits:
               cpu: "2000m" 
+              memory: "2Gi"
           startupProbe:
             exec:
               command:
