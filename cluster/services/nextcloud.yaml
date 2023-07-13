@@ -82,17 +82,17 @@ spec:
               subPath: "nextcloud"
             - name: nfs
               mountPath: "/custom-cont-init.d"
-              subPath: "nextcloud/custom-init"
+              subPath: ".docker/config/nextcloud/server-config/custom-init"
             - name: nfs
               mountPath: "/nfs"
             - name: nextcloud-www
               mountPath: "/www"
             - name: nfs
               mountPath: "/www/nextcloud/config"
-              subPath: ".docker/config/nextcloud-config"
+              subPath: ".docker/config/nextcloud/nextcloud-config"
             - name: nfs
               mountPath: "/config"
-              subPath: ".docker/config/nextcloud-data"
+              subPath: ".docker/config/nextcloud/server-config"
             - name: nextcloud-logs
               mountPath: "/config/log"
         - name: nextcloud-promtail
