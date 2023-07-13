@@ -65,15 +65,6 @@ spec:
             timeoutSeconds: 15
             failureThreshold: 10 
             successThreshold: 1
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 30
-            periodSeconds: 300
-            timeoutSeconds: 10
-            failureThreshold: 3
-            successThreshold: 1
           env:
             - name: PUID
               value: "1000"
