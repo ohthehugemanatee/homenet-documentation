@@ -26,5 +26,6 @@ all:
         celery:
         airbook:
         cluster2:
+        ubuntu:
       vars:
         cluster_role: "agent"
