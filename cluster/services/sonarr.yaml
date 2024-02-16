@@ -50,14 +50,11 @@ spec:
               mountPath: /config
               subPath: ".docker/config/sonarr"
             - name: nfs
-              mountPath: "/downloads"
-              subPath: "media/Downloads"
-            - name: nfs
-              mountPath: "/tv"
-              subPath: "media/TV Shows"
+              mountPath: "/custom-cont-init.d"
+              subPath: ".docker/config/sonarr/custom-cont-init.d"
             - name: nfs
               mountPath: "/data"
-              subPath: "media/Downloads"
+              subPath: "media"
           startupProbe:
             httpGet:
               path: /
@@ -111,3 +108,4 @@ spec:
               name: sonarr
               port:
                 number: 8989
+
