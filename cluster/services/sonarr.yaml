@@ -109,3 +109,14 @@ spec:
               port:
                 number: 8989
 
+  - host: sonarr.fritz.box
+    http:
+      paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: sonarr
+              port:
+                number: 8989
+
