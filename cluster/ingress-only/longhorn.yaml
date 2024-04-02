@@ -19,17 +19,6 @@ spec:
               port:
                 number: 80
 
-    - host: longhorn.germany.vertesi.com
-      http:
-        paths:
-        - pathType: Prefix
-          path: "/"
-          backend:
-            service:
-              name: longhorn-frontend
-              port:
-                number: 80
-
 --- 
 apiVersion: v1
 kind: Service
