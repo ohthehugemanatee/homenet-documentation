@@ -25,9 +25,15 @@ spec:
       nodeSelector:
         kubernetes.io/hostname: nuc1
       volumes:
-        - name: nfs
+        - name: nfs-media
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
+        - name: nfs-nextcloud
+          persistentVolumeClaim:
+            claimName: nextcloud
         - name: promtail-config
           configMap:
             name: sidecar-promtail
@@ -95,40 +101,43 @@ spec:
               value: "1000"
             - name: LIBVA_DRIVER_NAME
               value: "iHD"
+                #- name: PLEX_CLAIM
+                #value: "claim-3ny6yFkq29U-d9qNUq-i"
           volumeMounts:
             - mountPath: /config
-              name: nfs
-              subPath: ".docker/config/plex/plex-config"
+              name: nfs-config
+              subPath: "plex/plex-config"
             - mountPath: "/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
               name: plex-live-db
             - name: plex-logs
               mountPath: "/config/Library/Application Support/Plex Media Server/Logs"
             - mountPath: /custom-cont-init.d
-              name: nfs
-              subPath: ".docker/config/plex/custom-cont-init.d"
+              name: nfs-config
+              subPath: "plex/custom-cont-init.d"
             - mountPath: /custom-services.d
-              name: nfs
-              subPath: ".docker/config/plex/custom-services.d"
-            - name: nfs
-              mountPath: "/shared"
-            - name: nfs
+              name: nfs-config
+              subPath: "plex/custom-services.d"
+            - name: nfs-media
               mountPath: "/data/movies"
-              subPath: "media/Movies"
-            - name: nfs
+              subPath: "Movies"
+            - name: nfs-media
               mountPath: "/movies"
-              subPath: "media/Movies"
-            - name: nfs
+              subPath: "Movies"
+            - name: nfs-media
               mountPath: "/data/music"
-              subPath: "media/Music"
-            - name: nfs
+              subPath: "Music"
+            - name: nfs-media
               mountPath: "/music"
-              subPath: "media/Music"
-            - name: nfs
+              subPath: "Music"
+            - name: nfs-media
               mountPath: "/data/tv"
-              subPath: "media/TV Shows"
-            - name: nfs
+              subPath: "TV Shows"
+            - name: nfs-media
               mountPath: "/tv"
-              subPath: "media/TV Shows"
+              subPath: "TV Shows"
+            - name: nfs-nextcloud
+              mountPath: "/nextcloud"
+              subPath: "ohthehugemanatee/files"
 
 ---
 
