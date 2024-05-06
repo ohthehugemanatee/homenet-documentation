@@ -15,9 +15,12 @@ spec:
       nodeSelector:
         beta.kubernetes.io/arch: amd64
       volumes:
-        - name: nfs
+        - name: nfs-media
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
       containers:
       - name: delugevpn
         image: binhex/arch-delugevpn
@@ -53,15 +56,15 @@ spec:
           - name: VPN_PROV
             value: "pia"
         volumeMounts:
-          - name: nfs
+          - name: nfs-config
             mountPath: "/config"
-            subPath: ".docker/config/delugevpn"
-          - name: nfs
+            subPath: "delugevpn"
+          - name: nfs-media
             mountPath: "/data"
-            subPath: "media/Downloads"
-          - name: nfs
+            subPath: "Downloads"
+          - name: nfs-media
             mountPath: "/downloads"
-            subPath: "media/Downloads"
+            subPath: "Downloads"
         securityContext:
           capabilities:
             add:

@@ -13,9 +13,12 @@ spec:
         run: nzbget
     spec:
       volumes:
-        - name: nfs
+        - name: nfs-media
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
       containers:
       - name: nzbget
         image: linuxserver/nzbget
@@ -29,12 +32,12 @@ spec:
           - name: TZ
             value: "Europe/Berlin"
         volumeMounts:
-          - name: nfs
+          - name: nfs-config
             mountPath: "/config"
-            subPath: ".docker/config/nzbget"
-          - name: nfs
+            subPath: "nzbget"
+          - name: nfs-media
             mountPath: "/downloads"
-            subPath: "media/Downloads"
+            subPath: "Downloads"
 
 ---
 
