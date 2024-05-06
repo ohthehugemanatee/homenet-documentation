@@ -137,7 +137,7 @@ spec:
               subPath: "TV Shows"
             - name: nfs-nextcloud
               mountPath: "/nextcloud"
-              subPath: "ohthehugemanatee/files"
+              subPath: "ohthehugemantee/files"
 
 ---
 
