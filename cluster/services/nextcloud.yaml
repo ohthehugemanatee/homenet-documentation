@@ -25,9 +25,15 @@ spec:
         run: nextcloud
     spec:
       volumes:
-        - name: nfs
+        - name: nfs-nextcloud
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: nextcloud
+        - name: nfs-media
+          persistentVolumeClaim:
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
         - name: promtail-config
           configMap:
             name: sidecar-promtail
@@ -78,22 +84,21 @@ spec:
               name: nextcloud
               protocol: TCP
           volumeMounts:
-            - name: nfs
+            - name: nfs-nextcloud
               mountPath: "/data"
-              subPath: "nextcloud"
-            - name: nfs
+            - name: nfs-config
               mountPath: "/custom-cont-init.d"
-              subPath: ".docker/config/nextcloud/server-config/custom-init"
-            - name: nfs
-              mountPath: "/nfs"
+              subPath: "nextcloud/server-config/custom-init"
+            - name: nfs-media
+              mountPath: "/media"
             - name: nextcloud-www
               mountPath: "/www"
-            - name: nfs
+            - name: nfs-config
               mountPath: "/www/nextcloud/config"
-              subPath: ".docker/config/nextcloud/nextcloud-config"
-            - name: nfs
+              subPath: "nextcloud/nextcloud-config"
+            - name: nfs-config
               mountPath: "/config"
-              subPath: ".docker/config/nextcloud/server-config"
+              subPath: "nextcloud/server-config"
             - name: nextcloud-logs
               mountPath: "/config/log"
         - name: nextcloud-promtail

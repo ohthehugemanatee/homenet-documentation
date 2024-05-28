@@ -25,7 +25,7 @@ spec:
       volumes:
         - name: nfs
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: app-configs
       containers:
       - name: mariadb
         image: linuxserver/mariadb:10.6.13
@@ -76,7 +76,7 @@ spec:
         volumeMounts:
           - name: nfs
             mountPath: "/config"
-            subPath: ".docker/config/mariadb"
+            subPath: "mariadb"
           - name: datadir
             mountPath: "/config/databases"
 ---
