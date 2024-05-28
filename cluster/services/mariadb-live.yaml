@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"annotations":{},"name":"mariadb","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"run":"mariadb"}},"serviceName":"mariadb","template":{"metadata":{"labels":{"run":"mariadb"}},"spec":{"containers":[{"env":[{"name":"PGID","value":"1000"},{"name":"PUID","value":"1000"},{"name":"TZ","value":"Europe/Berlin"},{"name":"MYSQL_ROOT_PASSWORD","valueFrom":{"secretKeyRef":{"key":"rootpass","name":"mariadb"}}},{"name":"MYSQL_USER","value":"nextcloud"},{"name":"MYSQL_DATABASE","value":"nextcloud"},{"name":"MYSQL_PASSWORD","valueFrom":{"secretKeyRef":{"key":"nextcloudpass","name":"mariadb"}}}],"image":"linuxserver/mariadb:10.6.13","livenessProbe":{"exec":{"command":["/bin/bash","-ec","password_aux=\"${MYSQL_ROOT_PASSWORD:-}\"\nmysqladmin status -uroot -p\"${password_aux}\" -h127.0.0.1\n"]},"failureThreshold":3,"initialDelaySeconds":30,"periodSeconds":60,"successThreshold":1,"timeoutSeconds":5},"name":"mariadb","ports":[{"containerPort":3306,"name":"mysql-svc"}],"resources":{"limits":{"cpu":"1000m","memory":"4Gi"},"requests":{"cpu":"1000m","memory":"2Gi"}},"volumeMounts":[{"mountPath":"/config","name":"nfs","subPath":".docker/config/mariadb"},{"mountPath":"/config/databases","name":"datadir"}]}],"volumes":[{"name":"nfs","persistentVolumeClaim":{"claimName":"nfs-claim"}}]}},"volumeClaimTemplates":[{"metadata":{"name":"datadir"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"12Gi"}},"storageClassName":"longhorn"}}]}}
+  creationTimestamp: "2023-10-11T13:21:10Z"
+  generation: 12
+  name: mariadb
+  namespace: default
+  resourceVersion: "320315613"
+  uid: 2558d652-952e-4851-b2f3-430fe1a1da80
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  podManagementPolicy: OrderedReady
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      run: mariadb
+  serviceName: mariadb
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: mariadb
+    spec:
+      containers:
+      - env:
+        - name: PGID
+          value: "1000"
+        - name: PUID
+          value: "1000"
+        - name: TZ
+          value: Europe/Berlin
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: rootpass
+              name: mariadb
+        - name: MYSQL_USER
+          value: nextcloud
+        - name: MYSQL_DATABASE
+          value: nextcloud
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: nextcloudpass
+              name: mariadb
+        image: linuxserver/mariadb:10.6.13
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -ec
+            - |
+              password_aux="${MYSQL_ROOT_PASSWORD:-}"
+              mysqladmin status -uroot -p"${password_aux}" -h127.0.0.1
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: mariadb
+        ports:
+        - containerPort: 3306
+          name: mysql-svc
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "1"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 2Gi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /config
+          name: nfs
+          subPath: mariadb
+        - mountPath: /config/databases
+          name: datadir
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: nfs
+        persistentVolumeClaim:
+          claimName: app-configs
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      creationTimestamp: null
+      name: datadir
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 12Gi
+      storageClassName: longhorn
+      volumeMode: Filesystem
+    status:
+      phase: Pending
+status:
+  availableReplicas: 1
+  collisionCount: 0
+  currentReplicas: 1
+  currentRevision: mariadb-6d69d465c
+  observedGeneration: 12
+  readyReplicas: 1
+  replicas: 1
+  updateRevision: mariadb-6d69d465c
+  updatedReplicas: 1

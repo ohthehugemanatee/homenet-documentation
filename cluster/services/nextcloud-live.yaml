@@ -1,0 +1,179 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"StatefulSet","metadata":{"annotations":{},"labels":{"run":"nextcloud"},"name":"nextcloud","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"run":"nextcloud"}},"serviceName":"nextcloud","template":{"metadata":{"labels":{"run":"nextcloud"}},"spec":{"containers":[{"env":[{"name":"DOCKER_MODS","value":"linuxserver/mods:universal-package-install"},{"name":"INSTALL_PACKAGES","value":"libva|libva-intel-driver|intel-media-driver|mesa-va-gallium"},{"name":"PUID","value":"1000"},{"name":"PGID","value":"1000"},{"name":"TZ","value":"Europe/Berlin"}],"image":"lscr.io/linuxserver/nextcloud:26.0.0-ls238","imagePullPolicy":"Always","livenessProbe":{"exec":{"command":["pgrep","nginx"]},"failureThreshold":10,"initialDelaySeconds":60,"periodSeconds":15,"successThreshold":1,"timeoutSeconds":15},"name":"nextcloud","ports":[{"containerPort":80,"name":"nextcloud","protocol":"TCP"}],"resources":{"limits":{"cpu":"2000m","gpu.intel.com/i915":1,"memory":"4Gi"},"requests":{"cpu":"1000m","memory":"2Gi"}},"startupProbe":{"exec":{"command":["pgrep","nginx"]},"failureThreshold":120,"initialDelaySeconds":60,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":10},"volumeMounts":[{"mountPath":"/data","name":"nfs","subPath":"nextcloud"},{"mountPath":"/custom-cont-init.d","name":"nfs","subPath":".docker/config/nextcloud/server-config/custom-init"},{"mountPath":"/nfs","name":"nfs"},{"mountPath":"/www","name":"nextcloud-www"},{"mountPath":"/www/nextcloud/config","name":"nfs","subPath":".docker/config/nextcloud/nextcloud-config"},{"mountPath":"/config","name":"nfs","subPath":".docker/config/nextcloud/server-config"},{"mountPath":"/config/log","name":"nextcloud-logs"}]},{"args":["-config.file=/etc/promtail/config.yml","--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)"],"env":[{"name":"POD_RUN","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['run']"}}},{"name":"POD_NAMESPACE","valueFrom":{"fieldRef":{"fieldPath":"metadata.namespace"}}},{"name":"POD_NAME","valueFrom":{"fieldRef":{"fieldPath":"metadata.name"}}}],"image":"grafana/promtail:2.1.0","imagePullPolicy":"IfNotPresent","name":"nextcloud-promtail","volumeMounts":[{"mountPath":"/sidecar-logs","name":"nextcloud-logs"},{"mountPath":"/etc/promtail","name":"promtail-config"}]}],"imagePullSecrets":[{"name":"ghcr"}],"volumes":[{"name":"nfs","persistentVolumeClaim":{"claimName":"nfs-claim"}},{"configMap":{"name":"sidecar-promtail"},"name":"promtail-config"},{"emptyDir":{},"name":"nextcloud-logs"}]}},"volumeClaimTemplates":[{"metadata":{"name":"nextcloud-www"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"5Gi"}},"storageClassName":"longhorn"}}]}}
+  creationTimestamp: "2023-07-13T13:54:45Z"
+  generation: 11
+  labels:
+    run: nextcloud
+  name: nextcloud
+  namespace: default
+  resourceVersion: "320334371"
+  uid: 781d614b-1970-4b00-beb4-7cf25a3b2a92
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  podManagementPolicy: OrderedReady
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      run: nextcloud
+  serviceName: nextcloud
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: nextcloud
+    spec:
+      containers:
+      - env:
+        - name: DOCKER_MODS
+          value: linuxserver/mods:universal-package-install
+        - name: INSTALL_PACKAGES
+          value: libva|libva-intel-driver|intel-media-driver|mesa-va-gallium
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: Europe/Berlin
+        image: lscr.io/linuxserver/nextcloud:27.1.4
+        imagePullPolicy: Always
+        livenessProbe:
+          exec:
+            command:
+            - pgrep
+            - nginx
+          failureThreshold: 10
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 15
+        name: nextcloud
+        ports:
+        - containerPort: 80
+          name: nextcloud
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "2"
+            gpu.intel.com/i915: "1"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 2Gi
+        startupProbe:
+          exec:
+            command:
+            - pgrep
+            - nginx
+          failureThreshold: 120
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 10
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: nfs-nextcloud
+        - mountPath: /custom-cont-init.d
+          name: nfs-config
+          subPath: nextcloud/server-config/custom-init
+        - mountPath: /media
+          name: nfs-media
+        - mountPath: /www
+          name: nextcloud-www
+        - mountPath: /www/nextcloud/config
+          name: nfs-config
+          subPath: nextcloud/nextcloud-config
+        - mountPath: /config
+          name: nfs-config
+          subPath: nextcloud/server-config
+        - mountPath: /config/log
+          name: nextcloud-logs
+      - args:
+        - -config.file=/etc/promtail/config.yml
+        - --client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)
+        env:
+        - name: POD_RUN
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.labels['run']
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        image: grafana/promtail:2.1.0
+        imagePullPolicy: IfNotPresent
+        name: nextcloud-promtail
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /sidecar-logs
+          name: nextcloud-logs
+        - mountPath: /etc/promtail
+          name: promtail-config
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: ghcr
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: nfs-nextcloud
+        persistentVolumeClaim:
+          claimName: nextcloud
+      - name: nfs-media
+        persistentVolumeClaim:
+          claimName: media
+      - name: nfs-config
+        persistentVolumeClaim:
+          claimName: app-configs
+      - configMap:
+          defaultMode: 420
+          name: sidecar-promtail
+        name: promtail-config
+      - emptyDir: {}
+        name: nextcloud-logs
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      creationTimestamp: null
+      name: nextcloud-www
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: longhorn
+      volumeMode: Filesystem
+    status:
+      phase: Pending
+status:
+  availableReplicas: 1
+  collisionCount: 0
+  currentRevision: nextcloud-6fc885d84b
+  observedGeneration: 11
+  readyReplicas: 1
+  replicas: 1
+  updateRevision: nextcloud-655b4746cc
