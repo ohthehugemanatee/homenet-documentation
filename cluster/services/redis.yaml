@@ -15,6 +15,10 @@ spec:
     spec:
       containers:
       - name: redis-server
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
         image: redis
         args: 
           - "--appendonly"
@@ -29,16 +33,16 @@ spec:
           - name: redis-server
             containerPort: 6379
         volumeMounts:
-          - name: nfs
-            subPath: ".docker/config/redis"
+          - name: nfs-config
+            subPath: "redis"
             mountPath: "/data"
         env:
             - name: ALLOW_EMPTY_PASSWORD
               value: "yes"
       volumes:
-        - name: nfs
+        - name: nfs-config
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: app-configs
 ---
 
 apiVersion: v1
