@@ -13,9 +13,12 @@ spec:
         run: jackett
     spec:
       volumes:
-        - name: nfs
+        - name: nfs-media
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
       containers:
       - name: jackett
         image: linuxserver/jackett
@@ -29,15 +32,15 @@ spec:
           - name: TZ
             value: "Europe/Berlin"
         volumeMounts:
-          - name: nfs
+          - name: nfs-config
             mountPath: "/config"
-            subPath: ".docker/config/jackett"
-          - name: nfs
+            subPath: "jackett"
+          - name: nfs-media
             mountPath: "/data"
-            subPath: "media/Downloads"
-          - name: nfs
+            subPath: "Downloads"
+          - name: nfs-media
             mountPath: "/downloads"
-            subPath: "media/Downloads"
+            subPath: "Downloads"
 
 ---
 
