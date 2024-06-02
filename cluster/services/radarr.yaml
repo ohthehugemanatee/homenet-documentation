@@ -23,9 +23,16 @@ spec:
         run: radarr
     spec:
       volumes:
-        - name: nfs
+        - name: nfs-media
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
+        - name: nfs-nextcloud
+          persistentVolumeClaim:
+            claimName: nextcloud
+
       containers:
         - name: radarr
           image: lscr.io/linuxserver/radarr:latest
@@ -41,18 +48,18 @@ spec:
           volumeMounts:
             - mountPath: /db
               name: radarr-db
-            - name: nfs
+            - name: nfs-config
               mountPath: /config
-              subPath: ".docker/config/radarr"
-            - name: nfs
+              subPath: "radarr"
+            - name: nfs-media
               mountPath: "/downloads"
-              subPath: "media/Downloads"
-            - name: nfs
+              subPath: "Downloads"
+            - name: nfs-media
               mountPath: "/movies"
-              subPath: "media/Movies"
-            - name: nfs
+              subPath: "Movies"
+            - name: nfs-media
               mountPath: "/data"
-              subPath: "media/Downloads"
+              subPath: "Downloads"
 
 ---
 
