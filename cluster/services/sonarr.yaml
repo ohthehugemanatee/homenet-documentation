@@ -23,9 +23,15 @@ spec:
           run: sonarr
     spec:
       volumes:
-        - name: nfs
+        - name: nfs-media
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
+        - name: nfs-nextcloud
+          persistentVolumeClaim:
+            claimName: nextcloud
       containers:
         - name: sonarr
           env:
@@ -46,18 +52,18 @@ spec:
           volumeMounts:
             - mountPath: /db
               name: sonarr-db
-            - name: nfs
+            - name: nfs-config
               mountPath: /config
-              subPath: ".docker/config/sonarr"
-            - name: nfs
+              subPath: "sonarr"
+            - name: nfs-media
               mountPath: "/downloads"
-              subPath: "media/Downloads"
-            - name: nfs
+              subPath: "Downloads"
+            - name: nfs-media
               mountPath: "/tv"
-              subPath: "media/TV Shows"
-            - name: nfs
+              subPath: "TV Shows"
+            - name: nfs-media
               mountPath: "/data"
-              subPath: "media/Downloads"
+              subPath: "Downloads"
           startupProbe:
             httpGet:
               path: /
