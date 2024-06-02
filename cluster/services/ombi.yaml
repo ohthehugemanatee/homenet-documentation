@@ -22,10 +22,6 @@ spec:
       labels:
         run: ombi
     spec:
-      volumes:
-        - name: nfs
-          persistentVolumeClaim:
-            claimName: nfs-claim
       containers:
         - name: ombi
           image: lscr.io/linuxserver/ombi:latest
