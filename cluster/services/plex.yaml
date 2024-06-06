@@ -24,6 +24,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: nuc1
+      priorityClassName: high-priority
       volumes:
         - name: nfs-media
           persistentVolumeClaim:
