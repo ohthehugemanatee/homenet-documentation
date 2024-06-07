@@ -56,14 +56,7 @@ spec:
               mountPath: /config
               subPath: "sonarr"
             - name: nfs-media
-              mountPath: "/downloads"
-              subPath: "Downloads"
-            - name: nfs-media
-              mountPath: "/tv"
-              subPath: "TV Shows"
-            - name: nfs-media
               mountPath: "/data"
-              subPath: "Downloads"
           startupProbe:
             httpGet:
               path: /

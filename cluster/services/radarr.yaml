@@ -59,7 +59,6 @@ spec:
               subPath: "Movies"
             - name: nfs-media
               mountPath: "/data"
-              subPath: "Downloads"
 
 ---
 
