@@ -24,9 +24,9 @@ spec:
     spec:
       hostname: duplicacy-pod
       volumes:
-        - name: nfs
+        - name: nfs-storage
           persistentVolumeClaim:
-            claimName: nfs-claim
+            claimName: shoebox
         - name: promtail-config
           configMap:
             name: sidecar-promtail
@@ -96,9 +96,9 @@ spec:
               name: duplicacy-db
               subPath: "config"
             - mountPath: "/cache"
-              name: nfs
+              name: nfs-storage
               subPath: ".duplicacy-cache"
-            - name: nfs
+            - name: nfs-storage
               mountPath: "/storage"
 ---
 
