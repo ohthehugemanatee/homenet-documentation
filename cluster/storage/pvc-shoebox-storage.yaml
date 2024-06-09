@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: default
+  name: shoebox
+spec:
+  volumeName: shoebox-storage
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 24Ti
+  storageClassName: ""
