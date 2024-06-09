@@ -29,9 +29,6 @@ spec:
         - name: nfs-config
           persistentVolumeClaim:
             claimName: app-configs
-        - name: nfs-nextcloud
-          persistentVolumeClaim:
-            claimName: nextcloud
 
       containers:
         - name: radarr
@@ -51,12 +48,6 @@ spec:
             - name: nfs-config
               mountPath: /config
               subPath: "radarr"
-            - name: nfs-media
-              mountPath: "/downloads"
-              subPath: "Downloads"
-            - name: nfs-media
-              mountPath: "/movies"
-              subPath: "Movies"
             - name: nfs-media
               mountPath: "/data"
 
