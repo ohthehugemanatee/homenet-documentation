@@ -23,6 +23,8 @@ k3s nodes:
 
 All services run on kubernetes, with the yaml files listed in the `cluster/` subdirectory.
 
+Nodes with a useful GPU - ie a recent enough generation for video transcoding - are labeled with usefulGpu=1.
+
 Access to all the machines is keyed on my ssh keypair.
 
 
