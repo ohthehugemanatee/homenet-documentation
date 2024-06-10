@@ -15,10 +15,9 @@ k3s nodes:
 | cluster1 | arm64 | rpi4 |
 | cluster3 | arm64 | rpi4 |
 | cluster4 | arm64 | rpi4 |
-| nextcloud | amd64 | macbook pro 2014 15" |
 | airbernetes | amd64 | macbook air 2011 13" |
 | celery | amd64 | celeron mini-pc |
-| fiji | amd64 | i5 4th-gen mini-pc |
+| fuji | amd64 | i5 4th-gen mini-pc |
 | nuc1 | amd64 | i3-1115G4 mini-pc |
 | nuc2 | amd64 | i3-10110U CPU mini-pc |
 
