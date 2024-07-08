@@ -11,16 +11,6 @@ spec:
       app: unifi-controller
       app.kubernetes.io/instance: unifi-controller
       app.kubernetes.io/name: unifi-controller
-  volumeClaimTemplates:
-  - metadata:
-      name: unifi-data
-      namespace: unifi
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: "longhorn"
-      resources:
-        requests:
-          storage: 3Gi
   template:
     metadata:
       labels:
@@ -28,10 +18,31 @@ spec:
         app.kubernetes.io/instance: unifi-controller
         app.kubernetes.io/name: unifi-controller
     spec:
+      volumes:
+      - name: nfs-config
+        persistentVolumeClaim:
+          claimName: unifi-configs
       containers:
       - name: unifi-controller
         image: lscr.io/linuxserver/unifi-network-application:latest
         imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          value: "Europe/Berlin"
+        - name: PGID
+          value: "1000"
+        - name: PUID
+          value: "1000"
+        - name: MONGO_USER
+          value: unifi
+        - name: MONGO_PASS
+          value: unifi
+        - name: MONGO_DBNAME
+          value: unifi
+        - name: MONGO_HOST
+          value: unifi-db
+        - name: MONGO_PORT
+          value: "27017"
         ports:
         - name: device-comm
           containerPort: 8080
@@ -65,8 +76,9 @@ spec:
             cpu: "512m"
             memory: "2048Mi"
         volumeMounts:
-          - name: unifi-data
-            mountPath: /config
+        - mountPath: /config
+          name: nfs-config
+          subPath: "unifi-network-application/unifi"
 
 ---
 apiVersion: v1
