@@ -48,7 +48,7 @@ spec:
           name: unifi-db
         - mountPath: /docker-entrypoint-initdb.d
           name: nfs-config
-          subPath: "config/unifi-network-application/mongodb-initdb.d"
+          subPath: "mongodb-initdb.d"
 
 ---
 

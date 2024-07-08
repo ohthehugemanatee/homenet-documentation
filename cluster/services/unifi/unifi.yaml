@@ -78,20 +78,25 @@ spec:
         volumeMounts:
         - mountPath: /config
           name: nfs-config
-          subPath: "unifi-network-application/unifi"
+          subPath: "unifi"
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: unifi-controller
+  name: unificontroller
   namespace: unifi
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: unifi-unificontroller@kubernetescrd
   labels:
     app: unifi-controller
     app.kubernetes.io/instance: unifi-controller
     app.kubernetes.io/name: unifi-controller
 spec:
   type: LoadBalancer
+  selector: 
+    app: unifi-controller
   ports:
     - name: device-comm
       port: 8080
@@ -119,36 +124,37 @@ spec:
       protocol: UDP
 
 ---
-apiVersion: traefik.containo.us/v1alpha1
-kind: IngressRoute
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: unifi-ingress-route
+  name: unifi-external
   namespace: unifi
-  labels:
-    app: unifi-controller
-    app.kubernetes.io/instance: unifi-controller
-    app.kubernetes.io/name: unifi-controller
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
 spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: Host(`unifi.germany.vertesi.com`)
-      kind: Rule
-      services:
-      - name: unifi-controller
-        port: 8443
-        scheme: https
-        serversTransport: unifi-ingress-transport
+  rules:
+  - host: unifi.germany.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: unificontroller
+            port:
+              number: 8443
+  tls:
+    - hosts:
+      - unifi.germany.vertesi.com
+      secretName: unifi-germany-vertesi-com-tls
 
 ---
 apiVersion: traefik.containo.us/v1alpha1
 kind: ServersTransport
 metadata:
-  name: unifi-ingress-transport
+  name: unificontroller
   namespace: unifi
-  labels:
-    app: unifi-controller
-    app.kubernetes.io/instance: unifi-controller
-    app.kubernetes.io/name: unifi-controller
 spec:
   insecureSkipVerify: true
+
