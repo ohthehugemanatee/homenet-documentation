@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: unifi-controller
+  namespace: unifi
+spec:
+  serviceName: unifi-controller
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifi-controller
+      app.kubernetes.io/instance: unifi-controller
+      app.kubernetes.io/name: unifi-controller
+  volumeClaimTemplates:
+  - metadata:
+      name: unifi-data
+      namespace: unifi
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "longhorn"
+      resources:
+        requests:
+          storage: 3Gi
+  template:
+    metadata:
+      labels:
+        app: unifi-controller
+        app.kubernetes.io/instance: unifi-controller
+        app.kubernetes.io/name: unifi-controller
+    spec:
+      containers:
+      - name: unifi-controller
+        image: lscr.io/linuxserver/unifi-network-application:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: device-comm
+          containerPort: 8080
+          protocol: TCP
+        - name: stun
+          containerPort: 3478
+          protocol: UDP
+        - name: default-console
+          containerPort: 8443
+          protocol: TCP
+        - name: secure-redirect
+          containerPort: 8843
+          protocol: TCP
+        - name: http-redirect
+          containerPort: 8880
+          protocol: TCP
+        - name: speedtest
+          containerPort: 6789
+          protocol: TCP
+        - name: unifi-disc
+          containerPort: 10001
+          protocol: UDP
+        - name: unifi-disc-l2
+          containerPort: 1900
+          protocol: UDP
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "1024Mi"
+          limits:
+            cpu: "512m"
+            memory: "2048Mi"
+        volumeMounts:
+          - name: unifi-data
+            mountPath: /config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-controller
+  namespace: unifi
+  labels:
+    app: unifi-controller
+    app.kubernetes.io/instance: unifi-controller
+    app.kubernetes.io/name: unifi-controller
+spec:
+  type: LoadBalancer
+  ports:
+    - name: device-comm
+      port: 8080
+      protocol: TCP
+    - name: stun
+      port: 3478
+      protocol: UDP
+    - name: default-console
+      port: 8443
+      protocol: TCP
+    - name: secure-redirect
+      port: 8843
+      protocol: TCP
+    - name: http-redirect
+      port: 8880
+      protocol: TCP
+    - name: speedtest
+      port: 6789
+      protocol: TCP
+    - name: unifi-disc
+      port: 10001
+      protocol: UDP
+    - name: unifi-disc-l2
+      port: 1900
+      protocol: UDP
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: unifi-ingress-route
+  namespace: unifi
+  labels:
+    app: unifi-controller
+    app.kubernetes.io/instance: unifi-controller
+    app.kubernetes.io/name: unifi-controller
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`unifi.germany.vertesi.com`)
+      kind: Rule
+      services:
+      - name: unifi-controller
+        port: 8443
+        scheme: https
+        serversTransport: unifi-ingress-transport
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: ServersTransport
+metadata:
+  name: unifi-ingress-transport
+  namespace: unifi
+  labels:
+    app: unifi-controller
+    app.kubernetes.io/instance: unifi-controller
+    app.kubernetes.io/name: unifi-controller
+spec:
+  insecureSkipVerify: true
