@@ -1,16 +1,19 @@
+image:
+  tag: edge
+
 parent:
   claiming:
     enabled: true
-    token: "token-here"
-    rooms: "rooms-here"
+    token: "foo"
+    rooms: "bar"
   database:
     volumesize: 4Gi
 
 child:
   claiming:
     enabled: true
-    token: "token-here"
-    rooms: "rooms-here"
+    token: "foo"
+    rooms: "bar"
   resources:
     limits:
       memory: 200Mi
@@ -27,20 +30,13 @@ child:
           enabled = no
 
 k8sState:
-  enabled: false
+  enabled: true
 
 ml:
   enabled: false
 
 restarter:
-  enabled: false
+  enabled: true
 
 ingress:
-  enabled: true
-  annotations:
-    kubernetes.io/ingress.class: ""
-    traefik.ingress.kubernetes.io/redirect-entry-point: https
-  hosts:
-    - netdata.k8s.local
-    - netdata.cluster.vert
-
+  enabled: false
