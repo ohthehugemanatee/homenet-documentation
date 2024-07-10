@@ -8,6 +8,7 @@ all:
         cluster1:
           ip: 10.10.10.10
           new_hostname: "cluster1"
+          cluster_role: "first-master"
     multimasters:
       hosts:
         cluster3:
