@@ -45,7 +45,7 @@ spec:
         transcodingGpu: "1"
       containers:
         - name: nextcloud
-          image: lscr.io/linuxserver/nextcloud:27.1.4
+          image: lscr.io/linuxserver/nextcloud:28.0.8-previous
           imagePullPolicy: IfNotPresent
           resources:
             requests:
