@@ -1,0 +1,312 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: 
+  name: nextcloud-alpha
+  labels:
+    run: nextcloud-alpha
+spec:
+  selector:
+    matchLabels:
+      run: nextcloud-alpha
+  replicas: 1 
+  serviceName: nextcloud-alpha
+  volumeClaimTemplates:
+    - metadata:
+        name: nextcloud-www-alpha
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        dataSource:
+          name: nextcloud-www-nextcloud-0 
+          kind: PersistentVolumeClaim
+        resources:
+          requests:
+            storage: 5Gi
+  template:
+    metadata:
+      labels:
+        run: nextcloud-alpha
+    spec:
+      volumes:
+        - name: nfs-nextcloud
+          persistentVolumeClaim:
+            claimName: nextcloud
+        - name: nfs-media
+          persistentVolumeClaim:
+            claimName: media
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
+        - name: promtail-config
+          configMap:
+            name: sidecar-promtail
+        - name: nextcloud-logs
+          emptyDir: {}
+      imagePullSecrets:
+        - name: ghcr
+      nodeSelector:
+        transcodingGpu: "1"
+      containers:
+        - name: nextcloud
+          image: lscr.io/linuxserver/nextcloud:27.1.4
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "1000m" 
+              memory: "2Gi"
+            limits:
+              cpu: "2000m" 
+              memory: "4Gi"
+          startupProbe:
+            exec:
+              command:
+                - pgrep
+                - nginx
+            initialDelaySeconds: 60
+            periodSeconds: 10 
+            timeoutSeconds: 10
+            failureThreshold: 120 
+            successThreshold: 1
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - nginx
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 15
+            failureThreshold: 10 
+            successThreshold: 1
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+          ports:
+            - containerPort: 80
+              name: nextcloud
+              protocol: TCP
+          volumeMounts:
+            - name: nfs-nextcloud
+              mountPath: "/data"
+            - name: nfs-config
+              mountPath: "/custom-cont-init.d"
+              subPath: "nextcloud/alpha/server-config/custom-init"
+            - name: nfs-media
+              mountPath: "/media"
+            - name: nextcloud-www-alpha
+              mountPath: "/www"
+            - name: nfs-config
+              mountPath: "/www/nextcloud/config"
+              subPath: "nextcloud/alpha/nextcloud-config"
+            - name: nfs-config
+              mountPath: "/config"
+              subPath: "nextcloud/alpha/server-config"
+            - name: nextcloud-logs
+              mountPath: "/config/log"
+        - name: nextcloud-promtail
+          image: grafana/promtail:2.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-config.file=/etc/promtail/config.yml"
+            - '--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)' 
+          env:
+            - name: POD_RUN
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['run']
+            - name: POD_NAMESPACE 
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: nextcloud-logs
+              mountPath: /sidecar-logs
+            - mountPath: /etc/promtail
+              name: promtail-config
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-alpha
+  labels:
+    run: nextcloud-alpha
+  annotations:
+    traefik.ingress.kubernetes.io/affinity: "true"
+    traefik.ingress.kubernetes.io/session-cookie-name: "sticky"
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    run: nextcloud-alpha
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nextcloud-alpha
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+spec:
+  rules:
+  - host: alpha.germany.cluster.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud-alpha
+            port:
+              number: 80
+  - host: nextcloud-alpha.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud-alpha
+            port:
+              number: 80
+  - host: alpha.germany.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud-alpha
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - alpha.germany.vertesi.com
+    secretName: alpha-germany-vertesi-com-tls
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mariadb-nextcloud-alpha
+spec:
+  selector:
+    matchLabels:
+      run: mariadb-nextcloud-alpha
+  replicas: 1 
+  serviceName: mariadb-nextcloud-alpha
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir-alpha
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        dataSource:
+          name: datadir-mariadb-0
+          kind: PersistentVolumeClaim
+        resources:
+          requests:
+            storage: 13Gi
+  template:
+    metadata:
+      labels:
+        run: mariadb-nextcloud-alpha
+    spec:
+      volumes:
+        - name: nfs
+          persistentVolumeClaim:
+            claimName: app-configs
+      containers:
+      - name: mariadb
+        image: linuxserver/mariadb:10.6.13
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        ports:
+          - containerPort: 3306
+            name: mysql-svc
+        livenessProbe:
+          exec:
+            command:
+              - /bin/bash
+              - -ec
+              - |
+                password_aux="${MYSQL_ROOT_PASSWORD:-}"
+                mysqladmin status -uroot -p"${password_aux}" -h127.0.0.1
+          initialDelaySeconds: 30
+          periodSeconds: 60 
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        env:
+          - name: PGID
+            value: "1000"
+          - name: PUID
+            value: "1000"
+          - name: TZ
+            value: "Europe/Berlin"
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mariadb
+                key: rootpass
+          - name: MYSQL_USER
+            value: "nextcloud"
+          - name: MYSQL_DATABASE
+            value: "nextcloud"
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mariadb
+                key: nextcloudpass
+        volumeMounts:
+          - name: nfs
+            mountPath: "/config"
+            subPath: "mariadb"
+          - name: datadir-alpha
+            mountPath: "/config/databases"
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-nextcloud-alpha
+spec:
+  selector:
+    run: mariadb-nextcloud-alpha
+  ports:
+    - port: 3306
+      name: mariadb-svc-port
+      protocol: TCP
+      targetPort: mysql-svc
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-ext-nextcloud-alpha
+spec:
+  type: LoadBalancer
+  selector:
+    run: mariadb-nextcloud-alpha
+  ports:
+    - port: 3306
+      protocol: TCP
+      targetPort: mysql-svc
