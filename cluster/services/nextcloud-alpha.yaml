@@ -21,7 +21,7 @@ spec:
           kind: PersistentVolumeClaim
         resources:
           requests:
-            storage: 5Gi
+            storage: 20Gi
   template:
     metadata:
       labels:
