@@ -84,6 +84,8 @@ spec:
               value: "1000"
             - name: TZ
               value: "Europe/Berlin"
+            - name: DOCKER_MODS
+              value: "linuxserver/mods:nextcloud-notify-push"
           ports:
             - containerPort: 80
               name: nextcloud
@@ -145,6 +147,10 @@ spec:
   ports:
   - port: 80
     protocol: TCP
+    name: http
+  - port: 7867
+    protocol: TCP
+    name: notify-push
   selector:
     run: nextcloud-alpha
 
@@ -182,6 +188,16 @@ spec:
             name: nextcloud-alpha
             port:
               number: 80
+  - host: alpha.germany.vertesi.com
+    http:
+      paths:
+      - path: '/push'
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud-alpha
+            port:
+              number: 7867
   - host: alpha.germany.vertesi.com
     http:
       paths:
