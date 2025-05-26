@@ -1,0 +1,104 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: collabora
+  namespace: collabora
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`collabora.germany.vertesi.com`)
+      services:
+        - name: collabora-online
+          port: 9980
+          sticky:
+            cookie:
+              name: traefik_collabora_sticky
+      middlewares:
+        - name: collabora-sticky-id
+          namespace: collabora
+  tls:
+    domains:
+      - main: collabora.germany.vertesi.com
+    secretName: collabora-germany-vertesi-com-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: collabora-sticky-id
+  namespace: collabora
+spec:
+  plugin:
+    traefik-query-sticky:
+      queryName: WOPISrc
+      redisAddr: redis.collabora.svc.cluster.local:6379
+
+
+--- 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: collabora
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: redis
+  template:
+    metadata:
+      labels:
+        run: redis
+        name: redis
+    spec:
+      containers:
+      - name: redis-server
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+        image: redis
+        ports:
+          - name: redis-server
+            containerPort: 6379
+        env:
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: collabora
+spec:
+  selector:
+    run: redis
+  ports:
+    - name: redis
+      protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: collabora-germany-vertesi-com-tls
+  namespace: collabora
+spec:
+  # Secret names are always required.
+  secretName: collabora-germany-vertesi-com-tls
+
+  usages:
+  - digital signature
+  - key encipherment
+
+  dnsNames:
+    - collabora.germany.vertesi.com
+
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io

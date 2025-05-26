@@ -1,0 +1,25 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    #    additionalArguments:
+    #      - "--log.level=WARN"
+    log:
+      level: WARN
+        # Useful for extra debugging info
+        #    accessLog:
+        #      fields:
+        #        defaultMode: keep
+        #        headers:
+        #          defaultMode: keep
+    experimental:
+      enabled: true
+      # Needed for Nextcloud Office / Collabora to handle sticky sessions. Explained in the collabora helm directory README.
+      plugins:
+         traefik-query-sticky:
+           moduleName: "github.com/SIB-rennes/traefik_query_sticky"
+           version: "v1.0.4"
+
