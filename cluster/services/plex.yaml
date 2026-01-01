@@ -41,6 +41,18 @@ spec:
             name: sidecar-promtail
         - name: plex-logs
           emptyDir: {}
+        - name: plex-transcode
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                labels:
+                  type: plex-transcode
+              spec:
+                accessModes: [ "ReadWriteOnce" ]
+                storageClassName: "longhorn-ephemeral"
+                resources:
+                  requests:
+                    storage: 3Gi
       securityContext:
         fsGroup: 1000
       containers:
@@ -74,7 +86,7 @@ spec:
           resources:
             limits:
               gpu.intel.com/i915: 1
-              memory: 2Gi
+              memory: 6Gi
           ports:
             - containerPort: 32400
           startupProbe:
@@ -106,6 +118,8 @@ spec:
                 #- name: PLEX_CLAIM
                 #value: "claim-3ny6yFkq29U-d9qNUq-i"
           volumeMounts:
+            - mountPath: /tmp/transcode
+              name: plex-transcode
             - mountPath: /config
               name: nfs-config
               subPath: "plex/plex-config"
