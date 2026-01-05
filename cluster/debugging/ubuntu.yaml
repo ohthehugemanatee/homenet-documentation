@@ -4,8 +4,6 @@ metadata:
   name: ubuntu
   namespace: default
 spec:
-  nodeSelector:
-    k3s.io/hostname: airbernetes
   containers:
   - name: ubuntu
     image: ubuntu:latest
