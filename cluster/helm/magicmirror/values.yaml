@@ -1,0 +1,122 @@
+ingress:
+  enabled: true
+  hostname: magicmirror.cluster.vert
+modules:
+  autoInstall: true
+persistence:
+  enabled: true
+mmpm:
+  enabled: true
+
+config: |
+  let config = {
+    address: "0.0.0.0",
+    port: {{ .Values.service.port }},
+    basePath: "/",
+    ipWhitelist: [],
+    useHttps: false,
+    httpsPrivateKey: "",
+    httpsCertificate: "",
+    language: "de",
+    locale: "de-DE",
+    logLevel: ["INFO", "LOG", "WARN", "ERROR"], // Add "DEBUG" for even more logging
+    timeFormat: 24,
+    units: "metric",
+    modules: [
+    {{- if .Values.modules.autoInstall }}
+      {
+        module: "MMM-ModInstall",
+        config: {
+          autoInstall: true
+        },
+      },
+    {{- end }}
+    {{- if .Values.mmpm.enabled }}
+      { module: "MMM-mmpm" },
+    {{- end }}
+      {
+        module: "MMM-RepoStats",
+        position: "top_right",
+        config: {
+          repoList: [
+            "karsten13/magicmirror",
+            "karsten13/mmpm",
+            "library/node",
+            "library/traefik",
+          ],
+        },
+      },
+      {
+        module: "MMM-RAIN-MAP",
+        position: "top_right",
+        config: {
+          animationSpeedMs: 400,
+          colorizeTime: false,
+          defaultZoomLevel: 8,
+          displayTime: true,
+          displayClockSymbol: true,
+          displayOnlyOnRain: false,
+          extraDelayLastFrameMs: 2000,
+          markers: [
+            { lat: 50.17659, lng: 8.62685, color: "black" },
+          ],
+          mapPositions: [
+            { lat: 50.17659, lng: 8.62685, zoom: 9, loops: 1 },
+            { lat: 50.17659, lng: 8.62685, zoom: 8, loops: 1 },
+            { lat: 50.17659, lng: 8.62685, zoom: 7, loops: 1 },
+            { lat: 50.17659, lng: 8.62685, zoom: 6, loops: 1 },
+          ],
+          mapUrl: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+          mapHeight: "320px",
+          mapWidth: "520px",
+          updateIntervalInSeconds: 300,
+        }
+      },
+      {
+        module: "alert",
+      },
+      {
+        module: "updatenotification",
+        position: "top_bar"
+      },
+      {
+        module: "clock",
+        position: "top_left"
+      },
+      {
+        module: "calendar",
+        header: "US Holidays",
+        position: "top_left",
+        config: {
+          calendars: [
+            {
+              symbol: "calendar-check",
+              url: "webcal://www.calendarlabs.com/ical-calendar/ics/76/US_Holidays.ics"}
+          ]
+        }
+      },
+      {
+        module: "compliments",
+        position: "lower_third"
+      },
+      {
+        module: "newsfeed",
+        position: "bottom_bar",
+        config: {
+          feeds: [
+            {
+              title: "New York Times",
+              url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+            }
+          ],
+          showSourceTitle: true,
+          showPublishDate: true,
+          broadcastNewsFeeds: true,
+          broadcastNewsUpdates: true
+        }
+      },
+    ]
+  };
+  /*************** DO NOT EDIT THE LINE BELOW ***************/
+  if (typeof module !== "undefined") {module.exports = config;}
+
