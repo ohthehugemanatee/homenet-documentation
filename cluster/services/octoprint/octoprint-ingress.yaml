@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: octoprint
+  namespace: octoprint
+spec:
+  rules:
+  - host: octoprint.cluster.vert
+    http:
+      paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: octoprint
+              port: 
+                number: 80
+  - host: octoprint.vert
+    http:
+      paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: octoprint
+              port:
+                number: 80
+

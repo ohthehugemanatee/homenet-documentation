@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: octoprint
+  name: octoprint
+  namespace: octoprint
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octoprint
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: octoprint
+    spec:
+      containers:
+        - image: octoprint/octoprint
+          name: octoprint
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /octoprint
+              name: octoprint
+      restartPolicy: Always
+      volumes:
+        - name: octoprint
+          persistentVolumeClaim:
+            claimName: octoprint
