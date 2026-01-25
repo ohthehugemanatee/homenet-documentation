@@ -63,7 +63,7 @@ spec:
             requests:
               memory: "6Gi"
             limits:
-              memory: "6Gi"
+              memory: "8Gi"
           env:
             - name: "GRP_ID"
               value: "1000"
