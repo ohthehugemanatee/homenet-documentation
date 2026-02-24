@@ -68,7 +68,7 @@
 
     - name: Set hostname
       ansible.builtin.hostname:
-        name: "{{ new_hostname | default(inventory_hostname) }}"
+        name: "{{ inventory_hostname }}"
 
     # ── /etc/hosts ───────────────────────────────────────────────────────────
 

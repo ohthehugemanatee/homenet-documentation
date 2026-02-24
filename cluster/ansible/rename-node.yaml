@@ -1,0 +1,124 @@
+---
+# Rename a k3s node: OS hostname + Kubernetes node registration.
+#
+# Usage (ALWAYS supply --limit to target exactly one node):
+#   ansible-playbook -i inventory.yaml --ask-vault-pass \
+#     --limit cluster3 -e new_hostname=cluster2 rename-node.yaml
+#
+# After completion:
+#   1. Verify with: kubectl get nodes
+#   2. Update inventory.yaml: rename the host key to match new_hostname.
+#   3. For SERVER nodes only: clean up the stale etcd member (see below).
+#
+# ── SERVER NODE EXTRA STEPS ────────────────────────────────────────────────
+# Renaming a server node causes k3s to re-register under the new name, but
+# the old name remains as a stale etcd member. Clean it up after the playbook:
+#
+#   ssh <node>
+#   sudo k3s etcdctl member list
+#   sudo k3s etcdctl member remove <ID-of-old-name>
+#
+# ──────────────────────────────────────────────────────────────────────────
+
+- name: Rename k3s node
+  hosts: "{{ target }}"   # Always pass -e target=<hostname> (or use --limit)
+  become: true
+
+  pre_tasks:
+    - name: Require new_hostname
+      ansible.builtin.fail:
+        msg: "Pass the new hostname with: -e new_hostname=<name>"
+      when: new_hostname is not defined
+
+    - name: Abort if new_hostname matches current hostname
+      ansible.builtin.fail:
+        msg: "new_hostname '{{ new_hostname }}' is the same as the current hostname. Nothing to do."
+      when: new_hostname == ansible_hostname
+
+    - name: Confirm rename
+      ansible.builtin.debug:
+        msg: "Renaming {{ ansible_hostname }} → {{ new_hostname }} (cluster_role: {{ cluster_role }})"
+
+    - name: Warn about server node etcd cleanup
+      when: cluster_role != 'agent'
+      ansible.builtin.debug:
+        msg: >
+          SERVER NODE: after this playbook completes, manually remove the stale
+          etcd member entry for '{{ ansible_hostname }}':
+            sudo k3s etcdctl member list
+            sudo k3s etcdctl member remove <old-id>
+
+  tasks:
+    # ── Drain from Kubernetes ─────────────────────────────────────────────
+
+    - name: Drain node
+      ansible.builtin.command: >
+        kubectl drain {{ ansible_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --grace-period=30
+        --timeout=180s
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+    # ── Change OS hostname ────────────────────────────────────────────────
+
+    - name: Set new OS hostname
+      ansible.builtin.hostname:
+        name: "{{ new_hostname }}"
+
+    - name: Update 127.0.1.1 entry in /etc/hosts
+      ansible.builtin.replace:
+        path: /etc/hosts
+        regexp: '^(127\.0\.1\.1\s+){{ ansible_hostname }}(\s.*)?$'
+        replace: '\g<1>{{ new_hostname }}\2'
+
+    # ── Remove old node object so k3s re-registers under new name ─────────
+
+    - name: Delete old node object from Kubernetes
+      ansible.builtin.command: kubectl delete node {{ ansible_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+    # ── Restart k3s to re-register ────────────────────────────────────────
+
+    - name: Restart k3s service
+      ansible.builtin.systemd:
+        name: "{{ 'k3s-agent' if cluster_role == 'agent' else 'k3s' }}"
+        state: restarted
+
+    # ── Wait for re-registration ──────────────────────────────────────────
+
+    - name: Wait for new node to appear and be Ready
+      ansible.builtin.command: >
+        kubectl wait node/{{ new_hostname }}
+        --for=condition=Ready
+        --timeout=300s
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    # ── Show result ───────────────────────────────────────────────────────
+
+    - name: Show node status
+      ansible.builtin.command: kubectl get nodes -o wide
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: node_status
+
+    - name: Final cluster state
+      ansible.builtin.debug:
+        msg: "{{ node_status.stdout_lines }}"
+
+    - name: Reminder — update inventory
+      ansible.builtin.debug:
+        msg: >
+          SUCCESS. Update cluster/ansible/inventory.yaml:
+          rename host key '{{ inventory_hostname }}' → '{{ new_hostname }}'.
+          {% if cluster_role != 'agent' %}
+          Then run: ssh {{ new_hostname }} sudo k3s etcdctl member list
+          and remove the stale entry for '{{ ansible_hostname }}'.
+          {% endif %}

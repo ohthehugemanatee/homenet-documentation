@@ -15,6 +15,6 @@ ff02::2 ip6-allrouters
 {% for host in groups['all'] | sort %}
 {% set hv = hostvars[host] %}
 {% if hv.ip is defined %}
-{{ hv.ip }} {{ hv.new_hostname | default(host) }}
+{{ hv.ip }} {{ host }}
 {% endif %}
 {% endfor %}
