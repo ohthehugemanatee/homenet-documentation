@@ -208,7 +208,7 @@
 
     - name: Check k3s unit file exists
       ansible.builtin.stat:
-        path: "/lib/systemd/system/{{ k3s_svc }}.service"
+        path: "/etc/systemd/system/{{ k3s_svc }}.service"
       register: k3s_unit
 
     - name: k3s not installed — skip
@@ -226,26 +226,40 @@
         enabled: true
       failed_when: false
 
-    - name: Check k3s active state
+    - name: Get k3s ActiveState
       when: k3s_unit.stat.exists
-      ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
-      register: k3s_active
+      ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
+      register: k3s_active_state
       changed_when: false
       failed_when: false
 
+    - name: Get k3s restart count
+      when: k3s_unit.stat.exists
+      ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
+      register: k3s_nrestarts
+      changed_when: false
+      failed_when: false
+
+    # Unhealthy = not active, OR active but NRestarts > 5.
+    # The second condition catches restart loops: the service is briefly "active"
+    # between crashes, so is-active alone gives a false healthy signal.
+    - name: Assess k3s health
+      when: k3s_unit.stat.exists
+      ansible.builtin.set_fact:
+        k3s_healthy: >-
+          {{ k3s_active_state.stdout | default('') == 'active'
+             and k3s_nrestarts.stdout | default('99') | int <= 5 }}
+
     - name: k3s is healthy
-      when: k3s_unit.stat.exists and k3s_active.rc | default(1) == 0
+      when: k3s_unit.stat.exists and k3s_healthy | default(false)
       ansible.builtin.debug:
-        msg: "{{ k3s_svc }} is active on {{ inventory_hostname }}"
+        msg: >-
+          {{ k3s_svc }} is active on {{ inventory_hostname }}
+          (restarts: {{ k3s_nrestarts.stdout | default('?') }})
 
     - name: Diagnose and attempt fix for unhealthy k3s
-      when: k3s_unit.stat.exists and k3s_active.rc | default(1) != 0
+      when: k3s_unit.stat.exists and not (k3s_healthy | default(false))
       block:
-        - name: Get restart count
-          ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
-          register: k3s_restarts
-          changed_when: false
-
         - name: Get recent k3s journal
           ansible.builtin.command: "journalctl -u {{ k3s_svc }} --no-pager -n 50 -o short-iso"
           register: k3s_journal
@@ -254,9 +268,9 @@
         - name: Show diagnosis
           ansible.builtin.debug:
             msg: |
-              !! {{ k3s_svc }} not active on {{ inventory_hostname }}
-                 State:    {{ k3s_active.stdout }}
-                 Restarts: {{ k3s_restarts.stdout }}
+              !! {{ k3s_svc }} not healthy on {{ inventory_hostname }}
+                 ActiveState: {{ k3s_active_state.stdout }}
+                 Restarts:    {{ k3s_nrestarts.stdout }}
 
               Recent journal:
               {{ k3s_journal.stdout }}
@@ -266,17 +280,35 @@
             name: "{{ k3s_svc }}"
             state: restarted
 
-        - name: Wait for k3s to stabilize (up to 2 minutes)
-          ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
-          register: k3s_post
-          until: k3s_post.rc == 0
+        # NRestarts resets to 0 on explicit systemctl restart, then increments
+        # for each auto-restart thereafter. Wait for 'active', then pause so
+        # any restart loop has time to accumulate a non-zero count.
+        - name: Wait for k3s to become active (up to 2 minutes)
+          ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
+          register: k3s_post_state
+          until: k3s_post_state.stdout == 'active'
           retries: 12
           delay: 10
           changed_when: false
           failed_when: false
 
-        - name: Get journal after restart attempt (if still failing)
-          when: k3s_post.rc != 0
+        - name: Pause 30 seconds to expose any restart loop
+          when: k3s_post_state.stdout == 'active'
+          ansible.builtin.pause:
+            seconds: 30
+
+        - name: Re-check ActiveState after stability window
+          ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
+          register: k3s_final_state
+          changed_when: false
+
+        - name: Re-check NRestarts after stability window
+          ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
+          register: k3s_final_nrestarts
+          changed_when: false
+
+        - name: Get journal if still failing or re-looping
+          when: k3s_final_state.stdout != 'active' or k3s_final_nrestarts.stdout | int > 2
           ansible.builtin.command: "journalctl -u {{ k3s_svc }} --no-pager -n 30 -o short-iso"
           register: k3s_post_journal
           changed_when: false
@@ -284,11 +316,17 @@
         - name: Report post-restart state
           ansible.builtin.debug:
             msg: |
-              {% if k3s_post.rc == 0 %}
-              FIXED: {{ k3s_svc }} is now active on {{ inventory_hostname }}.
-              The restart resolved the issue (likely a config or module dependency).
+              {% if k3s_final_state.stdout == 'active' and k3s_final_nrestarts.stdout | int <= 2 %}
+              FIXED: {{ k3s_svc }} is stable on {{ inventory_hostname }}
+              ({{ k3s_final_nrestarts.stdout }} restarts in the 30s stability window)
+              {% elif k3s_final_state.stdout == 'active' %}
+              WARNING: {{ k3s_svc }} is active but restarting
+              ({{ k3s_final_nrestarts.stdout }} restarts in 30s — still looping)
+
+              Post-restart journal:
+              {{ k3s_post_journal.stdout | default('(no output)') }}
               {% else %}
-              !! {{ k3s_svc }} still not healthy after restart — manual investigation required.
+              !! {{ k3s_svc }} not active after restart — manual investigation required.
 
               Run on the node:
                 journalctl -u {{ k3s_svc }} -f
