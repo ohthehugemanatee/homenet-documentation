@@ -11,9 +11,7 @@ all:
     multimasters:
       hosts:
         cluster3:
-          ip: 10.10.10.11
         cluster4:
-          ip: 10.10.10.15
       vars: 
         cluster_role: "multi-master"
     agents:
@@ -22,8 +20,6 @@ all:
         nuc2:
         fuji:
         celery:
-        airbook:
-        cluster2:
         ubuntu:
       vars:
         cluster_role: "agent"
