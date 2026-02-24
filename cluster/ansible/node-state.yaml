@@ -1,0 +1,208 @@
+---
+# Idempotent node state management for k3s nodes.
+# Safe to re-run at any time — converges to declared state.
+#
+# Usage:
+#   All nodes:    ansible-playbook -i inventory.yaml --ask-vault-pass node-state.yaml
+#   Single node:  ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 node-state.yaml
+#   Dry-run:      ansible-playbook -i inventory.yaml --ask-vault-pass --check --diff node-state.yaml
+#
+# Override target group:  -e target=masters
+# Override NTP servers:   -e '{"ntp_servers": ["192.168.1.1"]}'
+
+- name: Enforce k3s node state
+  hosts: "{{ target | default('all:!ubuntu') }}"
+  become: true
+
+  vars:
+    ntp_servers:
+      - ntp.ubuntu.com
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+
+  handlers:
+    - name: Apply sysctl
+      ansible.builtin.command: sysctl --system
+      changed_when: false
+
+    - name: Restart timesyncd
+      ansible.builtin.systemd:
+        name: systemd-timesyncd
+        state: restarted
+        enabled: true
+
+    - name: Restart journald
+      ansible.builtin.systemd:
+        name: systemd-journald
+        state: restarted
+
+    - name: Restart multipathd
+      ansible.builtin.systemd:
+        name: multipathd
+        state: restarted
+
+  tasks:
+    # ── Packages ────────────────────────────────────────────────────────────
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 300
+        state: present
+        pkg:
+          - nfs-common
+          - vim
+          - unattended-upgrades
+          - apt-listchanges
+
+    - name: Install x86 media packages
+      when: ansible_architecture == "x86_64"
+      ansible.builtin.apt:
+        state: present
+        pkg:
+          - intel-media-va-driver-non-free
+          - libmfx1
+
+    # ── Hostname ─────────────────────────────────────────────────────────────
+
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ new_hostname | default(inventory_hostname) }}"
+
+    # ── /etc/hosts ───────────────────────────────────────────────────────────
+
+    - name: Template /etc/hosts
+      ansible.builtin.template:
+        src: templates/hosts.j2
+        dest: /etc/hosts
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ── Kernel modules ───────────────────────────────────────────────────────
+
+    - name: Ensure k3s kernel modules load on boot
+      ansible.builtin.copy:
+        content: |
+          br_netfilter
+          overlay
+        dest: /etc/modules-load.d/k3s.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Load k3s kernel modules now
+      ansible.builtin.command: "modprobe {{ item }}"
+      loop:
+        - br_netfilter
+        - overlay
+      changed_when: false
+
+    # ── Kernel parameters ────────────────────────────────────────────────────
+
+    - name: Template k3s sysctl parameters
+      ansible.builtin.template:
+        src: templates/sysctl-k3s.conf.j2
+        dest: /etc/sysctl.d/99-k3s.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Apply sysctl
+
+    # ── ARM: cgroup kernel command line ──────────────────────────────────────
+
+    - name: ARM — ensure cgroup params in kernel cmdline
+      when: ansible_architecture == "aarch64"
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/cmdline.txt
+        backrefs: true
+        # Only append if not already present
+        regexp: '^((?!.*cgroup_enable=memory).*)$'
+        line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+
+    # ── NTP ──────────────────────────────────────────────────────────────────
+
+    - name: Template timesyncd NTP config
+      ansible.builtin.template:
+        src: templates/timesyncd.conf.j2
+        dest: /etc/systemd/timesyncd.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart timesyncd
+
+    # ── Security updates ─────────────────────────────────────────────────────
+
+    - name: Template unattended-upgrades config
+      ansible.builtin.template:
+        src: templates/50unattended-upgrades.j2
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable automatic security updates
+      ansible.builtin.copy:
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ── Swap ─────────────────────────────────────────────────────────────────
+
+    - name: Disable swap immediately
+      ansible.builtin.command: swapoff -a
+      when: ansible_swaptotal_mb | int > 0
+      changed_when: ansible_swaptotal_mb | int > 0
+
+    - name: Disable swap in fstab
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*?\sswap\s+\S+\s+.*)$'
+        replace: '# \1'
+
+    # ── Journald ─────────────────────────────────────────────────────────────
+
+    - name: Configure journald volatile storage
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/journald.conf
+        regexp: '^#?Storage='
+        line: 'Storage=volatile'
+      notify: Restart journald
+
+    # ── Multipath ────────────────────────────────────────────────────────────
+
+    - name: Blacklist additional block devices in multipath
+      ansible.builtin.blockinfile:
+        path: /etc/multipath.conf
+        create: true
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - k3s"
+        block: |
+          blacklist {
+            devnode "^sd[b-z0-9]+"
+          }
+      notify: Restart multipathd
+
+    # ── k3s service ──────────────────────────────────────────────────────────
+
+    - name: Ensure k3s service is running and enabled
+      ansible.builtin.systemd:
+        name: "{{ 'k3s-agent' if cluster_role == 'agent' else 'k3s' }}"
+        state: started
+        enabled: true
+      # k3s may not be installed on a fresh node; the state playbook
+      # does not install k3s — use k3s-agent.yaml for initial install.
+      ignore_errors: true
+      register: k3s_service_result
+
+    - name: Warn if k3s service not found
+      when: k3s_service_result is failed
+      ansible.builtin.debug:
+        msg: >
+          k3s service not found on {{ inventory_hostname }}.
+          Run k3s-agent.yaml first for initial installation.
