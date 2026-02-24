@@ -19,6 +19,7 @@
       - ntp.ubuntu.com
       - 0.pool.ntp.org
       - 1.pool.ntp.org
+    k3s_svc: "{{ 'k3s-agent' if cluster_role == 'agent' else 'k3s' }}"
 
   handlers:
     - name: Apply sysctl
@@ -76,6 +77,16 @@
       ansible.builtin.template:
         src: templates/hosts.j2
         dest: /etc/hosts
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ── NFS client ───────────────────────────────────────────────────────────
+
+    - name: Template NFS global mount options (soft mounts)
+      ansible.builtin.template:
+        src: templates/nfsmount.conf.j2
+        dest: /etc/nfsmount.conf
         owner: root
         group: root
         mode: '0644'
@@ -189,20 +200,100 @@
       notify: Restart multipathd
 
     # ── k3s service ──────────────────────────────────────────────────────────
+    # Flush config handlers first — sysctl, modules, etc. must be current
+    # before we assess or restart k3s.
 
-    - name: Ensure k3s service is running and enabled
-      ansible.builtin.systemd:
-        name: "{{ 'k3s-agent' if cluster_role == 'agent' else 'k3s' }}"
-        state: started
-        enabled: true
-      # k3s may not be installed on a fresh node; the state playbook
-      # does not install k3s — use k3s-agent.yaml for initial install.
-      ignore_errors: true
-      register: k3s_service_result
+    - name: Flush config handlers before k3s health check
+      ansible.builtin.meta: flush_handlers
 
-    - name: Warn if k3s service not found
-      when: k3s_service_result is failed
+    - name: Check k3s unit file exists
+      ansible.builtin.stat:
+        path: "/lib/systemd/system/{{ k3s_svc }}.service"
+      register: k3s_unit
+
+    - name: k3s not installed — skip
+      when: not k3s_unit.stat.exists
       ansible.builtin.debug:
         msg: >
-          k3s service not found on {{ inventory_hostname }}.
+          {{ k3s_svc }} not installed on {{ inventory_hostname }}.
           Run k3s-agent.yaml first for initial installation.
+
+    - name: Ensure k3s is enabled and started
+      when: k3s_unit.stat.exists
+      ansible.builtin.systemd:
+        name: "{{ k3s_svc }}"
+        state: started
+        enabled: true
+      failed_when: false
+
+    - name: Check k3s active state
+      when: k3s_unit.stat.exists
+      ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
+      register: k3s_active
+      changed_when: false
+      failed_when: false
+
+    - name: k3s is healthy
+      when: k3s_unit.stat.exists and k3s_active.rc | default(1) == 0
+      ansible.builtin.debug:
+        msg: "{{ k3s_svc }} is active on {{ inventory_hostname }}"
+
+    - name: Diagnose and attempt fix for unhealthy k3s
+      when: k3s_unit.stat.exists and k3s_active.rc | default(1) != 0
+      block:
+        - name: Get restart count
+          ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
+          register: k3s_restarts
+          changed_when: false
+
+        - name: Get recent k3s journal
+          ansible.builtin.command: "journalctl -u {{ k3s_svc }} --no-pager -n 50 -o short-iso"
+          register: k3s_journal
+          changed_when: false
+
+        - name: Show diagnosis
+          ansible.builtin.debug:
+            msg: |
+              !! {{ k3s_svc }} not active on {{ inventory_hostname }}
+                 State:    {{ k3s_active.stdout }}
+                 Restarts: {{ k3s_restarts.stdout }}
+
+              Recent journal:
+              {{ k3s_journal.stdout }}
+
+        - name: Restart k3s with current config applied
+          ansible.builtin.systemd:
+            name: "{{ k3s_svc }}"
+            state: restarted
+
+        - name: Wait for k3s to stabilize (up to 2 minutes)
+          ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
+          register: k3s_post
+          until: k3s_post.rc == 0
+          retries: 12
+          delay: 10
+          changed_when: false
+          failed_when: false
+
+        - name: Get journal after restart attempt (if still failing)
+          when: k3s_post.rc != 0
+          ansible.builtin.command: "journalctl -u {{ k3s_svc }} --no-pager -n 30 -o short-iso"
+          register: k3s_post_journal
+          changed_when: false
+
+        - name: Report post-restart state
+          ansible.builtin.debug:
+            msg: |
+              {% if k3s_post.rc == 0 %}
+              FIXED: {{ k3s_svc }} is now active on {{ inventory_hostname }}.
+              The restart resolved the issue (likely a config or module dependency).
+              {% else %}
+              !! {{ k3s_svc }} still not healthy after restart — manual investigation required.
+
+              Run on the node:
+                journalctl -u {{ k3s_svc }} -f
+                systemctl status {{ k3s_svc }}
+
+              Post-restart journal:
+              {{ k3s_post_journal.stdout | default('(no output)') }}
+              {% endif %}

@@ -1,0 +1,11 @@
+# Managed by Ansible — do not edit manually.
+# /etc/nfsmount.conf — system-wide NFS mount defaults.
+#
+# Soft mounts return an error after a timeout rather than hanging indefinitely.
+# This is critical for Kubernetes: a hard-mount hang blocks the pod forever
+# and can wedge the kubelet. Soft + reasonable timeout = fast, recoverable failure.
+
+[ NFSMount_Global_Options ]
+Soft=True
+Timeo=60      # 6 seconds per transmission attempt (deciseconds)
+Retrans=3     # 3 retries → ~18 seconds total before returning an error
