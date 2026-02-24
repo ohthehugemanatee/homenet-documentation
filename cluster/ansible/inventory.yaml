@@ -17,8 +17,10 @@ all:
     agents:
       hosts:
         nuc1:
+          ansible_user: ohthehugemanatee
         nuc2:
         fuji:
+          ansible_user: ohthehugemanatee
         celery:
         ubuntu:
       vars:
