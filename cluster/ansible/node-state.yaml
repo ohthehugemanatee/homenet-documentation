@@ -37,9 +37,9 @@
         name: systemd-journald
         state: restarted
 
-    - name: Restart multipathd
+    - name: Restart iscsid
       ansible.builtin.systemd:
-        name: multipathd
+        name: iscsid
         state: restarted
 
   tasks:
@@ -54,6 +54,8 @@
         pkg:
           - nfs-common
           - vim
+          - open-iscsi
+          - linux-modules-extra-{{ ansible_kernel }}
           - unattended-upgrades
           - apt-listchanges
 
@@ -186,18 +188,47 @@
         line: 'Storage=volatile'
       notify: Restart journald
 
-    # ── Multipath ────────────────────────────────────────────────────────────
+    # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
 
-    - name: Blacklist additional block devices in multipath
-      ansible.builtin.blockinfile:
-        path: /etc/multipath.conf
-        create: true
-        marker: "# {mark} ANSIBLE MANAGED BLOCK - k3s"
-        block: |
-          blacklist {
-            devnode "^sd[b-z0-9]+"
-          }
-      notify: Restart multipathd
+    # Unmask first — dpkg's pre-removal script calls invoke-rc.d which calls
+    # `systemctl stop multipath-tools.service`, and that fails if the unit is
+    # masked. Unmask → stop → remove → reload → re-mask is idempotent in all
+    # states: unmasked units, masked units, and absent packages.
+    - name: Unmask multipathd before removal
+      ansible.builtin.systemd:
+        name: multipathd
+        masked: false
+      failed_when: false
+
+    - name: Stop multipathd
+      ansible.builtin.systemd:
+        name: multipathd
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Remove multipath-tools package
+      ansible.builtin.apt:
+        name: multipath-tools
+        state: absent
+
+    - name: Reload systemd after package removal
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Mask multipathd to prevent accidental start
+      ansible.builtin.systemd:
+        name: multipathd
+        masked: true
+      failed_when: false
+
+    # ── iSCSI (required by Longhorn) ─────────────────────────────────────────
+
+    - name: Ensure iscsid is enabled and running
+      ansible.builtin.systemd:
+        name: iscsid
+        state: started
+        enabled: true
 
     # ── k3s service ──────────────────────────────────────────────────────────
     # Flush config handlers first — sysctl, modules, etc. must be current

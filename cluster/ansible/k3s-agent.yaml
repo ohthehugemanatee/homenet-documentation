@@ -11,8 +11,10 @@
           update_cache: true
           lock_timeout: 300
           pkg:
-            - nfs-client
+            - nfs-common
             - vim
+            - open-iscsi
+            - linux-modules-extra-{{ ansible_kernel }}
       - name: x86-only apt installs
         when: ansible_architecture == "x86_64"
         ansible.builtin.apt:
@@ -79,18 +81,34 @@
         ansible.builtin.systemd:
           state: restarted
           name: systemd-journald.service
-      - name: Disable multipath for additional volumes
-        ansible.builtin.blockinfile:
-          path: /etc/multipath.conf
-          insertafter: "EOF"
-          block: |
-            blacklist {
-              devnode "^sd[b-z0-9]+"
-            }
-      - name: Restart multipath service
+      - name: Unmask multipathd before removal
         ansible.builtin.systemd:
-          state: restarted
-          name: multipathd.service
+          name: multipathd
+          masked: false
+        failed_when: false
+      - name: Stop multipathd (conflicts with Longhorn iSCSI)
+        ansible.builtin.systemd:
+          name: multipathd
+          state: stopped
+          enabled: false
+        failed_when: false
+      - name: Remove multipath-tools package
+        ansible.builtin.apt:
+          name: multipath-tools
+          state: absent
+      - name: Reload systemd after package removal
+        ansible.builtin.systemd:
+          daemon_reload: true
+      - name: Mask multipathd to prevent accidental start
+        ansible.builtin.systemd:
+          name: multipathd
+          masked: true
+        failed_when: false
+      - name: Enable and start iscsid (required by Longhorn)
+        ansible.builtin.systemd:
+          name: iscsid
+          state: started
+          enabled: true
       - name: Pre-installation reboot
         ansible.builtin.reboot:
       - name: Download k3s agent installer

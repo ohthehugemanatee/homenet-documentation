@@ -69,6 +69,14 @@
         post_reboot_delay: 15
       when: reboot_required_file.stat.exists or apt_upgrade.changed
 
+    - name: Refresh facts to pick up new kernel version
+      ansible.builtin.gather_facts:
+
+    - name: Install linux-modules-extra for running kernel (required for iSCSI)
+      ansible.builtin.apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
+        state: present
+
     - name: Wait for k3s-agent to become active
       ansible.builtin.command: systemctl is-active k3s-agent
       register: k3s_status
@@ -151,6 +159,14 @@
         reboot_timeout: 600
         post_reboot_delay: 20
       when: reboot_required_file.stat.exists or apt_upgrade.changed
+
+    - name: Refresh facts to pick up new kernel version
+      ansible.builtin.gather_facts:
+
+    - name: Install linux-modules-extra for running kernel (required for iSCSI)
+      ansible.builtin.apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
+        state: present
 
     - name: Wait for k3s server to become active
       ansible.builtin.command: systemctl is-active k3s
@@ -246,6 +262,14 @@
         reboot_timeout: 600
         post_reboot_delay: 30
       when: reboot_required_file.stat.exists or apt_upgrade.changed
+
+    - name: Refresh facts to pick up new kernel version
+      ansible.builtin.gather_facts:
+
+    - name: Install linux-modules-extra for running kernel (required for iSCSI)
+      ansible.builtin.apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
+        state: present
 
     - name: Wait for k3s server to become active
       ansible.builtin.command: systemctl is-active k3s
