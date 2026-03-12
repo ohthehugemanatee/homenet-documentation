@@ -39,8 +39,6 @@ spec:
             name: sidecar-promtail
         - name: nextcloud-logs
           emptyDir: {}
-      imagePullSecrets:
-        - name: ghcr
       nodeSelector:
         transcodingGpu: "1"
       containers:
