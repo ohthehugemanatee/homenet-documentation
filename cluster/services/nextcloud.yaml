@@ -39,8 +39,12 @@ spec:
             name: sidecar-promtail
         - name: nextcloud-logs
           emptyDir: {}
+        - name: preview-cache
+          persistentVolumeClaim:
+            claimName: nextcloud-previews
       nodeSelector:
         transcodingGpu: "1"
+        nvme: "1"
       containers:
         - name: nextcloud
           image: lscr.io/linuxserver/nextcloud:32.0.2-ls404
@@ -104,6 +108,19 @@ spec:
               subPath: "nextcloud/server-config"
             - name: nextcloud-logs
               mountPath: "/config/log"
+            - name: preview-cache
+              mountPath: "/preview-cache"
+        - name: imaginary
+          image: ghcr.io/nextcloud-releases/aio-imaginary:latest
+          args: ["-p", "9001", "-concurrency", "50", "-enable-url-source", "-return-size"]
+          env:
+            - name: "PORT"
+              value: "9001"
+          ports:
+          - containerPort: 9001
+          securityContext:
+            capabilities:
+              add: ["SYS_NICE"]
         - name: nextcloud-promtail
           image: grafana/promtail:2.1.0
           imagePullPolicy: IfNotPresent
@@ -128,6 +145,19 @@ spec:
               mountPath: /sidecar-logs
             - mountPath: /etc/promtail
               name: promtail-config
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-previews
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-ephemeral-fast
+  resources:
+    requests:
+      storage: 50Gi
 ---
 
 apiVersion: v1
