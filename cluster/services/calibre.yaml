@@ -1,0 +1,181 @@
+# ── calibre ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: calibre
+spec:
+  selector:
+    matchLabels:
+      run: calibre
+  replicas: 1
+  serviceName: calibre
+  template:
+    metadata:
+      labels:
+        run: calibre
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      volumes:
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
+        - name: nfs-media
+          persistentVolumeClaim:
+            claimName: media
+      containers:
+        - name: calibre
+          image: lscr.io/linuxserver/calibre:latest
+          ports:
+            - containerPort: 8080   # KasmVNC GUI
+            - containerPort: 8081   # Content / OPDS server
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - name: nfs-config
+              mountPath: /config
+              subPath: "calibre"
+            - name: nfs-media
+              mountPath: /books
+              subPath: "books"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: calibre
+  labels:
+    run: calibre
+spec:
+  ports:
+  - name: gui
+    port: 8080
+    protocol: TCP
+  - name: content
+    port: 8081
+    protocol: TCP
+  selector:
+    run: calibre
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: calibre
+spec:
+  rules:
+  - host: calibre.cluster.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: calibre
+            port:
+              number: 8080
+  - host: calibre.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: calibre
+            port:
+              number: 8080
+
+# ── calibre-web ────────────────────────────────────────────────────────────
+---
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: calibre-web
+spec:
+  selector:
+    matchLabels:
+      run: calibre-web
+  replicas: 1
+  serviceName: calibre-web
+  template:
+    metadata:
+      labels:
+        run: calibre-web
+    spec:
+      volumes:
+        - name: nfs-config
+          persistentVolumeClaim:
+            claimName: app-configs
+      containers:
+        - name: calibre-web
+          image: lscr.io/linuxserver/calibre-web:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+            - name: CALIBRE_PATH
+              value: "/calibre-library/Calibre Library"
+          volumeMounts:
+            - name: nfs-config
+              mountPath: /config
+              subPath: "calibre-web"
+            - name: nfs-config
+              mountPath: /calibre-library
+              subPath: "calibre"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: calibre-web
+  labels:
+    run: calibre-web
+spec:
+  ports:
+  - port: 8083
+    protocol: TCP
+  selector:
+    run: calibre-web
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: calibre-web
+spec:
+  rules:
+  - host: calibre-web.cluster.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: calibre-web
+            port:
+              number: 8083
+  - host: calibre-web.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: calibre-web
+            port:
+              number: 8083
