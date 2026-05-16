@@ -69,6 +69,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: calibre
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
 spec:
   rules:
   - host: calibre.cluster.vert
@@ -91,6 +93,20 @@ spec:
             name: calibre
             port:
               number: 8080
+  - host: calibre.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: calibre
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - calibre.berlin.vertesi.com
+    secretName: berlin-vertesi-com-wildcard-tls
 
 # ── calibre-web ────────────────────────────────────────────────────────────
 ---
@@ -179,3 +195,17 @@ spec:
             name: calibre-web
             port:
               number: 8083
+  - host: calibre-web.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: calibre-web
+            port:
+              number: 8083
+  tls:
+  - hosts:
+    - calibre-web.berlin.vertesi.com
+    secretName: berlin-vertesi-com-wildcard-tls
