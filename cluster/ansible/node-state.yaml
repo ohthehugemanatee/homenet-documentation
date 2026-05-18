@@ -140,16 +140,56 @@
         mode: '0644'
       notify: Apply sysctl
 
-    # ── ARM: cgroup kernel command line ──────────────────────────────────────
+    # ── cgroup v2 kernel command line ────────────────────────────────────────
+    # k3s >= 1.35 requires cgroup v2 (unified hierarchy). Older kernels
+    # (e.g. 5.4 on Ubuntu 20.04) still need the explicit cgroup_enable
+    # flags to expose memory/cpuset controllers in v2 mode.
 
-    - name: ARM — ensure cgroup params in kernel cmdline
+    - name: ARM — ensure cgroup memory/cpuset flags in kernel cmdline
       when: ansible_architecture == "aarch64"
       ansible.builtin.lineinfile:
         path: /boot/firmware/cmdline.txt
         backrefs: true
-        # Only append if not already present
         regexp: '^((?!.*cgroup_enable=memory).*)$'
         line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+
+    - name: ARM — ensure cgroup v2 unified hierarchy in kernel cmdline
+      when: ansible_architecture == "aarch64"
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/cmdline.txt
+        backrefs: true
+        regexp: '^((?!.*systemd\.unified_cgroup_hierarchy).*)$'
+        line: '\1 systemd.unified_cgroup_hierarchy=1'
+      register: arm_cgroup_v2
+
+    - name: x86 — ensure cgroup v2 unified hierarchy in GRUB
+      when: ansible_architecture == "x86_64"
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        backrefs: true
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*systemd\.unified_cgroup_hierarchy).*)"$'
+        line: '\1 systemd.unified_cgroup_hierarchy=1"'
+      register: x86_cgroup_v2
+
+    - name: x86 — ensure cgroup memory/cpuset flags in GRUB
+      when: ansible_architecture == "x86_64"
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        backrefs: true
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*cgroup_enable=memory).*)"$'
+        line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory"'
+      register: x86_cgroup_memory
+
+    - name: x86 — update GRUB config
+      when: ansible_architecture == "x86_64" and (x86_cgroup_v2.changed or x86_cgroup_memory.changed)
+      ansible.builtin.command: update-grub
+
+    - name: Flag reboot required for cgroup changes
+      when: (arm_cgroup_v2.changed | default(false)) or (x86_cgroup_v2.changed | default(false)) or (x86_cgroup_memory.changed | default(false))
+      ansible.builtin.file:
+        path: /var/run/reboot-required
+        state: touch
+        mode: '0644'
 
     # ── NTP ──────────────────────────────────────────────────────────────────
 
