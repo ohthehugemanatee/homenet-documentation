@@ -31,9 +31,9 @@
       register: os_version
       changed_when: false
 
-    - name: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+    - name: "Starting upgrade: {{ inventory_hostname }}"
       ansible.builtin.debug:
-        msg: "Starting upgrade of {{ inventory_hostname }}"
+        msg: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
 
     - name: Drain node
       ansible.builtin.command: >
@@ -105,9 +105,9 @@
       register: os_version_after
       changed_when: false
 
-    - name: "{{ inventory_hostname }} done — {{ os_version_after.stdout }}"
+    - name: "Upgrade done: {{ inventory_hostname }}"
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
+        msg: "{{ inventory_hostname }} upgraded to: {{ os_version_after.stdout }}"
 
 - name: Rolling OS upgrade — multi-master servers
   hosts: "{{ target | default('multimasters') }}"
@@ -121,9 +121,9 @@
       register: os_version
       changed_when: false
 
-    - name: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+    - name: "Starting upgrade: {{ inventory_hostname }}"
       ansible.builtin.debug:
-        msg: "Starting upgrade of multi-master {{ inventory_hostname }}"
+        msg: "Upgrading multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
 
     - name: Drain node
       ansible.builtin.command: >
@@ -204,9 +204,9 @@
       register: os_version_after
       changed_when: false
 
-    - name: "{{ inventory_hostname }} done — {{ os_version_after.stdout }}"
+    - name: "Upgrade done: {{ inventory_hostname }}"
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
+        msg: "{{ inventory_hostname }} upgraded to: {{ os_version_after.stdout }}"
 
 - name: Rolling OS upgrade — first master (last)
   hosts: "{{ target | default('masters') }}"
@@ -220,10 +220,10 @@
       register: os_version
       changed_when: false
 
-    - name: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+    - name: "Starting upgrade: {{ inventory_hostname }}"
       ansible.builtin.debug:
         msg: >
-          Starting upgrade of first-master {{ inventory_hostname }}.
+          Upgrading first-master {{ inventory_hostname }} ({{ os_version.stdout }}).
           Ensure kubectl is configured to reach the cluster via a VIP or
           another server in case this node's API server is briefly unavailable.
 

@@ -15,7 +15,7 @@
           - vim
           - open-iscsi
           - linux-modules-extra-{{ ansible_kernel }}
-    - name: x86-only apt installs
+    - name: AMD64-only apt installs
       when: ansible_architecture == "x86_64"
       ansible.builtin.apt:
         pkg:
@@ -29,7 +29,7 @@
         path: /etc/fstab
         regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
         replace: '# \1'
-    - name: get PARTUUID
+    - name: Get PARTUUID
       ansible.builtin.command: 'lsblk {{ usb_disk }} -no PARTUUID'
       register: partuuid
       when: usb_disk is defined
@@ -117,12 +117,12 @@
       ansible.builtin.get_url:
         url: https://get.k3s.io
         dest: /tmp/k3s-setup.sh
-        mode: 0755
+        mode: '0755'
     - name: Run k3s agent installer
       when: cluster_role == "agent"
       tags:
         - k3s
-      ansible.builtin.shell: /tmp/k3s-setup.sh
+      ansible.builtin.command: /tmp/k3s-setup.sh
       environment:
         K3S_URL: https://10.10.10.10:6443
         K3S_TOKEN: "{{ k3s_token }}"
@@ -130,7 +130,7 @@
       when: cluster_role == "multi-master"
       tags:
         - k3s
-      ansible.builtin.shell: /tmp/k3s-setup.sh
+      ansible.builtin.command: /tmp/k3s-setup.sh
       environment:
         K3S_URL: https://10.10.10.10:6443
         K3S_TOKEN: "{{ k3s_token }}"
@@ -139,7 +139,7 @@
       when: cluster_role == "first-master"
       tags:
         - k3s
-      ansible.builtin.shell: /tmp/k3s-setup.sh
+      ansible.builtin.command: /tmp/k3s-setup.sh
       environment:
         K3S_TOKEN: "{{ k3s_token }}"
         INSTALL_K3S_EXEC: "server --cluster-init --disable=servicelb"

@@ -242,7 +242,7 @@
         path: "/etc/systemd/system/{{ k3s_svc }}.service"
       register: k3s_unit
 
-    - name: k3s not installed — skip
+    - name: K3s not installed — skip
       when: not k3s_unit.stat.exists
       ansible.builtin.debug:
         msg: >
@@ -281,7 +281,7 @@
           {{ k3s_active_state.stdout | default('') == 'active'
              and k3s_nrestarts.stdout | default('99') | int <= 5 }}
 
-    - name: k3s is healthy
+    - name: K3s is healthy
       when: k3s_unit.stat.exists and k3s_healthy | default(false)
       ansible.builtin.debug:
         msg: >-
