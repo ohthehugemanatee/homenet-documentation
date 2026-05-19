@@ -22,4 +22,3 @@ spec:
          traefik-query-sticky:
            moduleName: "github.com/SIB-rennes/traefik_query_sticky"
            version: "v1.0.4"
-

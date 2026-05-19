@@ -109,7 +109,6 @@
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
 
-
 - name: Rolling OS upgrade — multi-master servers
   hosts: "{{ target | default('multimasters') }}"
   become: true
@@ -208,7 +207,6 @@
     - name: "{{ inventory_hostname }} done — {{ os_version_after.stdout }}"
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
-
 
 - name: Rolling OS upgrade — first master (last)
   hosts: "{{ target | default('masters') }}"

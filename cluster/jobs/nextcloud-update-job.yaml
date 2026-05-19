@@ -1,6 +1,6 @@
 apiVersion: batch/v1
 kind: Job
-metadata: 
+metadata:
   name: nextcloud-update
 spec:
   template:
@@ -15,7 +15,7 @@ spec:
           image: lscr.io/linuxserver/nextcloud:php8
           command: ["/bin/sh", "-c"]
           args:
-            - /init & 
+            - /init &
               sleep 180;
               sudo -u abc php8 $NEXTCLOUD_PATH/updater/updater.phar;
               sudo -u abc php8 /usr/bin/occ db:add-missing-indices -n -v;

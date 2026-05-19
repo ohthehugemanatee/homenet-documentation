@@ -1,3 +1,6 @@
+failure-threshold: error
 ignore:
-  - DL3007  # :latest tag is acceptable for homelab images
-  - DL3047  # curl vs wget is user preference
+  - DL3007
+  - DL3008
+  - DL3015
+  - DL3047

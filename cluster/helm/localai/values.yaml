@@ -17,4 +17,3 @@ models:
     accessModes:
       - ReadWriteOnce
     storageClass: "longhorn"
-

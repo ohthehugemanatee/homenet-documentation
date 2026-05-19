@@ -2,12 +2,12 @@ collabora:
   extra_params: --o:ssl.enable=false --o:ssl.termination=true
   aliasgroups:
     - host: "https://germany.vertesi.com:443"
-  
-  # External hostname:port of the server running coolwsd. 
-  # If empty, it's derived from the request (please set it if this doesn't work). 
+
+  # External hostname:port of the server running coolwsd.
+  # If empty, it's derived from the request (please set it if this doesn't work).
   # May be specified when behind a reverse-proxy or when the hostname is not reachable directly.
   # server_name: null
-  
+
   # existingSecret:
   #   enabled: false
   #   secretName: ""

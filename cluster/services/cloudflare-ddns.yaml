@@ -11,8 +11,8 @@ spec:
     type: Recreate
   template:
     metadata:
-        labels:
-          run: cloudflare-ddns
+      labels:
+        run: cloudflare-ddns
     spec:
       affinity:
         nodeAffinity:

@@ -1,6 +1,6 @@
 FROM ubuntu:20.04
-RUN apt update && apt install dumb-init -y && rm -rf /var/lib/apt/lists/*
-ADD ./sync-storage.sh /sync-storage.sh
+RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
+COPY ./sync-storage.sh /sync-storage.sh
 RUN chmod +x /sync-storage.sh
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]

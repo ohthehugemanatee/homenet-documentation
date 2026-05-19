@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       run: jackett
-  replicas: 1 
+  replicas: 1
   template:
     metadata:
       labels:
@@ -75,4 +75,3 @@ spec:
             name: jackett
             port:
               number: 9117
-

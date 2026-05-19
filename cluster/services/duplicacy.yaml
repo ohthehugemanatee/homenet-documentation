@@ -19,8 +19,8 @@ spec:
             storage: 500Mi
   template:
     metadata:
-        labels:
-          run: duplicacy
+      labels:
+        run: duplicacy
     spec:
       hostname: duplicacy-pod
       volumes:
@@ -32,20 +32,20 @@ spec:
             name: sidecar-promtail
         - name: sidecar-promtail-logs
           emptyDir:
-            medium: Memory 
+            medium: Memory
       containers:
         - name: promtail-sidecar
           image: grafana/promtail:2.1.0
           imagePullPolicy: IfNotPresent
           args:
             - "-config.file=/etc/promtail/config.yml"
-            - '--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)' 
+            - '--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)'
           env:
             - name: POD_RUN
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['run']
-            - name: POD_NAMESPACE 
+            - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
@@ -83,7 +83,7 @@ spec:
                 secretKeyRef:
                   name: duplicacy
                   key: machine-id
-          image: saspus/duplicacy-web:mini 
+          image: saspus/duplicacy-web:mini
           ports:
             - containerPort: 3875
               name: duplicacy
@@ -143,4 +143,3 @@ spec:
             name: duplicacy
             port:
               number: 3875
-

@@ -20,7 +20,7 @@ spec:
           runAsUser: 1000
           runAsGroup: 1000
         image: redis
-        args: 
+        args:
           - "--appendonly"
           - "no"
           - "--maxmemory"
@@ -37,8 +37,8 @@ spec:
             subPath: "redis"
             mountPath: "/data"
         env:
-            - name: ALLOW_EMPTY_PASSWORD
-              value: "yes"
+          - name: ALLOW_EMPTY_PASSWORD
+            value: "yes"
       volumes:
         - name: nfs-config
           persistentVolumeClaim:

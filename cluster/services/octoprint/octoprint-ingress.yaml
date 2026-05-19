@@ -13,7 +13,7 @@ spec:
           backend:
             service:
               name: octoprint
-              port: 
+              port:
                 number: 80
   - host: octoprint.vert
     http:
@@ -25,4 +25,3 @@ spec:
               name: octoprint
               port:
                 number: 80
-

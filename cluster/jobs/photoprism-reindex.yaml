@@ -1,6 +1,6 @@
 apiVersion: batch/v1
 kind: Job
-metadata: 
+metadata:
   name: photoprism-reindex
 spec:
   template:
@@ -69,4 +69,3 @@ spec:
             - name: nfs
               mountPath: "/assets"
               subPath: ".docker/config/photoprism"
-

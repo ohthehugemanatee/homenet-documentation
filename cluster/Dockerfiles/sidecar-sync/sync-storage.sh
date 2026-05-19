@@ -50,7 +50,7 @@ while [ $# -gt 0 ]; do
       printf "***************************\n"
       printf "* Error: Invalid argument.*\n"
       printf "***************************\n"
-      echo -e $HELPTEXT
+      echo -e "$HELPTEXT"
       exit 1
   esac
   shift
@@ -60,8 +60,8 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-printf "Creating a ${SIZE} image at ${RAMDISK}, mounting it at ${RAMDISK_MOUNTPOINT}.\n"
-printf "It will sync to ${STORAGE} every ${SYNCPERIOD} seconds.\n"
+printf 'Creating a %s image at %s, mounting it at %s.\n' "${SIZE}" "${RAMDISK}" "${RAMDISK_MOUNTPOINT}"
+printf 'It will sync to %s every %s seconds.\n' "${STORAGE}" "${SYNCPERIOD}"
 
 trap "cleanup" TERM
 
@@ -69,7 +69,7 @@ trap "cleanup" TERM
 startup()
 {
   mkdir -p "${RAMDISK_MOUNTPOINT}"
-  dd if=/dev/zero of="${RAMDISK}"/image.ext4 count=0 bs=1 seek=${SIZE}
+  dd if=/dev/zero of="${RAMDISK}"/image.ext4 count=0 bs=1 seek="${SIZE}"
   mkfs.ext4 "${RAMDISK}"/image.ext4;
   mount "${RAMDISK}"/image.ext4 "${RAMDISK_MOUNTPOINT}"
   cp -fvpR "${STORAGE}"/* "${RAMDISK_MOUNTPOINT}"

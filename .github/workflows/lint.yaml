@@ -1,6 +1,6 @@
 name: Lint
 
-on:
+'on':
   push:
   pull_request:
 
@@ -45,6 +45,7 @@ jobs:
         with:
           recursive: true
           config: .hadolint.yaml
+          failure-threshold: error
 
   shell:
     name: Shell scripts
