@@ -1,0 +1,109 @@
+name: Cluster smoke tests
+
+'on':
+  push:
+  pull_request:
+
+jobs:
+
+  dry-run:
+    name: k3d dry-run
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k3d
+        env:
+          K3D_VERSION: v5.7.5
+        run: |
+          curl -fsSLo /tmp/k3d \
+            "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
+          install -m 755 /tmp/k3d /usr/local/bin/k3d
+          k3d version
+
+      - name: Create k3d cluster
+        run: k3d cluster create ci --wait --no-lb
+
+      - name: Install cert-manager CRDs via helm
+        run: |
+          helm repo add jetstack https://charts.jetstack.io
+          helm repo update
+          helm install cert-manager jetstack/cert-manager \
+            --namespace cert-manager \
+            --create-namespace \
+            --set crds.enabled=true \
+            --wait
+
+      - name: Wait for cert-manager webhook
+        run: |
+          kubectl rollout status deployment/cert-manager-webhook \
+            -n cert-manager --timeout=120s
+
+      - name: Seed cluster state (namespaces, priority classes)
+        run: |
+          kubectl create namespace collabora --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f cluster/priorityClasses/
+
+      - name: Server-side dry-run — all manifests
+        run: |
+          FAILED=0
+          while IFS= read -r f; do
+            echo "==> $f"
+            kubectl apply --dry-run=server -f "$f" || { echo "FAILED: $f"; FAILED=1; }
+          done < <(find cluster -name "*.yaml" \
+            ! -path "*/ansible/*" \
+            ! -path "*/helm/*" \
+            ! -path "*/localdev/*" \
+            ! -path "*/operators/*" \
+            ! -path "*/priorityClasses/*" \
+            ! -name "cert-manager.yaml" \
+            ! -name "l2-config.yaml" \
+            | sort)
+          exit "$FAILED"
+
+  helm-dry-run:
+    name: Helm dry-run
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create k3d cluster
+        env:
+          K3D_VERSION: v5.7.5
+        run: |
+          curl -fsSLo /tmp/k3d \
+            "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
+          install -m 755 /tmp/k3d /usr/local/bin/k3d
+          k3d cluster create ci --wait --no-lb
+
+      - name: Add helm repos
+        run: |
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo add netdata https://netdata.github.io/helmchart/
+          helm repo add nfs-subdir-external-provisioner \
+            https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
+          helm repo update
+
+      - name: Dry-run loki-stack
+        run: |
+          helm upgrade --install loki grafana/loki-stack \
+            --namespace loki --create-namespace \
+            --dry-run \
+            -f cluster/helm/loki/values.yaml
+
+      - name: Dry-run netdata
+        run: |
+          helm upgrade --install netdata netdata/netdata \
+            --dry-run \
+            -f cluster/helm/netdata/override.yaml
+
+      - name: Dry-run nfs-subdir-external-provisioner
+        run: |
+          helm upgrade --install nfs-subdir-external-provisioner \
+            nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
+            --namespace kube-system \
+            --dry-run \
+            --set nfs.server=shoebox.vert \
+            --set nfs.path=/export/storage/configs/kubernetes
