@@ -1,0 +1,38 @@
+name: Ansible lint
+
+on:
+  push:
+    paths:
+      - 'cluster/ansible/**'
+      - 'homelab/**'
+  pull_request:
+    paths:
+      - 'cluster/ansible/**'
+      - 'homelab/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+
+      - name: Lint playbooks
+        run: |
+          ansible-lint cluster/ansible/node-state.yaml
+          ansible-lint cluster/ansible/rolling-upgrade.yaml
+          ansible-lint homelab/shoebox-ansible-setup.yaml
+
+      - name: Syntax check
+        run: |
+          ansible-playbook --syntax-check \
+            -i cluster/ansible/inventory.yaml \
+            cluster/ansible/node-state.yaml
+          ansible-playbook --syntax-check \
+            -i cluster/ansible/inventory.yaml \
+            cluster/ansible/rolling-upgrade.yaml
+          ansible-playbook --syntax-check \
+            -i cluster/ansible/inventory.yaml \
+            homelab/shoebox-ansible-setup.yaml

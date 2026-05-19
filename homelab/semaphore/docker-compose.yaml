@@ -1,0 +1,39 @@
+# Semaphore Ansible UI — runs on shoebox, external to the k3s cluster.
+#
+# Semaphore process runs as uid 1001. All bind-mounted files must be readable
+# by gid 1001 on the host. See homelab/shoebox-ansible-setup.yaml for setup.
+#
+# Access: SSH-tunnel only. From your workstation:
+#   ssh -L 3000:localhost:3000 shoebox
+# Then open http://localhost:3000
+
+services:
+  semaphore:
+    image: semaphoreui/semaphore:v2.10.22
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      # Semaphore data (database, task history)
+      - /opt/semaphore/data:/home/semaphore
+      # SSH key for ansible user — hosts must trust this key
+      - /home/ansible/.ssh:/home/semaphore/.ssh:ro
+      # Primary kubeconfig — points to cluster1 (default for agents + multimasters)
+      - /home/ansible/.kube:/home/semaphore/.kube:ro
+      # Secondary kubeconfig — points to cluster3; used for masters play when cluster1 is down
+      - /etc/ansible/kubeconfig-cluster3:/etc/ansible/kubeconfig-cluster3:ro
+      # kubectl static binary
+      - /usr/local/bin/kubectl:/usr/local/bin/kubectl:ro
+      # Playbook repository (read-only)
+      - /home/user/homenet-documentation:/repo:ro
+      # State files written by delegate_to: localhost tasks — must be host-visible
+      - /var/lib/ansible-upgrade:/var/lib/ansible-upgrade
+      # Log directory
+      - /var/log/ansible:/var/log/ansible
+      # Pushover credentials (sourced by rescue blocks)
+      - /etc/ansible/pushover.env:/etc/ansible/pushover.env:ro
+    environment:
+      # Default kubeconfig for agents + multimasters plays
+      KUBECONFIG: /home/semaphore/.kube/config
+    env_file:
+      - /opt/semaphore/.env
+    restart: unless-stopped

@@ -1,0 +1,295 @@
+---
+# One-time bootstrap for the Ansible runner on shoebox.
+# Run from the OPERATOR'S WORKSTATION (not from shoebox itself):
+#
+#   ansible-playbook -i shoebox, --ask-become-pass \
+#     --ask-vault-pass homelab/shoebox-ansible-setup.yaml
+#
+# Prerequisites on the operator's workstation:
+#   - SSH access to shoebox as a user with sudo
+#   - Ansible vault password for the homenet vault
+#
+# Vault variables required (add to cluster/ansible/group_vars/all.yaml):
+#   pushover_app_token: <Pushover application token>
+#   pushover_user_key:  <Pushover user key>
+#   semaphore_admin_password:       <Semaphore admin password>
+#   semaphore_access_key_encryption: <random 32-char string>
+#
+# After running: verify connectivity with:
+#   ansible -m ping all -i cluster/ansible/inventory.yaml \
+#     -u ansible --private-key /home/ansible/.ssh/id_ed25519
+#   kubectl get nodes (using both kubeconfigs)
+
+- name: Bootstrap shoebox as Ansible runner
+  hosts: all
+  become: true
+
+  vars:
+    ansible_user_home: /home/ansible
+    kubectl_version: "1.29.4"  # pin to match cluster version
+    semaphore_data_dir: /opt/semaphore/data
+    semaphore_env_file: /opt/semaphore/.env
+    state_dir: /var/lib/ansible-upgrade
+    log_dir: /var/log/ansible
+
+  tasks:
+    # ── Ansible user ─────────────────────────────────────────────────────────
+
+    - name: Create ansible system user
+      ansible.builtin.user:
+        name: ansible
+        system: true
+        shell: /bin/bash
+        home: "{{ ansible_user_home }}"
+        create_home: true
+
+    - name: Ensure .ssh and .kube dirs exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0700'
+      loop:
+        - "{{ ansible_user_home }}/.ssh"
+        - "{{ ansible_user_home }}/.kube"
+
+    # ── SSH key ───────────────────────────────────────────────────────────────
+    # Generate a key pair if absent; distribute the public key to all nodes
+    # via your normal key management process (cloud-init, authorized_keys, etc.)
+
+    - name: Generate SSH key for ansible user (if absent)
+      ansible.builtin.openssh_keypair:
+        path: "{{ ansible_user_home }}/.ssh/id_ed25519"
+        type: ed25519
+        owner: ansible
+        group: ansible
+        mode: '0600'
+      register: ssh_key
+
+    - name: Show public key (add to authorized_keys on all cluster nodes)
+      ansible.builtin.debug:
+        msg: "{{ ssh_key.public_key }}"
+      when: ssh_key.changed
+
+    - name: Pre-populate known_hosts for cluster nodes
+      ansible.builtin.known_hosts:
+        name: "{{ item }}"
+        state: present
+        key: "{{ lookup('pipe', 'ssh-keyscan -H ' + item + ' 2>/dev/null') }}"
+        path: "{{ ansible_user_home }}/.ssh/known_hosts"
+      loop:
+        - cluster1
+        - cluster3
+        - cluster4
+        - nuc1
+        - nuc2
+        - fuji
+        - celery
+      failed_when: false  # nodes may not yet be reachable; run again after they are
+
+    - name: Set ownership on .ssh
+      ansible.builtin.file:
+        path: "{{ ansible_user_home }}/.ssh"
+        owner: ansible
+        group: "1001"  # Semaphore container uid
+        mode: '0750'
+        recurse: false
+
+    - name: Set permissions on SSH files for Semaphore container (gid 1001)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: ansible
+        group: "1001"
+        mode: '0640'
+      loop:
+        - "{{ ansible_user_home }}/.ssh/id_ed25519"
+        - "{{ ansible_user_home }}/.ssh/id_ed25519.pub"
+        - "{{ ansible_user_home }}/.ssh/known_hosts"
+      failed_when: false  # files may not all exist yet
+
+    # ── kubectl ───────────────────────────────────────────────────────────────
+
+    - name: Download kubectl static binary
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+        owner: root
+        group: root
+
+    # ── kubeconfigs ───────────────────────────────────────────────────────────
+    # Place kubeconfig files manually after running this playbook.
+    # Primary:   /home/ansible/.kube/config  → https://10.10.10.10:6443
+    # Secondary: /etc/ansible/kubeconfig-cluster3  → https://<cluster3-IP>:6443
+    # Then set permissions:
+    #   chown ansible:1001 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
+    #   chmod 640 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
+
+    - name: Ensure /etc/ansible dir exists
+      ansible.builtin.file:
+        path: /etc/ansible
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    # ── Credential files ──────────────────────────────────────────────────────
+
+    - name: Write vault password file
+      ansible.builtin.copy:
+        content: "{{ vault_password }}"
+        dest: /etc/ansible/vault-password
+        owner: ansible
+        group: ansible
+        mode: '0400'
+      no_log: true
+
+    - name: Write Pushover credentials file
+      ansible.builtin.copy:
+        content: |
+          PUSHOVER_TOKEN={{ pushover_app_token }}
+          PUSHOVER_USER={{ pushover_user_key }}
+        dest: /etc/ansible/pushover.env
+        owner: ansible
+        group: "1001"
+        mode: '0640'
+      no_log: true
+
+    # ── State and log directories ─────────────────────────────────────────────
+
+    - name: Create state dir
+      ansible.builtin.file:
+        path: "{{ state_dir }}"
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0755'
+
+    - name: Create log dir
+      ansible.builtin.file:
+        path: "{{ log_dir }}"
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0755'
+
+    # ── Logrotate ─────────────────────────────────────────────────────────────
+
+    - name: Configure logrotate for Ansible logs
+      ansible.builtin.copy:
+        content: |
+          /var/log/ansible/*.log {
+            weekly
+            rotate 12
+            compress
+            missingok
+            notifempty
+          }
+        dest: /etc/logrotate.d/ansible
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ── node-state systemd timer ──────────────────────────────────────────────
+
+    - name: Install run-node-state.sh wrapper
+      ansible.builtin.copy:
+        src: scripts/run-node-state.sh
+        dest: /usr/local/bin/run-node-state.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install systemd service unit
+      ansible.builtin.copy:
+        src: systemd/ansible-node-state.service
+        dest: /etc/systemd/system/ansible-node-state.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install systemd timer unit
+      ansible.builtin.copy:
+        src: systemd/ansible-node-state.timer
+        dest: /etc/systemd/system/ansible-node-state.timer
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable and start node-state timer
+      ansible.builtin.systemd:
+        name: ansible-node-state.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    # ── Semaphore Docker ──────────────────────────────────────────────────────
+
+    - name: Ensure Docker is installed
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Create Semaphore data directory
+      ansible.builtin.file:
+        path: "{{ semaphore_data_dir }}"
+        state: directory
+        owner: "1001"
+        group: "1001"
+        mode: '0755'
+
+    - name: Write Semaphore environment file
+      ansible.builtin.copy:
+        content: |
+          SEMAPHORE_DB_DIALECT=bolt
+          SEMAPHORE_ADMIN=admin
+          SEMAPHORE_ADMIN_EMAIL=admin@localhost
+          SEMAPHORE_ADMIN_PASSWORD={{ semaphore_admin_password }}
+          SEMAPHORE_ACCESS_KEY_ENCRYPTION={{ semaphore_access_key_encryption }}
+        dest: "{{ semaphore_env_file }}"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Copy docker-compose.yaml for Semaphore
+      ansible.builtin.copy:
+        src: semaphore/docker-compose.yaml
+        dest: /opt/semaphore/docker-compose.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install Semaphore Docker systemd service
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Semaphore Ansible UI
+          After=docker.service
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/opt/semaphore
+          # Clear maintenance flag in case Semaphore crashed mid-run
+          ExecStartPre=/bin/rm -f /var/lib/ansible-upgrade/maintenance-in-progress
+          ExecStart=/usr/bin/docker compose up -d
+          ExecStop=/usr/bin/docker compose down
+          TimeoutStartSec=120
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/semaphore.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable and start Semaphore
+      ansible.builtin.systemd:
+        name: semaphore.service
+        daemon_reload: true
+        enabled: true
+        state: started
