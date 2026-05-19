@@ -1,6 +1,6 @@
 apiVersion: batch/v1
 kind: CronJob
-metadata: 
+metadata:
   name: photoprism-index
 spec:
   schedule: "* * * * *"
@@ -76,4 +76,3 @@ spec:
                 - name: nfs
                   mountPath: "/assets"
                   subPath: ".docker/config/photoprism"
-

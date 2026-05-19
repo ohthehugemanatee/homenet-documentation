@@ -12,7 +12,7 @@ all:
       hosts:
         cluster3:
         cluster4:
-      vars: 
+      vars:
         cluster_role: "multi-master"
     agents:
       hosts:

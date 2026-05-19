@@ -14,4 +14,3 @@ spec:
     server: shoebox
     path: "/export/configs/config"
     readOnly: false
-

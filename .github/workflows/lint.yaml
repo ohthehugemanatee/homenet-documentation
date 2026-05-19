@@ -1,0 +1,97 @@
+name: Lint
+
+'on':
+  push:
+  pull_request:
+
+jobs:
+
+  yaml:
+    name: YAML syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yamllint
+        run: pip install yamllint
+      - name: Run yamllint
+        run: yamllint .
+
+  k8s-manifests:
+    name: Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.7.0
+        run: |
+          curl -fsSLo /tmp/kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
+      - name: Validate manifests
+        # Excludes ansible playbooks and helm values files (not K8s manifests).
+        # --ignore-missing-schemas skips custom CRDs (cert-manager, MetalLB, Longhorn).
+        run: |
+          find cluster -name "*.yaml" \
+            ! -path "*/ansible/*" \
+            ! -path "*/helm/*" \
+            | xargs kubeconform \
+              --ignore-missing-schemas \
+              --kubernetes-version 1.29.0
+
+  dockerfiles:
+    name: Dockerfiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+          config: .hadolint.yaml
+          failure-threshold: error
+
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        run: find cluster -name "*.sh" -exec shellcheck {} +
+
+  ansible:
+    name: Ansible playbooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ansible and ansible-lint
+        run: pip install ansible ansible-lint
+      - name: Install collections
+        run: ansible-galaxy collection install -r cluster/ansible/requirements.yaml
+      - name: Run ansible-lint
+        working-directory: cluster/ansible
+        run: ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml
+
+  policy:
+    name: Kubernetes policy (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kube-score
+        env:
+          KUBE_SCORE_VERSION: v1.20.0
+        run: |
+          curl -fsSLo /tmp/kube-score.tar.gz \
+            "https://github.com/zegl/kube-score/releases/download/${KUBE_SCORE_VERSION}/kube-score_${KUBE_SCORE_VERSION#v}_linux_amd64.tar.gz"
+          tar -xzf /tmp/kube-score.tar.gz -C /usr/local/bin kube-score
+          kube-score version
+      - name: Run kube-score
+        # Advisory only (|| true) — many homelab workloads legitimately skip NetworkPolicy,
+        # PodDisruptionBudgets, and strict security contexts. Review output and add
+        # --ignore-test flags as appropriate when findings are confirmed acceptable.
+        run: |
+          find cluster -name "*.yaml" \
+            ! -path "*/ansible/*" \
+            ! -path "*/helm/*" \
+            | xargs kube-score score \
+              --ignore-test pod-networkpolicy,pod-poddisruptionbudget \
+              --output-format ci || true

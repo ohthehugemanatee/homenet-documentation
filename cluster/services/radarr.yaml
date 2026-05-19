@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       run: radarr
-  replicas: 1 
+  replicas: 1
   serviceName: radarr
   volumeClaimTemplates:
     - metadata:
@@ -94,4 +94,3 @@ spec:
             name: radarr
             port:
               number: 7878
-

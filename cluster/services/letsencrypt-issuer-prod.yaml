@@ -14,7 +14,7 @@ spec:
     solvers:
     # HTTP-01 for individual public domains
     - http01:
-        ingress: { }
+        ingress: {}
     # DNS-01 via Cloudflare for wildcard certs
     - dns01:
         cloudflare:

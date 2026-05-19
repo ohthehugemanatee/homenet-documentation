@@ -17,4 +17,3 @@ prometheus:
 loki:
   persistence:
     enabled: false
-

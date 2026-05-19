@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       run: mariadb
-  replicas: 1 
+  replicas: 1
   serviceName: mariadb
   volumeClaimTemplates:
     - metadata:
@@ -48,7 +48,7 @@ spec:
                 password_aux="${MYSQL_ROOT_PASSWORD:-}"
                 mysqladmin status -uroot -p"${password_aux}" -h127.0.0.1
           initialDelaySeconds: 30
-          periodSeconds: 60 
+          periodSeconds: 60
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1

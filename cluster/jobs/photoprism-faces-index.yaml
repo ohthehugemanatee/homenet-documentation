@@ -1,6 +1,6 @@
 apiVersion: batch/v1
 kind: Job
-metadata: 
+metadata:
   name: photoprism-faces-update
 spec:
   template:
@@ -67,4 +67,3 @@ spec:
             - name: nfs
               mountPath: "/assets"
               subPath: ".docker/config/photoprism"
-

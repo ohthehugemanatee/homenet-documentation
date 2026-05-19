@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       run: ombi
-  replicas: 1 
+  replicas: 1
   serviceName: ombi
   volumeClaimTemplates:
     - metadata:
@@ -97,4 +97,3 @@ spec:
   - hosts:
     - requests.germany.vertesi.com
     secretName: requests-germany-vertesi-com-tls
-

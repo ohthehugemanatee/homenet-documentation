@@ -41,7 +41,7 @@ spec:
           value: unifi
         - name: MONGO_INITDB_ROOT_USERNAME
           value: unifi
-        - name: MONGO_INITDB_ROOT_PASSWORD 
+        - name: MONGO_INITDB_ROOT_PASSWORD
           value: unifi
         volumeMounts:
         - mountPath: /data/db
@@ -63,4 +63,3 @@ spec:
   ports:
     - port: 27017
       targetPort: 27017
-

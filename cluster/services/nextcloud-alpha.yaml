@@ -1,6 +1,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
-metadata: 
+metadata:
   name: nextcloud-alpha
   labels:
     run: nextcloud-alpha
@@ -8,7 +8,7 @@ spec:
   selector:
     matchLabels:
       run: nextcloud-alpha
-  replicas: 1 
+  replicas: 1
   serviceName: nextcloud-alpha
   volumeClaimTemplates:
     - metadata:
@@ -17,7 +17,7 @@ spec:
         accessModes: [ "ReadWriteOnce" ]
         storageClassName: "longhorn"
         dataSource:
-          name: nextcloud-www-nextcloud-0 
+          name: nextcloud-www-nextcloud-0
           kind: PersistentVolumeClaim
         resources:
           requests:
@@ -52,10 +52,10 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             requests:
-              cpu: "1000m" 
+              cpu: "1000m"
               memory: "2Gi"
             limits:
-              cpu: "2000m" 
+              cpu: "2000m"
               memory: "4Gi"
           startupProbe:
             exec:
@@ -63,9 +63,9 @@ spec:
                 - pgrep
                 - nginx
             initialDelaySeconds: 60
-            periodSeconds: 10 
+            periodSeconds: 10
             timeoutSeconds: 10
-            failureThreshold: 120 
+            failureThreshold: 120
             successThreshold: 1
           livenessProbe:
             exec:
@@ -75,7 +75,7 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 15
             timeoutSeconds: 15
-            failureThreshold: 10 
+            failureThreshold: 10
             successThreshold: 1
           env:
             - name: PUID
@@ -113,13 +113,13 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - "-config.file=/etc/promtail/config.yml"
-            - '--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)' 
+            - '--client.external-labels=run=$(POD_RUN),namespace=$(POD_NAMESPACE),pod=$(POD_NAME)'
           env:
             - name: POD_RUN
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['run']
-            - name: POD_NAMESPACE 
+            - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
@@ -221,7 +221,7 @@ spec:
   selector:
     matchLabels:
       run: mariadb-nextcloud-alpha
-  replicas: 1 
+  replicas: 1
   serviceName: mariadb-nextcloud-alpha
   volumeClaimTemplates:
     - metadata:
@@ -266,7 +266,7 @@ spec:
                 password_aux="${MYSQL_ROOT_PASSWORD:-}"
                 mysqladmin status -uroot -p"${password_aux}" -h127.0.0.1
           initialDelaySeconds: 30
-          periodSeconds: 60 
+          periodSeconds: 60
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1

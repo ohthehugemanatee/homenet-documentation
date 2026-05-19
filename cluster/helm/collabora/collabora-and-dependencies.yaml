@@ -34,8 +34,7 @@ spec:
       queryName: WOPISrc
       redisAddr: redis.collabora.svc.cluster.local:6379
 
-
---- 
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -63,8 +62,8 @@ spec:
           - name: redis-server
             containerPort: 6379
         env:
-            - name: ALLOW_EMPTY_PASSWORD
-              value: "yes"
+          - name: ALLOW_EMPTY_PASSWORD
+            value: "yes"
 
 ---
 

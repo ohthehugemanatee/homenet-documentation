@@ -12,4 +12,3 @@ spec:
       - "3600"
     imagePullPolicy: IfNotPresent
   restartPolicy: Always
-
