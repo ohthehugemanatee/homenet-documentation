@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install kubeconform
         env:
-          KUBECONFORM_VERSION: v0.6.7
+          KUBECONFORM_VERSION: v0.7.0
         run: |
           curl -fsSLo /tmp/kubeconform.tar.gz \
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
@@ -81,7 +81,7 @@ jobs:
           KUBE_SCORE_VERSION: v1.20.0
         run: |
           curl -fsSLo /tmp/kube-score.tar.gz \
-            "https://github.com/zegl/kube-score/releases/download/${KUBE_SCORE_VERSION}/kube-score_linux_amd64.tar.gz"
+            "https://github.com/zegl/kube-score/releases/download/${KUBE_SCORE_VERSION}/kube-score_${KUBE_SCORE_VERSION#v}_linux_amd64.tar.gz"
           tar -xzf /tmp/kube-score.tar.gz -C /usr/local/bin kube-score
           kube-score version
       - name: Run kube-score
