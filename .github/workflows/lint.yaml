@@ -22,9 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.6.7
         run: |
-          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
-            | tar xz -C /usr/local/bin
+          curl -fsSLo /tmp/kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
       - name: Validate manifests
         # Excludes ansible playbooks and helm values files (not K8s manifests).
         # --ignore-missing-schemas skips custom CRDs (cert-manager, MetalLB, Longhorn).
