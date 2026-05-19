@@ -74,9 +74,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install kube-score
+        env:
+          KUBE_SCORE_VERSION: v1.20.0
         run: |
-          curl -sSL https://github.com/zegl/kube-score/releases/latest/download/kube-score_linux_amd64.tar.gz \
-            | tar xz -C /usr/local/bin
+          curl -fsSLo /tmp/kube-score.tar.gz \
+            "https://github.com/zegl/kube-score/releases/download/${KUBE_SCORE_VERSION}/kube-score_linux_amd64.tar.gz"
+          tar -xzf /tmp/kube-score.tar.gz -C /usr/local/bin kube-score
+          kube-score version
       - name: Run kube-score
         # Advisory only (|| true) — many homelab workloads legitimately skip NetworkPolicy,
         # PodDisruptionBudgets, and strict security contexts. Review output and add
