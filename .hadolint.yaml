@@ -1,0 +1,3 @@
+ignore:
+  - DL3007  # :latest tag is acceptable for homelab images
+  - DL3047  # curl vs wget is user preference
