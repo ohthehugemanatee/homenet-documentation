@@ -242,7 +242,7 @@
         path: "/etc/systemd/system/{{ k3s_svc }}.service"
       register: k3s_unit
 
-    - name: k3s not installed — skip
+    - name: K3s not installed — skip
       when: not k3s_unit.stat.exists
       ansible.builtin.debug:
         msg: >
@@ -257,14 +257,14 @@
         enabled: true
       failed_when: false
 
-    - name: Get k3s ActiveState
+    - name: Get k3s ActiveState  # noqa: command-instead-of-module
       when: k3s_unit.stat.exists
       ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
       register: k3s_active_state
       changed_when: false
       failed_when: false
 
-    - name: Get k3s restart count
+    - name: Get k3s restart count  # noqa: command-instead-of-module
       when: k3s_unit.stat.exists
       ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
       register: k3s_nrestarts
@@ -281,7 +281,7 @@
           {{ k3s_active_state.stdout | default('') == 'active'
              and k3s_nrestarts.stdout | default('99') | int <= 5 }}
 
-    - name: k3s is healthy
+    - name: K3s is healthy
       when: k3s_unit.stat.exists and k3s_healthy | default(false)
       ansible.builtin.debug:
         msg: >-
@@ -314,7 +314,7 @@
         # NRestarts resets to 0 on explicit systemctl restart, then increments
         # for each auto-restart thereafter. Wait for 'active', then pause so
         # any restart loop has time to accumulate a non-zero count.
-        - name: Wait for k3s to become active (up to 2 minutes)
+        - name: Wait for k3s to become active (up to 2 minutes)  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
           register: k3s_post_state
           until: k3s_post_state.stdout == 'active'
@@ -328,12 +328,12 @@
           ansible.builtin.pause:
             seconds: 30
 
-        - name: Re-check ActiveState after stability window
+        - name: Re-check ActiveState after stability window  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
           register: k3s_final_state
           changed_when: false
 
-        - name: Re-check NRestarts after stability window
+        - name: Re-check NRestarts after stability window  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
           register: k3s_final_nrestarts
           changed_when: false

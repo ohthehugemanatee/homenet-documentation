@@ -59,18 +59,25 @@
     # via your normal key management process (cloud-init, authorized_keys, etc.)
 
     - name: Generate SSH key for ansible user (if absent)
-      ansible.builtin.openssh_keypair:
-        path: "{{ ansible_user_home }}/.ssh/id_ed25519"
-        type: ed25519
-        owner: ansible
-        group: ansible
-        mode: '0600'
-      register: ssh_key
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -t
+          - ed25519
+          - -f
+          - "{{ ansible_user_home }}/.ssh/id_ed25519"
+          - -N
+          - ""
+        creates: "{{ ansible_user_home }}/.ssh/id_ed25519"
+
+    - name: Read SSH public key
+      ansible.builtin.slurp:
+        src: "{{ ansible_user_home }}/.ssh/id_ed25519.pub"
+      register: ssh_pubkey
 
     - name: Show public key (add to authorized_keys on all cluster nodes)
       ansible.builtin.debug:
-        msg: "{{ ssh_key.public_key }}"
-      when: ssh_key.changed
+        msg: "{{ ssh_pubkey.content | b64decode }}"
 
     - name: Pre-populate known_hosts for cluster nodes
       ansible.builtin.known_hosts:

@@ -45,7 +45,7 @@
         mode: '0755'
       delegate_to: localhost
       become: false
-      run_once: true
+      when: inventory_hostname == ansible_play_hosts_all[0]
 
     - name: Clear stale failure state from previous run
       ansible.builtin.file:
@@ -59,20 +59,22 @@
       ansible.builtin.copy:
         content: "{{ ansible_date_time.iso8601 }}"
         dest: /var/lib/ansible-upgrade/maintenance-in-progress
+        mode: '0644'
       delegate_to: localhost
       become: false
       when: inventory_hostname == ansible_play_hosts_all[0]
 
   tasks:
-    - block:
+    - name: Upgrade node
+      block:
         - name: Show current OS version
           ansible.builtin.command: lsb_release -ds
           register: os_version
           changed_when: false
 
-        - name: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+        - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
-            msg: "Starting upgrade of {{ inventory_hostname }}"
+            msg: "Starting upgrade of {{ inventory_hostname }} ({{ os_version.stdout }})"
 
         - name: Verify k8s node name matches ansible_hostname
           ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
@@ -140,7 +142,7 @@
             name: "linux-modules-extra-{{ ansible_kernel }}"
             state: present
 
-        - name: Wait for k3s-agent to become active
+        - name: Wait for k3s-agent to become active  # noqa: command-instead-of-module
           ansible.builtin.command: systemctl is-active k3s-agent
           register: k3s_status
           until: k3s_status.rc == 0
@@ -163,7 +165,7 @@
           become: false
           changed_when: false
 
-        - name: Verify k3s not in restart loop
+        - name: Verify k3s not in restart loop  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
           register: post_restarts
           failed_when: post_restarts.stdout | int > 3
@@ -174,7 +176,7 @@
           register: os_version_after
           changed_when: false
 
-        - name: "{{ inventory_hostname }} done — {{ os_version_after.stdout }}"
+        - name: Upgrade complete — {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
 
@@ -183,9 +185,10 @@
           ansible.builtin.file:
             path: /var/lib/ansible-upgrade/rolling-upgrade-failed
             state: touch
+            mode: '0644'
           delegate_to: localhost
           become: false
-          ignore_errors: true
+          failed_when: false
 
         - name: Attempt automatic node rebuild
           block:
@@ -194,17 +197,18 @@
                 cmd: /usr/local/bin/k3s-agent-uninstall.sh
                 executable: /bin/bash
               failed_when: false
+              changed_when: true
 
-            - name: Reinstall k3s agent
+            - name: Reinstall k3s agent  # noqa: command-instead-of-module
               ansible.builtin.shell:
                 executable: /bin/bash
-                cmd: >
+                cmd: |
+                  set -o pipefail
                   curl -sfL https://get.k3s.io |
-                  K3S_URL=https://10.10.10.10:6443
-                  K3S_TOKEN="{{ k3s_token }}"
-                  sh -s - agent
+                    K3S_URL=https://10.10.10.10:6443 K3S_TOKEN="{{ k3s_token }}" sh -s - agent
+              changed_when: true
 
-            - name: Wait for k3s-agent to become active after rebuild
+            - name: Wait for k3s-agent to become active after rebuild  # noqa: command-instead-of-module
               ansible.builtin.command: systemctl is-active k3s-agent
               register: k3s_rebuilt
               until: k3s_rebuilt.rc == 0
@@ -234,31 +238,37 @@
               become: false
 
             - name: Alert WARNING — node auto-rebuilt and back in service
-              ansible.builtin.shell:
-                executable: /bin/bash
-                cmd: |
-                  source /etc/ansible/pushover.env
-                  curl -s -X POST https://api.pushover.net/1/messages.json \
-                    -d "token=${PUSHOVER_TOKEN}&user=${PUSHOVER_USER}" \
-                    --data-urlencode "message=WARNING: {{ inventory_hostname }} upgrade failed but was auto-rebuilt and is back in service. OS is a fresh k3s reinstall." \
-                    -d "priority=1"
+              ansible.builtin.uri:
+                url: https://api.pushover.net/1/messages.json
+                method: POST
+                body_format: form-urlencoded
+                body:
+                  token: "{{ pushover_app_token }}"
+                  user: "{{ pushover_user_key }}"
+                  message: "WARNING: {{ inventory_hostname }} upgrade failed; auto-rebuilt, back in service."
+                  priority: "1"
               delegate_to: localhost
               become: false
+              changed_when: false
 
           rescue:
-            - name: Alert CRITICAL — upgrade failed AND auto-rebuild failed
-              ansible.builtin.shell:
-                executable: /bin/bash
-                cmd: |
-                  source /etc/ansible/pushover.env
-                  curl -s -X POST https://api.pushover.net/1/messages.json \
-                    -d "token=${PUSHOVER_TOKEN}&user=${PUSHOVER_USER}" \
-                    --data-urlencode "message=CRITICAL: {{ inventory_hostname }} upgrade failed AND auto-rebuild failed. Node is DRAINED. Manual intervention required." \
-                    -d "priority=2" \
-                    -d "retry=300" \
-                    -d "expire=3600"
+            - name: Alert CRITICAL — upgrade and rebuild both failed
+              ansible.builtin.uri:
+                url: https://api.pushover.net/1/messages.json
+                method: POST
+                body_format: form-urlencoded
+                body:
+                  token: "{{ pushover_app_token }}"
+                  user: "{{ pushover_user_key }}"
+                  message: >-
+                    CRITICAL: {{ inventory_hostname }} upgrade+rebuild failed.
+                    Node DRAINED. Manual fix required.
+                  priority: "2"
+                  retry: "300"
+                  expire: "3600"
               delegate_to: localhost
               become: false
+              changed_when: false
 
 
 - name: Rolling OS upgrade — multi-master servers
@@ -286,12 +296,13 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    - name: Verify all control-plane nodes Ready before draining this one
+    - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
       ansible.builtin.shell:
         cmd: |
+          set -o pipefail
           not_ready=$(kubectl get nodes \
             -l node-role.kubernetes.io/control-plane \
-            --no-headers | grep -v ' Ready' | wc -l)
+            --no-headers | { grep -v ' Ready' || true; } | wc -l)
           echo $not_ready
           exit $not_ready
         executable: /bin/bash
@@ -301,15 +312,16 @@
       run_once: true
 
   tasks:
-    - block:
+    - name: Upgrade node
+      block:
         - name: Show current OS version
           ansible.builtin.command: lsb_release -ds
           register: os_version
           changed_when: false
 
-        - name: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+        - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
-            msg: "Starting upgrade of multi-master {{ inventory_hostname }}"
+            msg: "Starting upgrade of multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
 
         - name: Verify k8s node name matches ansible_hostname
           ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
@@ -377,7 +389,7 @@
             name: "linux-modules-extra-{{ ansible_kernel }}"
             state: present
 
-        - name: Wait for k3s server to become active
+        - name: Wait for k3s server to become active  # noqa: command-instead-of-module
           ansible.builtin.command: systemctl is-active k3s
           register: k3s_status
           until: k3s_status.rc == 0
@@ -409,7 +421,7 @@
           become: false
           changed_when: false
 
-        - name: Verify k3s not in restart loop
+        - name: Verify k3s not in restart loop  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
           register: post_restarts
           failed_when: post_restarts.stdout | int > 3
@@ -420,7 +432,7 @@
           register: os_version_after
           changed_when: false
 
-        - name: "{{ inventory_hostname }} done — {{ os_version_after.stdout }}"
+        - name: Upgrade complete — {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
 
@@ -429,23 +441,28 @@
           ansible.builtin.file:
             path: /var/lib/ansible-upgrade/rolling-upgrade-failed
             state: touch
+            mode: '0644'
           delegate_to: localhost
           become: false
-          ignore_errors: true
+          failed_when: false
 
         - name: Alert CRITICAL — control-plane node upgrade failed
-          ansible.builtin.shell:
-            executable: /bin/bash
-            cmd: |
-              source /etc/ansible/pushover.env
-              curl -s -X POST https://api.pushover.net/1/messages.json \
-                -d "token=${PUSHOVER_TOKEN}&user=${PUSHOVER_USER}" \
-                --data-urlencode "message=CRITICAL: {{ inventory_hostname }} (control-plane) upgrade failed. Node is DRAINED. Manual intervention required — do not auto-rebuild etcd members." \
-                -d "priority=2" \
-                -d "retry=300" \
-                -d "expire=3600"
+          ansible.builtin.uri:
+            url: https://api.pushover.net/1/messages.json
+            method: POST
+            body_format: form-urlencoded
+            body:
+              token: "{{ pushover_app_token }}"
+              user: "{{ pushover_user_key }}"
+              message: >-
+                CRITICAL: {{ inventory_hostname }} (master) upgrade failed.
+                Node DRAINED. Manual fix required.
+              priority: "2"
+              retry: "300"
+              expire: "3600"
           delegate_to: localhost
           become: false
+          changed_when: false
 
 
 - name: Rolling OS upgrade — first master (last)
@@ -476,12 +493,13 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    - name: Verify all control-plane nodes Ready before draining this one
+    - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
       ansible.builtin.shell:
         cmd: |
+          set -o pipefail
           not_ready=$(kubectl get nodes \
             -l node-role.kubernetes.io/control-plane \
-            --no-headers | grep -v ' Ready' | wc -l)
+            --no-headers | { grep -v ' Ready' || true; } | wc -l)
           echo $not_ready
           exit $not_ready
         executable: /bin/bash
@@ -491,16 +509,17 @@
       run_once: true
 
   tasks:
-    - block:
+    - name: Upgrade node
+      block:
         - name: Show current OS version
           ansible.builtin.command: lsb_release -ds
           register: os_version
           changed_when: false
 
-        - name: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+        - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: >
-              Starting upgrade of first-master {{ inventory_hostname }}.
+              Starting upgrade of first-master {{ inventory_hostname }} ({{ os_version.stdout }}).
               Ensure kubectl is configured to reach the cluster via a VIP or
               another server in case this node's API server is briefly unavailable.
 
@@ -570,7 +589,7 @@
             name: "linux-modules-extra-{{ ansible_kernel }}"
             state: present
 
-        - name: Wait for k3s server to become active
+        - name: Wait for k3s server to become active  # noqa: command-instead-of-module
           ansible.builtin.command: systemctl is-active k3s
           register: k3s_status
           until: k3s_status.rc == 0
@@ -602,7 +621,7 @@
           become: false
           changed_when: false
 
-        - name: Verify k3s not in restart loop
+        - name: Verify k3s not in restart loop  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
           register: post_restarts
           failed_when: post_restarts.stdout | int > 3
@@ -624,23 +643,28 @@
           ansible.builtin.file:
             path: /var/lib/ansible-upgrade/rolling-upgrade-failed
             state: touch
+            mode: '0644'
           delegate_to: localhost
           become: false
-          ignore_errors: true
+          failed_when: false
 
         - name: Alert CRITICAL — control-plane node upgrade failed
-          ansible.builtin.shell:
-            executable: /bin/bash
-            cmd: |
-              source /etc/ansible/pushover.env
-              curl -s -X POST https://api.pushover.net/1/messages.json \
-                -d "token=${PUSHOVER_TOKEN}&user=${PUSHOVER_USER}" \
-                --data-urlencode "message=CRITICAL: {{ inventory_hostname }} (control-plane) upgrade failed. Node is DRAINED. Manual intervention required — do not auto-rebuild etcd members." \
-                -d "priority=2" \
-                -d "retry=300" \
-                -d "expire=3600"
+          ansible.builtin.uri:
+            url: https://api.pushover.net/1/messages.json
+            method: POST
+            body_format: form-urlencoded
+            body:
+              token: "{{ pushover_app_token }}"
+              user: "{{ pushover_user_key }}"
+              message: >-
+                CRITICAL: {{ inventory_hostname }} (master) upgrade failed.
+                Node DRAINED. Manual fix required.
+              priority: "2"
+              retry: "300"
+              expire: "3600"
           delegate_to: localhost
           become: false
+          changed_when: false
 
 
 - name: Cleanup — clear maintenance flag
