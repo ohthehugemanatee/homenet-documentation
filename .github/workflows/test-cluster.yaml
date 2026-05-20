@@ -42,7 +42,9 @@ jobs:
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
-          kubectl create namespace collabora --dry-run=client -o yaml | kubectl apply -f -
+          for ns in collabora unifi octoprint loki longhorn-system dns-bg-check; do
+            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+          done
           kubectl apply -f cluster/priorityClasses/
 
       - name: Server-side dry-run — all manifests
