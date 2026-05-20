@@ -1,0 +1,22 @@
+# DS-0002: linuxserver images must start as root so s6-overlay can write to
+# /etc/passwd and /etc/group to apply PUID/PGID. Running as non-root disables
+# PUID/PGID entirely, breaking NFS UID 1001 access.
+DS-0002
+
+# KSV-0014: linuxserver read-only mode disables PUID/PGID (falls back to UID 911),
+# breaking NFS filesystem access. All workloads use linuxserver or similar images
+# that legitimately write to their root filesystems for runtime state.
+KSV-0014
+
+# KSV-0009, KSV-0017: nodelocaldns requires hostNetwork to bind to the node loopback
+# for DNS interception, and privileged to manage iptables rules. This is the only
+# supported deployment method for node-local DNS caching.
+KSV-0009
+KSV-0017
+
+# KSV-0041, KSV-0056, KSV-0114: cert-manager legitimately needs to read/write
+# Secrets (that's how it stores TLS certificates) and manage webhook configurations.
+# These come from the upstream vendor installer; the permissions are intentional.
+KSV-0041
+KSV-0056
+KSV-0114

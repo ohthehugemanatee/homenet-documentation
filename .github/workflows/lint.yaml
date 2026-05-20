@@ -129,16 +129,15 @@ jobs:
             | sh -s -- -b /usr/local/bin
           trivy --version
       - name: Scan Dockerfiles for misconfigurations
-        # Advisory only (|| true) — sidecar-sync legitimately runs as root (needs
-        # mount/ramdisk access); nextcloud uses linuxserver UID remapping at runtime.
         run: |
           trivy config \
+            --exit-code 1 \
             --severity CRITICAL,HIGH \
-            cluster/Dockerfiles || true
+            cluster/Dockerfiles
       - name: Scan k8s manifests for misconfigurations
-        # Advisory only (|| true) — overlaps with kube-score/polaris but catches
-        # different issues (privileged containers, host namespaces, etc.).
         run: |
           trivy config \
+            --exit-code 1 \
             --severity CRITICAL,HIGH \
-            cluster || true
+            --skip-files "cluster/services/cert-manager.yaml" \
+            cluster
