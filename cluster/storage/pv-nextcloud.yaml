@@ -14,4 +14,3 @@ spec:
     server: shoebox
     path: "/export/nextcloud"
     readOnly: false
-

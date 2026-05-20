@@ -1,4 +1,4 @@
-apiVersion: batch/v1beta1
+apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: mariadb-backup
@@ -19,7 +19,7 @@ spec:
           containers:
             - name: mysqldump
               image: linuxserver/mariadb
-              command: 
+              command:
                 - sh
                 - -c
                 - mysqldump -u root --password=$MYSQL_ROOT_PASSWORD -h mariadb --all-databases  | gzip > /backups/$(date --iso-8601)-$(date +"%T")-all-databases.sql.gz
@@ -33,4 +33,3 @@ spec:
                 - name: nfs
                   mountPath: "/backups"
                   subPath: ".docker/config/mariadb/backups"
-

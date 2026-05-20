@@ -1,6 +1,6 @@
 apiVersion: batch/v1
 kind: CronJob
-metadata: 
+metadata:
   name: nextcloud-preview-generate
 spec:
   schedule: "*/30 * * * *"
@@ -27,10 +27,10 @@ spec:
               resources:
                 requests:
                   memory: "2048Mi"
-                  cpu: "1000m" 
+                  cpu: "1000m"
                 limits:
                   memory: "2048Mi"
-                  cpu: "1000m" 
+                  cpu: "1000m"
               env:
                 - name: PUID
                   value: "1000"
