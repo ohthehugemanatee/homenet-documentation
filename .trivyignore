@@ -1,3 +1,8 @@
+# KSV-0118: linuxserver images set the runtime user via PUID/PGID env vars processed
+# by s6-overlay, not via securityContext.runAsNonRoot. Adding runAsNonRoot: false
+# would be misleading documentation; setting it true breaks PUID/PGID entirely.
+KSV-0118
+
 # DS-0002: linuxserver images must start as root so s6-overlay can write to
 # /etc/passwd and /etc/group to apply PUID/PGID. Running as non-root disables
 # PUID/PGID entirely, breaking NFS UID 1001 access.
