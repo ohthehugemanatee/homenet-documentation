@@ -95,3 +95,54 @@ jobs:
             | xargs kube-score score \
               --ignore-test pod-networkpolicy,pod-poddisruptionbudget \
               --output-format ci || true
+
+  polaris:
+    name: Kubernetes best practices (Polaris, advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install polaris
+        env:
+          POLARIS_VERSION: 9.3.0
+        run: |
+          curl -fsSLo /tmp/polaris.tar.gz \
+            "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/polaris_linux_amd64.tar.gz"
+          tar -xzf /tmp/polaris.tar.gz -C /usr/local/bin polaris
+          polaris version
+      - name: Run polaris audit
+        # Advisory only (|| true) — homelab workloads legitimately skip many
+        # security best practices. Review output and add exemptions in .polaris.yaml
+        # once findings are triaged.
+        run: |
+          polaris audit \
+            --audit-path cluster \
+            --format pretty || true
+
+  trivy:
+    name: Dockerfile and IaC security scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install trivy
+        env:
+          TRIVY_VERSION: v0.52.2
+        run: |
+          curl -fsSLo /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz"
+          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          trivy --version
+      - name: Scan Dockerfiles for vulnerabilities
+        run: |
+          trivy config \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            cluster/Dockerfiles
+      - name: Scan k8s manifests for misconfigurations
+        # Advisory only (|| true) — overlaps with kube-score/polaris but catches
+        # different issues (privileged containers, host namespaces, etc.).
+        run: |
+          trivy config \
+            --exit-code 0 \
+            --severity CRITICAL,HIGH \
+            --skip-dirs cluster/services/cert-manager.yaml \
+            cluster || true
