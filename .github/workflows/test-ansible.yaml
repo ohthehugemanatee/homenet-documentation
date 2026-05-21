@@ -27,7 +27,9 @@ jobs:
         run: ansible-galaxy collection install -r requirements.yaml
 
       - name: Create state directory
-        run: sudo mkdir -p /var/lib/ansible-upgrade && sudo chmod 777 /var/lib/ansible-upgrade
+        run: |
+          sudo mkdir -p /var/lib/ansible-upgrade
+          sudo chown "$(whoami):$(whoami)" /var/lib/ansible-upgrade
 
       - name: Run Monkeyble scenarios
         working-directory: cluster/ansible
@@ -55,7 +57,7 @@ jobs:
 
       - name: Run Molecule tests
         working-directory: cluster/ansible
-        run: molecule test -s node-state
+        run: molecule test
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
