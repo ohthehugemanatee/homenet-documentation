@@ -1,0 +1,103 @@
+---
+# Scenario: agent upgrade health check fails, auto-rebuild succeeds.
+# Expected: WARNING Pushover alert sent, failure flag cleared, CRITICAL not sent.
+monkeyble_scenarios:
+  agent_rescue_success:
+    # --- Infrastructure tasks mocked (no real cluster in CI) ---
+    - task: "Verify k8s node name matches ansible_hostname"
+      mock:
+        mock_status: "ok"
+        return_value:
+          stdout: "testnode   Ready   agent"
+          rc: 0
+
+    - task: "Cordon node before drain"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Drain node"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    # Mock apt tasks to avoid modifying the CI runner and for speed
+    - task: "Update apt cache"
+      mock:
+        mock_status: "ok"
+
+    - task: "Run dist-upgrade"
+      mock:
+        mock_status: "ok"
+        return_value:
+          changed: false  # prevents Reboot task from running
+
+    - task: "Install linux-modules-extra for running kernel (required for iSCSI)"
+      mock:
+        mock_status: "ok"
+
+    - task: "Wait for k3s-agent to become active"
+      mock:
+        mock_status: "ok"
+        return_value:
+          stdout: "active"
+          rc: 0
+
+    - task: "Uncordon node"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Verify node is Ready"
+      mock:
+        mock_status: "ok"
+        return_value:
+          rc: 0
+
+    # --- Trigger rescue: simulate NRestarts > 3 ---
+    - task: "Verify k3s not in restart loop"
+      mock:
+        mock_status: "failed"
+        return_value:
+          stdout: "5"
+          rc: 0
+          failed: true
+
+    # --- Rescue path: rebuild succeeds ---
+    - task: "Reinstall k3s agent"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Wait for k3s-agent to become active after rebuild"
+      mock:
+        mock_status: "ok"
+        return_value:
+          stdout: "active"
+          rc: 0
+
+    - task: "Wait for node to rejoin cluster after rebuild"
+      mock:
+        mock_status: "ok"
+        return_value:
+          rc: 0
+
+    - task: "Uncordon node after successful rebuild"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Alert WARNING — node auto-rebuilt and back in service"
+      mock:
+        mock_status: "ok"
+      test:
+        - should_be: "called"
+
+    - task: "Alert CRITICAL — upgrade and rebuild both failed"
+      test:
+        - should_be: "not called"

@@ -1,0 +1,148 @@
+---
+- name: Verify node-state converge
+  hosts: all
+  gather_facts: true
+
+  tasks:
+    - name: Collect package facts
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Assert base packages are installed
+      ansible.builtin.assert:
+        that:
+          - "'nfs-common' in ansible_facts.packages"
+          - "'vim' in ansible_facts.packages"
+          - "'open-iscsi' in ansible_facts.packages"
+          - "'unattended-upgrades' in ansible_facts.packages"
+          - "'apt-listchanges' in ansible_facts.packages"
+        fail_msg: "One or more base packages missing"
+
+    - name: Stat k3s modules-load config
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/k3s.conf
+      register: modules_conf
+
+    - name: Assert modules-load config exists
+      ansible.builtin.assert:
+        that: modules_conf.stat.exists
+
+    - name: Read modules-load config
+      ansible.builtin.slurp:
+        src: /etc/modules-load.d/k3s.conf
+      register: modules_content
+
+    - name: Assert modules-load config contains k3s modules
+      ansible.builtin.assert:
+        that:
+          - "'br_netfilter' in (modules_content.content | b64decode)"
+          - "'overlay' in (modules_content.content | b64decode)"
+
+    - name: Stat sysctl config
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/99-k3s.conf
+      register: sysctl_conf
+
+    - name: Assert sysctl config exists
+      ansible.builtin.assert:
+        that: sysctl_conf.stat.exists
+
+    - name: Read sysctl config
+      ansible.builtin.slurp:
+        src: /etc/sysctl.d/99-k3s.conf
+      register: sysctl_content
+
+    - name: Assert required sysctl params present
+      ansible.builtin.assert:
+        that:
+          - "'net.ipv4.ip_forward = 1' in (sysctl_content.content | b64decode)"
+          - "'net.bridge.bridge-nf-call-iptables = 1' in (sysctl_content.content | b64decode)"
+
+    - name: Stat NFS mount options config
+      ansible.builtin.stat:
+        path: /etc/nfsmount.conf
+      register: nfsmount_conf
+
+    - name: Assert NFS mount options config exists
+      ansible.builtin.assert:
+        that: nfsmount_conf.stat.exists
+
+    - name: Read NFS mount options config
+      ansible.builtin.slurp:
+        src: /etc/nfsmount.conf
+      register: nfsmount_content
+
+    - name: Assert NFS soft mounts configured
+      ansible.builtin.assert:
+        that: "'Soft=True' in (nfsmount_content.content | b64decode)"
+
+    - name: Read timesyncd config
+      ansible.builtin.slurp:
+        src: /etc/systemd/timesyncd.conf
+      register: timesyncd_content
+
+    - name: Assert NTP configured in timesyncd
+      ansible.builtin.assert:
+        that: "'ntp.ubuntu.com' in (timesyncd_content.content | b64decode)"
+
+    - name: Stat unattended-upgrades config
+      ansible.builtin.stat:
+        path: /etc/apt/apt.conf.d/50unattended-upgrades
+      register: unattended_conf
+
+    - name: Assert unattended-upgrades config exists
+      ansible.builtin.assert:
+        that: unattended_conf.stat.exists
+
+    - name: Stat auto-upgrades config
+      ansible.builtin.stat:
+        path: /etc/apt/apt.conf.d/20auto-upgrades
+      register: auto_upgrades_conf
+
+    - name: Assert auto-upgrades config exists
+      ansible.builtin.assert:
+        that: auto_upgrades_conf.stat.exists
+
+    - name: Check fstab has no active swap entries
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -E '^[^#].*\sswap\s' /etc/fstab | wc -l || echo 0
+        executable: /bin/bash
+      register: active_swap_lines
+      changed_when: false
+
+    - name: Assert no active swap in fstab
+      ansible.builtin.assert:
+        that: active_swap_lines.stdout | int == 0
+        fail_msg: "fstab still contains active swap entries"
+
+    - name: Check journald volatile storage setting
+      ansible.builtin.command: grep '^Storage=volatile' /etc/systemd/journald.conf
+      register: journald_volatile
+      changed_when: false
+      failed_when: journald_volatile.rc > 1
+
+    - name: Assert journald uses volatile storage
+      ansible.builtin.assert:
+        that: journald_volatile.rc == 0
+        fail_msg: "journald not configured for volatile storage"
+
+    - name: Check /etc/hosts contains loopback hostname entry
+      ansible.builtin.command: grep '127.0.1.1' /etc/hosts
+      register: hosts_loopback
+      changed_when: false
+
+    - name: Assert loopback hostname entry present
+      ansible.builtin.assert:
+        that: hosts_loopback.rc == 0
+
+    - name: Stat k3s-agent unit file
+      ansible.builtin.stat:
+        path: /etc/systemd/system/k3s-agent.service
+      register: k3s_unit
+
+    - name: Assert k3s not installed (expected in Docker) — play handled gracefully
+      ansible.builtin.assert:
+        that: not k3s_unit.stat.exists
+        success_msg: "k3s-agent service absent — node-state gracefully skipped k3s tasks"

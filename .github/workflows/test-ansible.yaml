@@ -1,0 +1,61 @@
+name: Ansible tests
+
+'on':
+  push:
+  pull_request:
+
+jobs:
+
+  monkeyble:
+    name: Monkeyble rescue-logic tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: cluster/ansible
+        run: pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        working-directory: cluster/ansible
+        run: ansible-galaxy collection install -r requirements.yaml
+
+      - name: Create state directory
+        run: sudo mkdir -p /var/lib/ansible-upgrade && sudo chmod 777 /var/lib/ansible-upgrade
+
+      - name: Run Monkeyble scenarios
+        working-directory: cluster/ansible
+        run: bash tests/monkeyble/run-tests.sh
+
+  molecule:
+    name: Molecule node-state integration tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: cluster/ansible
+        run: pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        working-directory: cluster/ansible
+        run: ansible-galaxy collection install -r requirements.yaml
+
+      - name: Run Molecule tests
+        working-directory: cluster/ansible
+        run: molecule test -s node-state
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'

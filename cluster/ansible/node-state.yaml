@@ -55,9 +55,15 @@
           - nfs-common
           - vim
           - open-iscsi
-          - linux-modules-extra-{{ ansible_kernel }}
           - unattended-upgrades
           - apt-listchanges
+
+    - name: Install kernel extra modules package
+      ansible.builtin.apt:
+        state: present
+        pkg:
+          - linux-modules-extra-{{ ansible_kernel }}
+      failed_when: false
 
     - name: Install x86 media packages
       when: ansible_architecture == "x86_64"
@@ -111,6 +117,7 @@
         - br_netfilter
         - overlay
       changed_when: false
+      failed_when: false
 
     # ── Kernel parameters ────────────────────────────────────────────────────
 

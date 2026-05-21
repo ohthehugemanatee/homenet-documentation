@@ -1,0 +1,94 @@
+---
+# Scenario: agent upgrade health check fails, auto-rebuild also fails.
+# Expected: CRITICAL Pushover alert sent, WARNING not sent, failure flag set.
+monkeyble_scenarios:
+  agent_rescue_failure:
+    # --- Infrastructure tasks mocked (no real cluster in CI) ---
+    - task: "Verify k8s node name matches ansible_hostname"
+      mock:
+        mock_status: "ok"
+        return_value:
+          stdout: "testnode   Ready   agent"
+          rc: 0
+
+    - task: "Cordon node before drain"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Drain node"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Update apt cache"
+      mock:
+        mock_status: "ok"
+
+    - task: "Run dist-upgrade"
+      mock:
+        mock_status: "ok"
+        return_value:
+          changed: false
+
+    - task: "Install linux-modules-extra for running kernel (required for iSCSI)"
+      mock:
+        mock_status: "ok"
+
+    - task: "Wait for k3s-agent to become active"
+      mock:
+        mock_status: "ok"
+        return_value:
+          stdout: "active"
+          rc: 0
+
+    - task: "Uncordon node"
+      mock:
+        mock_status: "changed"
+        return_value:
+          rc: 0
+
+    - task: "Verify node is Ready"
+      mock:
+        mock_status: "ok"
+        return_value:
+          rc: 0
+
+    # --- Trigger rescue: simulate NRestarts > 3 ---
+    - task: "Verify k3s not in restart loop"
+      mock:
+        mock_status: "failed"
+        return_value:
+          stdout: "5"
+          rc: 0
+          failed: true
+
+    # --- Rescue path: rebuild fails → inner rescue fires ---
+    - task: "Reinstall k3s agent"
+      mock:
+        mock_status: "failed"
+        return_value:
+          rc: 1
+          stderr: "curl: (6) Could not resolve host: get.k3s.io"
+          failed: true
+
+    - task: "Alert CRITICAL — upgrade and rebuild both failed"
+      mock:
+        mock_status: "ok"
+      test:
+        - should_be: "called"
+
+    - task: "Alert WARNING — node auto-rebuilt and back in service"
+      test:
+        - should_be: "not called"
+
+    # These tasks are in the success path; should not run when rebuild fails
+    - task: "Clear failure flag — rebuild succeeded, safe to continue"
+      test:
+        - should_be: "not called"
+
+    - task: "Uncordon node after successful rebuild"
+      test:
+        - should_be: "not called"

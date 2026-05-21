@@ -1,0 +1,40 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yaml
+
+driver:
+  name: docker
+
+platforms:
+  - name: node-state-test
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    command: /lib/systemd/systemd
+    capabilities:
+      - SYS_ADMIN
+
+provisioner:
+  name: ansible
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        cluster_role: agent
+        ansible_user: root
+        ntp_servers:
+          - ntp.ubuntu.com
+          - 0.pool.ntp.org
+          - 1.pool.ntp.org
+        k3s_token: ci-test-token
+        pushover_app_token: ci-fake-token
+        pushover_user_key: ci-fake-user
+
+verifier:
+  name: ansible
