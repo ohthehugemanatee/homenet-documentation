@@ -37,16 +37,23 @@
         name: systemd-timesyncd
         state: restarted
         enabled: true
+      failed_when: false  # service stripped in Docker test containers
 
     - name: Restart journald
       ansible.builtin.systemd:
         name: systemd-journald
         state: restarted
+      failed_when: false  # may not be restartable in Docker test containers
 
     - name: Restart iscsid
       ansible.builtin.systemd:
         name: iscsid
         state: restarted
+      failed_when: false  # may not be running in Docker test containers
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
 
   tasks:
     # ── Packages ────────────────────────────────────────────────────────────
@@ -94,6 +101,7 @@
         owner: root
         group: root
         mode: '0644'
+        unsafe_writes: true  # /etc/hosts is a bind-mount in Docker; atomic rename fails
 
     # ── NFS client ───────────────────────────────────────────────────────────
 
@@ -203,15 +211,19 @@
 
     # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
 
-    # Unmask first — dpkg's pre-removal script calls invoke-rc.d which calls
-    # `systemctl stop multipath-tools.service`, and that fails if the unit is
-    # masked. Unmask → stop → remove → reload → re-mask is idempotent in all
-    # states: unmasked units, masked units, and absent packages.
+    - name: Gather package facts for multipath check
+      ansible.builtin.package_facts:
+        manager: apt
+
+    # Unmask first so dpkg's pre-removal invoke-rc.d doesn't fail on a masked unit.
+    # Skipped when package is already absent — prevents the unmask/re-mask toggle
+    # that would otherwise make every run non-idempotent.
     - name: Unmask multipathd before removal
       ansible.builtin.systemd:
         name: multipathd
         masked: false
       failed_when: false
+      when: "'multipath-tools' in ansible_facts.packages"
 
     - name: Stop multipathd
       ansible.builtin.systemd:
@@ -219,15 +231,14 @@
         state: stopped
         enabled: false
       failed_when: false
+      when: "'multipath-tools' in ansible_facts.packages"
 
     - name: Remove multipath-tools package
       ansible.builtin.apt:
         name: multipath-tools
         state: absent
-
-    - name: Reload systemd after package removal
-      ansible.builtin.systemd:
-        daemon_reload: true
+      when: "'multipath-tools' in ansible_facts.packages"
+      notify: Reload systemd
 
     - name: Mask multipathd to prevent accidental start
       ansible.builtin.systemd:

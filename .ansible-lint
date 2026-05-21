@@ -9,3 +9,6 @@ skip_list:
 # needing the vault password. Real secrets live in group_vars/vault.yaml.
 extra_vars:
   vault_file: cluster/ansible/tests/monkeyble/test_secrets.yml
+  # rename-node.yaml requires these at runtime; dummy values satisfy syntax-check.
+  target: lint_placeholder
+  new_hostname: lint_placeholder
