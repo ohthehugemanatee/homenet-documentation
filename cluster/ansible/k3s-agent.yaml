@@ -5,6 +5,10 @@
 - name: "Setup k3s node"
   hosts: all:!ubuntu
   become: true
+
+  vars_files:
+    - "{{ vault_file }}"
+
   tasks:
     - name: Apt installs
       ansible.builtin.apt:

@@ -4,3 +4,8 @@ warn_list:
   - yaml[line-length]
 skip_list:
   - galaxy  # no galaxy metadata required for homelab playbooks
+
+# Provide plaintext dummy vars so lint can syntax-check playbooks without
+# needing the vault password. Real secrets live in group_vars/vault.yaml.
+extra_vars:
+  vault_file: cluster/ansible/tests/monkeyble/test_secrets.yml

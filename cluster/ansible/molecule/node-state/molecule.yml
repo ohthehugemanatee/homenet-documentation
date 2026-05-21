@@ -23,6 +23,10 @@ provisioner:
   playbooks:
     converge: converge.yml
     verify: verify.yml
+  extra_vars:
+    # Point to plaintext dummy secrets so no vault password is needed in CI.
+    # The real vault (group_vars/vault.yaml) is only decrypted on production runs.
+    vault_file: "tests/monkeyble/test_secrets.yml"
   inventory:
     group_vars:
       all:
@@ -32,9 +36,6 @@ provisioner:
           - ntp.ubuntu.com
           - 0.pool.ntp.org
           - 1.pool.ntp.org
-        k3s_token: ci-test-token
-        pushover_app_token: ci-fake-token
-        pushover_user_key: ci-fake-user
 
 verifier:
   name: ansible

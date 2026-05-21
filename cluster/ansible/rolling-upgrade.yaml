@@ -9,8 +9,12 @@
 #   - ansible-playbook run from a machine with kubectl access
 #
 # Usage:
-#   All nodes (rolling):  ansible-playbook -i inventory.yaml --ask-vault-pass rolling-upgrade.yaml
-#   Single node:          ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 rolling-upgrade.yaml
+#   All nodes (rolling):  ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                           -e vault_file=group_vars/vault.yaml rolling-upgrade.yaml
+#   Single node:          ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                           -e vault_file=group_vars/vault.yaml --limit cluster1 rolling-upgrade.yaml
+#   Testing (no vault):   ansible-playbook -i tests/monkeyble/inventory.yml \
+#                           -e vault_file=tests/monkeyble/test_secrets.yml rolling-upgrade.yaml
 #
 # Node ordering: agents first, then multimasters, then masters (first-master last).
 # Override with --limit or -e target=<group>.
@@ -33,6 +37,9 @@
   become: true
   serial: 1
   any_errors_fatal: "{{ strict_mode | default(false) | bool }}"
+
+  vars_files:
+    - "{{ vault_file }}"
 
   vars:
     k3s_svc: k3s-agent
@@ -277,6 +284,9 @@
   serial: 1
   any_errors_fatal: "{{ strict_mode | default(false) | bool }}"
 
+  vars_files:
+    - "{{ vault_file }}"
+
   vars:
     k3s_svc: k3s
 
@@ -470,6 +480,9 @@
   become: true
   serial: 1
   any_errors_fatal: "{{ strict_mode | default(false) | bool }}"
+
+  vars_files:
+    - "{{ vault_file }}"
 
   vars:
     k3s_svc: k3s

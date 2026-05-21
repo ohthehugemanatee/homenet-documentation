@@ -14,6 +14,7 @@ cd "$PLAYBOOK_DIR"
 
 if ansible-playbook -i inventory.yaml \
     --vault-password-file "$VAULT_PASS" \
+    -e vault_file=group_vars/vault.yaml \
     node-state.yaml 2>&1 | tee "$LOG"; then
   exit 0
 fi

@@ -3,9 +3,12 @@
 # Safe to re-run at any time — converges to declared state.
 #
 # Usage:
-#   All nodes:    ansible-playbook -i inventory.yaml --ask-vault-pass node-state.yaml
-#   Single node:  ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 node-state.yaml
-#   Dry-run:      ansible-playbook -i inventory.yaml --ask-vault-pass --check --diff node-state.yaml
+#   All nodes:    ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                   -e vault_file=group_vars/vault.yaml node-state.yaml
+#   Single node:  ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                   -e vault_file=group_vars/vault.yaml --limit cluster1 node-state.yaml
+#   Dry-run:      ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                   -e vault_file=group_vars/vault.yaml --check --diff node-state.yaml
 #
 # Override target group:  -e target=masters
 # Override NTP servers:   -e '{"ntp_servers": ["192.168.1.1"]}'
@@ -13,6 +16,9 @@
 - name: Enforce k3s node state
   hosts: "{{ target | default('all:!ubuntu') }}"
   become: true
+
+  vars_files:
+    - "{{ vault_file }}"
 
   vars:
     ntp_servers:

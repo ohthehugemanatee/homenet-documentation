@@ -34,6 +34,9 @@ services:
     environment:
       # Default kubeconfig for agents + multimasters plays
       KUBECONFIG: /home/semaphore/.kube/config
+      # vault_file is passed as an extra-var in each Semaphore task definition, e.g.:
+      #   vault_file=/repo/cluster/ansible/group_vars/vault.yaml
+      # The vault password is stored in Semaphore Key Store (type: LoginPassword).
     env_file:
       - /opt/semaphore/.env
     restart: unless-stopped

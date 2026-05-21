@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANSIBLE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 INVENTORY="${SCRIPT_DIR}/inventory.yml"
+TEST_SECRETS="${SCRIPT_DIR}/test_secrets.yml"
 STATE_DIR="/var/lib/ansible-upgrade"
 
 cd "$ANSIBLE_DIR"
@@ -44,9 +45,7 @@ run_scenario() {
       -i "$INVENTORY" \
       -e "@${vars_file}" \
       -e "monkeyble_scenario=${name}" \
-      -e "k3s_token=ci-test-token" \
-      -e "pushover_app_token=ci-fake-token" \
-      -e "pushover_user_key=ci-fake-user" \
+      -e "vault_file=${TEST_SECRETS}" \
       "${extra[@]+"${extra[@]}"}" \
       rolling-upgrade.yaml
 
@@ -75,9 +74,7 @@ if ansible-playbook \
     -i "$INVENTORY" \
     --limit multimasters \
     -e "strict_mode=true" \
-    -e "k3s_token=ci-test-token" \
-    -e "pushover_app_token=ci-fake-token" \
-    -e "pushover_user_key=ci-fake-user" \
+    -e "vault_file=${TEST_SECRETS}" \
     rolling-upgrade.yaml 2>&1; then
   echo "  ERROR: expected playbook to abort but it succeeded"
   exit 1

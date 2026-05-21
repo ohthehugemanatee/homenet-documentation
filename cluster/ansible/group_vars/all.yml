@@ -1,0 +1,4 @@
+# Non-secret cluster-wide defaults.
+# Vault-encrypted secrets live in group_vars/vault.yaml (explicitly included
+# by each playbook via vars_files). Override in tests with:
+#   -e "vault_file=/path/to/test_secrets.yml"
