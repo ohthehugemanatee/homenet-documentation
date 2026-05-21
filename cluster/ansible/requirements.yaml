@@ -1,2 +1,6 @@
 collections:
   - ansible.posix
+  - name: hpe.monkeyble
+    source: https://github.com/HewlettPackard/monkeyble.git
+    type: git
+    version: main

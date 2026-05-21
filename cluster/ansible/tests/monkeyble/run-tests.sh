@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run all Monkeyble scenarios for rolling-upgrade.yaml.
-# Requires: pip install monkeyble
+# Requires: pip install monkeyble && ansible-galaxy collection install hpe.monkeyble
 # Run from cluster/ansible/ or any directory (script auto-cds).
 set -euo pipefail
 
@@ -12,19 +12,8 @@ STATE_DIR="/var/lib/ansible-upgrade"
 
 cd "$ANSIBLE_DIR"
 
-# Locate monkeyble callback_plugins directory
-MONKEYBLE_CB_DIR="$(python3 - <<'EOF'
-import os, monkeyble
-pkg = os.path.dirname(os.path.abspath(monkeyble.__file__))
-cb = os.path.join(pkg, "callback_plugins")
-if os.path.isdir(cb):
-    print(cb)
-else:
-    # Some installs put it under monkeyble/plugins/callback
-    alt = os.path.join(pkg, "plugins", "callback")
-    print(alt if os.path.isdir(alt) else cb)
-EOF
-)"
+# Enable the hpe.monkeyble callback plugin (installed via ansible-galaxy collection)
+export ANSIBLE_CALLBACKS_ENABLED=hpe.monkeyble.monkeyble_callback
 
 mkdir -p "$STATE_DIR"
 
@@ -39,15 +28,13 @@ run_scenario() {
   echo "  Scenario: ${name}"
   echo "══════════════════════════════════════════════"
 
-  ANSIBLE_CALLBACKS_ENABLED=monkeyble_callback \
-  ANSIBLE_CALLBACK_PLUGINS="$MONKEYBLE_CB_DIR" \
-    ansible-playbook \
-      -i "$INVENTORY" \
-      -e "@${vars_file}" \
-      -e "monkeyble_scenario=${name}" \
-      -e "vault_file=${TEST_SECRETS}" \
-      "${extra[@]+"${extra[@]}"}" \
-      rolling-upgrade.yaml
+  ansible-playbook \
+    -i "$INVENTORY" \
+    -e "@${vars_file}" \
+    -e "monkeyble_scenario=${name}" \
+    -e "vault_file=${TEST_SECRETS}" \
+    "${extra[@]+"${extra[@]}"}" \
+    rolling-upgrade.yaml
 
   echo "  PASSED: ${name}"
 }
@@ -55,12 +42,14 @@ run_scenario() {
 # ── Scenario 1: health check fails, rebuild succeeds → WARNING sent ──────────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario "agent_rescue_success" \
-  "${SCRIPT_DIR}/test_agent_rescue_success.yml"
+  "${SCRIPT_DIR}/test_agent_rescue_success.yml" \
+  "--limit" "agents"
 
 # ── Scenario 2: health check fails, rebuild also fails → CRITICAL sent ───────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario "agent_rescue_failure" \
-  "${SCRIPT_DIR}/test_agent_rescue_failure.yml"
+  "${SCRIPT_DIR}/test_agent_rescue_failure.yml" \
+  "--limit" "agents"
 
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
 echo ""
@@ -70,7 +59,8 @@ echo "════════════════════════�
 
 touch "${STATE_DIR}/rolling-upgrade-failed"
 
-if ansible-playbook \
+# Disable monkeyble callback — this scenario tests Ansible logic, not task assertions.
+if env -u ANSIBLE_CALLBACKS_ENABLED ansible-playbook \
     -i "$INVENTORY" \
     --limit multimasters \
     -e "strict_mode=true" \
