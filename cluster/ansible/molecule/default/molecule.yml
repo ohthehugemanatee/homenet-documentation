@@ -12,6 +12,7 @@ platforms:
     image: geerlingguy/docker-ubuntu2204-ansible:latest
     pre_build_image: true
     privileged: true
+    cgroupns_mode: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     command: /lib/systemd/systemd
@@ -23,8 +24,10 @@ provisioner:
   config_options:
     defaults:
       remote_tmp: /tmp/.ansible/tmp
+      pipelining: true
   playbooks:
     converge: converge.yml
+    prepare: prepare.yml
     verify: verify.yml
   inventory:
     group_vars:
