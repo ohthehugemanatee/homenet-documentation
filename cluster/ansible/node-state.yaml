@@ -97,7 +97,7 @@
         owner: root
         group: root
         mode: '0644'
-        unsafe_writes: "{{ ansible_virtualization_type == 'docker' }}"
+        unsafe_writes: "{{ (ansible_virtualization_type == 'docker') | bool }}"
 
     # ── NFS client ───────────────────────────────────────────────────────────
 

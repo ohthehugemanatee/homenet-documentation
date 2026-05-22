@@ -20,6 +20,10 @@ if ansible-playbook -i inventory.yaml \
 fi
 
 # Playbook exited non-zero — fire Pushover alert
+if [[ ! -r /etc/ansible/pushover.env ]]; then
+  echo "CRITICAL: node-state.yaml failed AND /etc/ansible/pushover.env unreadable — no alert sent" >&2
+  exit 1
+fi
 # shellcheck source=/dev/null
 source /etc/ansible/pushover.env
 curl -s -X POST https://api.pushover.net/1/messages.json \
