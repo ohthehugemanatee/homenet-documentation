@@ -60,6 +60,7 @@ scheduled or Semaphore runs. Semaphore command:
 ```
 ansible-playbook -i inventory.yaml \
   --vault-password-file /etc/ansible/vault-password \
+  -e vault_file=group_vars/vault.yaml \
   -e strict_mode=true \
   rolling-upgrade.yaml 2>&1 | tee /var/log/ansible/rolling-upgrade-$(date +%Y%m%d).log
 ```
@@ -178,11 +179,35 @@ kubectl scale statefulset nextcloud --replicas=1
 
 ---
 
+## Playbook variables
+
+### node-state.yaml
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `target` | No | `all:!ubuntu` | Host pattern override (`-e target=masters`) |
+| `ntp_servers` | No | `[ntp.ubuntu.com, 0.pool.ntp.org, 1.pool.ntp.org]` | NTP server list |
+| `cluster_role` | No | `agent` | `agent` or `server` — controls which k3s service unit is checked |
+
+`node-state.yaml` loads no vault variables and requires no `vault_file`.
+
+### rolling-upgrade.yaml
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `vault_file` | **Yes** | — | Path to vault secrets file, e.g. `group_vars/vault.yaml` |
+| `strict_mode` | No | `false` | `true` stops the run on the first node failure; use for all scheduled/Semaphore runs |
+| `target` | No | play-specific | Overrides the hosts pattern for all three plays simultaneously |
+
+Vault secrets consumed from `vault_file`: `k3s_token`, `k3s_api_server_url`, `pushover_app_token`, `pushover_user_key`.
+
+---
+
 ## Testing
 
 ### Lint (automated, every push)
 
-`.github/workflows/ansible-lint.yaml` runs `ansible-lint` + `--syntax-check`
+`.github/workflows/lint.yaml` runs `ansible-lint` + `--syntax-check`
 on all playbooks on every push to `cluster/ansible/` or `homelab/`.
 
 ### Integration test protocol
@@ -192,6 +217,7 @@ Before merging any change to `rolling-upgrade.yaml`:
 ```bash
 ansible-playbook -i cluster/ansible/inventory.yaml \
   --vault-password-file /etc/ansible/vault-password \
+  -e vault_file=cluster/ansible/group_vars/vault.yaml \
   --limit nuc2 \
   -e strict_mode=true \
   cluster/ansible/rolling-upgrade.yaml
@@ -233,7 +259,7 @@ After `homelab/shoebox-ansible-setup.yaml` runs:
 6. **Environment**: set `KUBECONFIG=/home/semaphore/.kube/config`
 7. **Task templates**:
    - node-state: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password node-state.yaml`
-   - rolling-upgrade: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password -e strict_mode=true rolling-upgrade.yaml`
+   - rolling-upgrade: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password -e vault_file=group_vars/vault.yaml -e strict_mode=true rolling-upgrade.yaml`
 
 ---
 
