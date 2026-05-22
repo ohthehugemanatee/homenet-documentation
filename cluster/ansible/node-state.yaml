@@ -71,7 +71,7 @@
         state: present
         pkg:
           - linux-modules-extra-{{ ansible_kernel }}
-      failed_when: false
+      when: ansible_virtualization_type != 'docker'
 
     - name: Install x86 media packages
       when: ansible_architecture == "x86_64"
@@ -127,7 +127,7 @@
         - br_netfilter
         - overlay
       changed_when: false
-      failed_when: false
+      when: ansible_virtualization_type != 'docker'
 
     # ── Kernel parameters ────────────────────────────────────────────────────
 
