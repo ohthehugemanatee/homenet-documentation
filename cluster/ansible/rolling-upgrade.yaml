@@ -310,11 +310,13 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
+          # Match STATUS column (col 2) exactly — substring grep would treat
+          # 'Ready,SchedulingDisabled' (cordoned) as Ready.
           not_ready=$(kubectl get nodes \
             -l node-role.kubernetes.io/control-plane \
-            --no-headers | { grep -v ' Ready' || true; } | wc -l)
-          echo $not_ready
-          exit $not_ready
+            --no-headers | awk '$2 != "Ready" { c++ } END { print c+0 }')
+          echo "$not_ready"
+          exit "$not_ready"
         executable: /bin/bash
       delegate_to: localhost
       become: false
@@ -510,11 +512,13 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
+          # Match STATUS column (col 2) exactly — substring grep would treat
+          # 'Ready,SchedulingDisabled' (cordoned) as Ready.
           not_ready=$(kubectl get nodes \
             -l node-role.kubernetes.io/control-plane \
-            --no-headers | { grep -v ' Ready' || true; } | wc -l)
-          echo $not_ready
-          exit $not_ready
+            --no-headers | awk '$2 != "Ready" { c++ } END { print c+0 }')
+          echo "$not_ready"
+          exit "$not_ready"
         executable: /bin/bash
       delegate_to: localhost
       become: false
