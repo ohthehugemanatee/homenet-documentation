@@ -31,23 +31,24 @@
         name: systemd-timesyncd
         state: restarted
         enabled: true
-      failed_when: false  # service stripped in Docker test containers
+      when: ansible_virtualization_type != 'docker'
 
     - name: Restart journald
       ansible.builtin.systemd:
         name: systemd-journald
         state: restarted
-      failed_when: false  # may not be restartable in Docker test containers
+      when: ansible_virtualization_type != 'docker'
 
     - name: Restart iscsid
       ansible.builtin.systemd:
         name: iscsid
         state: restarted
-      failed_when: false  # may not be running in Docker test containers
+      when: ansible_virtualization_type != 'docker'
 
     - name: Reload systemd
       ansible.builtin.systemd:
         daemon_reload: true
+      when: ansible_virtualization_type != 'docker'
 
   tasks:
     # ── Packages ────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@
         owner: root
         group: root
         mode: '0644'
-        unsafe_writes: true  # /etc/hosts is a bind-mount in Docker; atomic rename fails
+        unsafe_writes: "{{ ansible_virtualization_type == 'docker' }}"
 
     # ── NFS client ───────────────────────────────────────────────────────────
 
@@ -186,7 +187,7 @@
 
     - name: Disable swap immediately
       ansible.builtin.command: swapoff -a
-      when: ansible_swaptotal_mb | int > 0
+      when: ansible_swaptotal_mb | int > 0 and ansible_virtualization_type != 'docker'
       changed_when: ansible_swaptotal_mb | int > 0
 
     - name: Disable swap in fstab
@@ -239,7 +240,7 @@
       ansible.builtin.systemd:
         name: multipathd
         masked: true
-      failed_when: false
+      when: ansible_virtualization_type != 'docker'
 
     # ── iSCSI (required by Longhorn) ─────────────────────────────────────────
 
@@ -248,7 +249,7 @@
         name: iscsid
         state: started
         enabled: true
-      failed_when: false  # may not start in Docker test containers
+      when: ansible_virtualization_type != 'docker'
 
     # ── k3s service ──────────────────────────────────────────────────────────
     # Flush config handlers first — sysctl, modules, etc. must be current
