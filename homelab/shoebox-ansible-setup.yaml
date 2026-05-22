@@ -9,11 +9,15 @@
 #   - SSH access to shoebox as a user with sudo
 #   - Ansible vault password for the homenet vault
 #
-# Vault variables required (add to cluster/ansible/group_vars/all.yaml):
+# Vault variables required (add to cluster/ansible/group_vars/vault.yaml):
 #   pushover_app_token: <Pushover application token>
 #   pushover_user_key:  <Pushover user key>
-#   semaphore_admin_password:       <Semaphore admin password>
+#   semaphore_admin_password:        <Semaphore admin password>
 #   semaphore_access_key_encryption: <random 32-char string>
+#
+# Prompted at run time (not stored in vault — used to seed the vault password
+# file on shoebox itself):
+#   vault_password — the same password supplied to --ask-vault-pass
 #
 # After running: verify connectivity with:
 #   ansible -m ping all -i cluster/ansible/inventory.yaml \
@@ -23,6 +27,12 @@
 - name: Bootstrap shoebox as Ansible runner
   hosts: all
   become: true
+
+  vars_prompt:
+    - name: vault_password
+      prompt: "Ansible vault password (will be written to /etc/ansible/vault-password on shoebox)"
+      private: true
+      confirm: true
 
   vars:
     ansible_user_home: /home/ansible

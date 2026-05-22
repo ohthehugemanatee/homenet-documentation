@@ -208,6 +208,20 @@ kubectl scale statefulset nextcloud --replicas=1
 
 Vault secrets consumed from `vault_file`: `k3s_token`, `k3s_api_server_url`, `pushover_app_token`, `pushover_user_key`.
 
+### homelab/shoebox-ansible-setup.yaml
+
+One-time bootstrap, run from the operator's workstation.
+
+| Variable | Required | Source | Description |
+|---|---|---|---|
+| `vault_password` | **Yes** | Prompted at run time | The Ansible vault password itself — written to `/etc/ansible/vault-password` on shoebox. Cannot live in the vault (chicken-and-egg). The playbook prompts for it via `vars_prompt` |
+| `pushover_app_token` | **Yes** | vault | Pushover application token |
+| `pushover_user_key` | **Yes** | vault | Pushover user key |
+| `semaphore_admin_password` | **Yes** | vault | Semaphore admin login password |
+| `semaphore_access_key_encryption` | **Yes** | vault | 32-character random string for Semaphore secret-at-rest encryption |
+
+All five must be set up before running the playbook. Add the four vault entries to `cluster/ansible/group_vars/vault.yaml` (encrypt with `ansible-vault encrypt`); the `vault_password` is supplied interactively each run.
+
 ---
 
 ## Testing
