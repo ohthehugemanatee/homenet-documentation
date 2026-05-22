@@ -79,6 +79,7 @@
         pkg:
           - intel-media-va-driver-non-free
           - libmfx1
+      failed_when: false  # packages may be absent from minimal/Docker apt repos (multiverse)
 
     # ── Hostname ─────────────────────────────────────────────────────────────
 
