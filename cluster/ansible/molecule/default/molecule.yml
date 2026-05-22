@@ -20,6 +20,9 @@ platforms:
 
 provisioner:
   name: ansible
+  config_options:
+    defaults:
+      remote_tmp: /tmp/.ansible/tmp
   playbooks:
     converge: converge.yml
     verify: verify.yml
