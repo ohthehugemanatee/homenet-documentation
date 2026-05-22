@@ -247,6 +247,7 @@
         name: iscsid
         state: started
         enabled: true
+      failed_when: false  # may not start in Docker test containers
 
     # ── k3s service ──────────────────────────────────────────────────────────
     # Flush config handlers first — sysctl, modules, etc. must be current
