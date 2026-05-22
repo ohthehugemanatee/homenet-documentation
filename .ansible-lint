@@ -2,6 +2,7 @@ warn_list:
   - no-changed-when
   - command-instead-of-module
   - yaml[line-length]
+  - run-once[task]  # run_once with delegate_to:localhost is correct; strategy:free not used
 skip_list:
   - galaxy  # no galaxy metadata required for homelab playbooks
 
