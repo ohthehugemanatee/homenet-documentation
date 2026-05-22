@@ -218,7 +218,6 @@
       ansible.builtin.systemd:
         name: multipathd
         masked: false
-      failed_when: false
       when: "'multipath-tools' in ansible_facts.packages"
 
     - name: Stop multipathd
@@ -226,7 +225,6 @@
         name: multipathd
         state: stopped
         enabled: false
-      failed_when: false
       when: "'multipath-tools' in ansible_facts.packages"
 
     - name: Remove multipath-tools package

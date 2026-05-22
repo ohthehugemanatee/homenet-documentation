@@ -128,6 +128,13 @@ tasks inside the container write to the host filesystem.
 
 ## Failure handling
 
+### Pre-upgrade package snapshot
+
+Before each node upgrade, `rolling-upgrade.yaml` records installed package versions
+to `/var/lib/ansible-upgrade/pre-upgrade.txt` **on the node**. This file is forensic
+only — it tells you what changed after a failure, but no automated rollback reads it.
+Package-level apt downgrade is not the recovery path (see agent rescue below).
+
 ### Agent nodes
 
 On any task failure after drain, the rescue block:
