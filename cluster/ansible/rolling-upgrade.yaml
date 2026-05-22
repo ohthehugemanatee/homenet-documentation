@@ -142,7 +142,7 @@
           when: reboot_required_file.stat.exists or apt_upgrade.changed
 
         - name: Refresh facts to pick up new kernel version
-          ansible.builtin.gather_facts:
+          ansible.builtin.setup:
 
         - name: Install linux-modules-extra for running kernel (required for iSCSI)
           ansible.builtin.apt:
@@ -392,7 +392,7 @@
           when: reboot_required_file.stat.exists or apt_upgrade.changed
 
         - name: Refresh facts to pick up new kernel version
-          ansible.builtin.gather_facts:
+          ansible.builtin.setup:
 
         - name: Install linux-modules-extra for running kernel (required for iSCSI)
           ansible.builtin.apt:
@@ -595,7 +595,7 @@
           when: reboot_required_file.stat.exists or apt_upgrade.changed
 
         - name: Refresh facts to pick up new kernel version
-          ansible.builtin.gather_facts:
+          ansible.builtin.setup:
 
         - name: Install linux-modules-extra for running kernel (required for iSCSI)
           ansible.builtin.apt:
