@@ -28,8 +28,6 @@ provisioner:
       all:
         cluster_role: agent
         ansible_user: root
-        # Plaintext dummy secrets — no vault password needed in CI.
-        vault_file: tests/monkeyble/test_secrets.yml
         ntp_servers:
           - ntp.ubuntu.com
           - 0.pool.ntp.org
