@@ -3,6 +3,7 @@
 # Run from the OPERATOR'S WORKSTATION (not from shoebox itself):
 #
 #   ansible-playbook -i shoebox, --ask-become-pass \
+#     -e @cluster/ansible/group_vars/vault.yaml
 #     --ask-vault-pass shoebox/shoebox-ansible-setup.yaml
 #
 # Prerequisites on the operator's workstation:
