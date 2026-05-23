@@ -25,6 +25,8 @@ provisioner:
     defaults:
       remote_tmp: /tmp/.ansible/tmp
       pipelining: true
+  options:
+    skip-tags: molecule-notest
   playbooks:
     converge: converge.yml
     prepare: prepare.yml
