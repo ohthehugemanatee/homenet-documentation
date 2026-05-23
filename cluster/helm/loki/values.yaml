@@ -14,7 +14,7 @@ prometheus:
   alertmanager:
     enabled: true
     persistentVolume:
-      storageClass: "longhorn"
+      storageClass: "longhorn-ephemeral"
   # Alertmanager configuration — Pushover receiver for k8s health alerts.
   # Credentials: set PUSHOVER_TOKEN and PUSHOVER_USER in the alertmanager secret,
   # or template this file from Ansible vault before running helm upgrade.
@@ -38,3 +38,5 @@ prometheus:
 loki:
   persistence:
     enabled: false
+
+deploymentMode: Monolithic
