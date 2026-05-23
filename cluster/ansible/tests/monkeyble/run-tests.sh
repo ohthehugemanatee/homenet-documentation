@@ -59,6 +59,12 @@ echo "════════════════════════�
 
 touch "${STATE_DIR}/rolling-upgrade-failed"
 
+# --limit multimasters is intentional and required: the agents play pre_tasks
+# unconditionally clear rolling-upgrade-failed at the start of every run.
+# If agents ran first, the flag we just set would be wiped before multimasters
+# could check it, defeating the test. Skipping agents entirely preserves the
+# flag so the multimasters pre_task abort logic can be exercised.
+#
 # Disable monkeyble callback — this scenario tests Ansible logic, not task assertions.
 if env -u ANSIBLE_CALLBACKS_ENABLED ansible-playbook \
     -i "$INVENTORY" \
