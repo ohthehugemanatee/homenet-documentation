@@ -56,7 +56,7 @@
 
     - name: Clear stale failure state from previous run
       ansible.builtin.file:
-        path: {{ state_dir }}/rolling-upgrade-failed
+        path: "{{ state_dir }}/rolling-upgrade-failed"
         state: absent
       delegate_to: localhost
       become: false
@@ -65,7 +65,7 @@
     - name: Signal maintenance in progress
       ansible.builtin.copy:
         content: "{{ ansible_date_time.iso8601 }}"
-        dest: {{ state_dir }}/maintenance-in-progress
+        dest: "{{ state_dir }}/maintenance-in-progress"
         mode: '0644'
       delegate_to: localhost
       become: false
@@ -190,7 +190,7 @@
       rescue:
         - name: Record play failure for subsequent plays
           ansible.builtin.file:
-            path: {{ state_dir }}/rolling-upgrade-failed
+            path: "{{ state_dir }}/rolling-upgrade-failed"
             state: touch
             mode: '0644'
           delegate_to: localhost
@@ -239,7 +239,7 @@
 
             - name: Clear failure flag — rebuild succeeded, safe to continue
               ansible.builtin.file:
-                path: {{ state_dir }}/rolling-upgrade-failed
+                path: "{{ state_dir }}/rolling-upgrade-failed"
                 state: absent
               delegate_to: localhost
               become: false
@@ -293,7 +293,7 @@
   pre_tasks:
     - name: Check if a previous play failed
       ansible.builtin.stat:
-        path: {{ state_dir }}/rolling-upgrade-failed
+        path: "{{ state_dir }}/rolling-upgrade-failed"
       delegate_to: localhost
       become: false
       register: prev_play_failed
@@ -451,7 +451,7 @@
       rescue:
         - name: Record play failure for subsequent plays
           ansible.builtin.file:
-            path: {{ state_dir }}/rolling-upgrade-failed
+            path: "{{ state_dir }}/rolling-upgrade-failed"
             state: touch
             mode: '0644'
           delegate_to: localhost
@@ -495,7 +495,7 @@
   pre_tasks:
     - name: Check if a previous play failed
       ansible.builtin.stat:
-        path: {{ state_dir }}/rolling-upgrade-failed
+        path: "{{ state_dir }}/rolling-upgrade-failed"
       delegate_to: localhost
       become: false
       register: prev_play_failed
@@ -658,7 +658,7 @@
       rescue:
         - name: Record play failure for subsequent plays
           ansible.builtin.file:
-            path: {{ state_dir }}/rolling-upgrade-failed
+            path: "{{ state_dir }}/rolling-upgrade-failed"
             state: touch
             mode: '0644'
           delegate_to: localhost
@@ -691,5 +691,5 @@
   tasks:
     - name: Clear maintenance flag
       ansible.builtin.file:
-        path: {{ state_dir }}/maintenance-in-progress
+        path: "{{ state_dir }}/maintenance-in-progress"
         state: absent
