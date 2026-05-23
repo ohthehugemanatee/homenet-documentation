@@ -20,10 +20,16 @@
 # file on shoebox itself):
 #   vault_password — the same password supplied to --ask-vault-pass
 #
-# After running: verify connectivity with:
-#   ansible -m ping all -i cluster/ansible/inventory.yaml \
+# After running: SSH into shoebox and verify connectivity:
+#   # All cluster nodes respond to Ansible:
+#   ansible all -m ping -i cluster/ansible/inventory.yaml \
 #     -u ansible --private-key /home/ansible/.ssh/id_ed25519
-#   kubectl get nodes (using both kubeconfigs)
+#
+#   # kubectl works with the primary kubeconfig:
+#   kubectl get nodes
+#
+#   # kubectl works with the cluster3 kubeconfig:
+#   kubectl get nodes --kubeconfig /etc/ansible/kubeconfig-cluster3
 
 - name: Bootstrap shoebox as Ansible runner
   hosts: all
