@@ -186,6 +186,7 @@
       when: ansible_architecture == "x86_64" and (x86_cgroup_v2.changed or x86_cgroup_memory.changed)
       tags: [molecule-notest]
       ansible.builtin.command: update-grub
+      changed_when: true
 
     - name: Flag reboot required for cgroup changes
       when: (arm_cgroup_v2.changed | default(false)) or (x86_cgroup_v2.changed | default(false)) or (x86_cgroup_memory.changed | default(false))
