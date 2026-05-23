@@ -92,7 +92,7 @@ jobs:
 
           # --- Load known exceptions ---
           exceptions_context = ''
-          exceptions_path = '.github/pr-review-exceptions.yaml'
+          exceptions_path = '.github/agentic-review-exceptions.yaml'
           if os.path.exists(exceptions_path):
               with open(exceptions_path) as f:
                   exceptions_text = f.read()
