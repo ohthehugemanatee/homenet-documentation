@@ -1,0 +1,89 @@
+# Known-dismissed findings for AI PR review.
+# Findings listed here have been explicitly reviewed and accepted by the maintainer.
+# The auto-reviewer reads this file and must not re-raise any of these findings.
+
+exceptions:
+  - pattern: "CHANGEME_PUSHOVER"
+    files:
+      - cluster/helm/loki/values.yaml
+    reason: >-
+      Architectural deferral. Full vault->Helm templating is out of scope.
+      The doc explicitly requires manual replacement before `helm upgrade`.
+
+  - pattern: "k3s_token plaintext"
+    files:
+      - tests/monkeyble/test_secrets.yml
+    reason: >-
+      Cannot rename. The playbook loads k3s_token from vault_file, so the
+      test file must use the same variable name. Values are obvious CI fakes
+      (ci-test-token).
+
+  - pattern: "KUBECONFIG hardcoded for cluster3"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      cluster3 is in the multimasters group, not masters. The described
+      deadlock cannot happen given current inventory grouping.
+
+  - pattern: "k3s_api_server_url hardcoded"
+    files:
+      - cluster/ansible/
+    reason: >-
+      https://10.10.10.10:6443 IS the cluster VIP. It is correct for this
+      homelab and will not change.
+
+  - pattern: "run_once clearing failure flag"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. Operator recovery procedure uses --limit multimasters to
+      skip re-running agents after a mid-playbook failure. A full re-run
+      legitimately means "redo everything."
+
+  - pattern: "curl | sh k3s install without checksum"
+    files:
+      - cluster/ansible/
+    reason: >-
+      k3s upstream does not publish stable checksums for the installer.
+      The recovery path values speed over supply-chain defense for a homelab.
+
+  - pattern: "ansible_virtualization_type != docker"
+    files:
+      - cluster/ansible/
+    reason: >-
+      Standard Ansible idiom for skipping runtime service management inside
+      test containers. A skip_runtime_services variable would add indirection
+      with no real benefit.
+
+  - pattern: "TODO: verify IP resolves from shoebox"
+    files:
+      - cluster/ansible/inventory.yaml
+    reason: >-
+      Operational reminders for the operator, not blockers for merging
+      documentation.
+
+  - pattern: "requirements.txt unbounded >= versions"
+    files:
+      - requirements.txt
+    reason: >-
+      Acceptable for a homelab. Will pin if CI starts breaking on major
+      version bumps.
+
+  - pattern: "hpe.monkeyble namespace unusual"
+    files:
+      - cluster/ansible/
+    reason: >-
+      hpe.monkeyble is the actual upstream Galaxy publisher (Hewlett Packard
+      Enterprise). The namespace is correct.
+
+factual_corrections:
+  - claim: "Cleanup play won't run if any_errors_fatal hits"
+    correction: >-
+      Incorrect. any_errors_fatal terminates the current play; subsequent
+      plays in the same playbook still execute, so the cleanup play always
+      runs.
+
+  - claim: "hpe namespace is unusual for a homelab tool"
+    correction: >-
+      hpe.monkeyble is published by Hewlett Packard Enterprise on Ansible
+      Galaxy. The namespace is correct and expected.

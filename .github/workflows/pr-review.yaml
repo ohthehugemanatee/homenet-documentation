@@ -18,12 +18,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check skip conditions
+        id: skip-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Skip if commit message contains [skip-review] or [no-review]
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MSG" | grep -qE '\[(skip-review|no-review)\]'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: [skip-review] marker in commit message"
+            exit 0
+          fi
+
+          # Skip if all changed files are documentation
+          CHANGED=$(gh pr view ${{ github.event.pull_request.number }} \
+            --json files --jq '[.files[].path]')
+          TOTAL=$(echo "$CHANGED" | jq 'length')
+          DOCS=$(echo "$CHANGED" | \
+            jq '[.[] | select(test("\\.(md|txt|rst)$|^docs/|README"))] | length')
+          if [ "$TOTAL" -gt 0 ] && [ "$TOTAL" -eq "$DOCS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: docs-only change ($TOTAL files)"
+            exit 0
+          fi
+
+          # Skip if the diff is too small (<20 changed lines)
+          DIFF_LINES=$(gh pr diff ${{ github.event.pull_request.number }} | \
+            grep -cE '^[+-][^+-]' || true)
+          if [ "$DIFF_LINES" -lt 20 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: diff too small (${DIFF_LINES} changed lines)"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Get PR diff
+        if: steps.skip-check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr.diff
 
       - name: Review with Claude
+        if: steps.skip-check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
@@ -52,6 +90,42 @@ jobs:
               diff = diff[:cut if cut > 0 else MAX_CHARS]
               truncated = True
 
+          # --- Load known exceptions ---
+          exceptions_context = ''
+          exceptions_path = '.github/agentic-review-exceptions.yaml'
+          if os.path.exists(exceptions_path):
+              with open(exceptions_path) as f:
+                  exceptions_text = f.read()
+              exceptions_context = (
+                  '\n\n## Known exceptions — do not re-raise\n\n'
+                  'The following findings have been reviewed and intentionally accepted '
+                  'by the maintainer. Do not raise them again:\n\n'
+                  '```yaml\n' + exceptions_text + '\n```'
+              )
+
+          # --- Fetch prior review comments on this PR ---
+          prior_comments_context = ''
+          pr_number = os.environ['PR_NUMBER']
+          repo = os.environ['REPO']
+          try:
+              result = subprocess.run(
+                  ['gh', 'api', f'/repos/{repo}/issues/{pr_number}/comments',
+                   '--jq',
+                   '[.[] | select(.body | startswith("## AI Infrastructure Review"))'
+                   ' | .body] | join("\n---\n")'],
+                  capture_output=True, text=True, timeout=30
+              )
+              if result.returncode == 0 and result.stdout.strip():
+                  prior = result.stdout.strip()[:8000]
+                  prior_comments_context = (
+                      '\n\n## Prior AI reviews on this PR\n\n'
+                      'These findings were already posted in previous review rounds. '
+                      'Do not duplicate anything substantively the same:\n\n'
+                      + prior
+                  )
+          except Exception as e:
+              print(f'Warning: could not fetch prior comments: {e}')
+
           fence = '```'
           trunc_note = '\n\n*(diff truncated due to size)*' if truncated else ''
           prompt = (
@@ -67,10 +141,14 @@ jobs:
               '5. **Documentation** - Undocumented manual prerequisites, missing runbook entries for new failure modes,'
               ' outdated topology references, and similar\n\n'
               'Be concise. Only report actual issues, not style preferences.\n'
-              'Format: `[SEVERITY: HIGH/MEDIUM/LOW] Issue description`\n\n'
-              'Here is the pull request diff:\n\n'
+              'Format: `[SEVERITY: HIGH/MEDIUM/LOW] Issue description`\n'
+              + exceptions_context
+              + prior_comments_context
+              + '\n\n## Pull request diff\n\n'
               + fence + 'diff\n' + diff + '\n' + fence + trunc_note
           )
+
+          print(f'Prompt length: {len(prompt)} chars')
 
           payload = json.dumps({
               'model': 'claude-opus-4-7',
