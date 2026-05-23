@@ -11,9 +11,9 @@ all:
     multimasters:
       hosts:
         cluster3:
-          ansible_host: 10.10.10.12  # TODO: verify IP resolves from shoebox
+          ansible_host: 10.10.10.111
         cluster4:
-          ansible_host: 10.10.10.13  # TODO: verify IP resolves from shoebox
+          ansible_host: 10.10.10.114 
       vars:
         cluster_role: "multi-master"
     agents:
