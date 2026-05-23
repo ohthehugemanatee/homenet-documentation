@@ -1,7 +1,7 @@
 # Semaphore Ansible UI — runs on shoebox, external to the k3s cluster.
 #
 # Semaphore process runs as uid 1001. All bind-mounted files must be readable
-# by gid 1001 on the host. See homelab/shoebox-ansible-setup.yaml for setup.
+# by gid 1001 on the host. See shoebox/shoebox-ansible-setup.yaml for setup.
 #
 # Access: SSH-tunnel only. From your workstation:
 #   ssh -L 3000:localhost:3000 shoebox

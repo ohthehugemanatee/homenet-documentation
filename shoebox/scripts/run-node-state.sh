@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Weekly wrapper for node-state.yaml.
 # Fires a Pushover alert on non-zero exit. Logs to /var/log/ansible/.
-# Invoked by homelab/systemd/ansible-node-state.service.
+# Invoked by shoebox/systemd/ansible-node-state.service.
 set -euo pipefail
 
 LOG="/var/log/ansible/node-state-$(date +%Y%m%d-%H%M%S).log"

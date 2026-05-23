@@ -3,7 +3,7 @@
 # Run from the OPERATOR'S WORKSTATION (not from shoebox itself):
 #
 #   ansible-playbook -i shoebox, --ask-become-pass \
-#     --ask-vault-pass homelab/shoebox-ansible-setup.yaml
+#     --ask-vault-pass shoebox/shoebox-ansible-setup.yaml
 #
 # Prerequisites on the operator's workstation:
 #   - SSH access to shoebox as a user with sudo

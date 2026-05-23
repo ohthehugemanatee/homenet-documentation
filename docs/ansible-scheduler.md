@@ -209,7 +209,7 @@ kubectl scale statefulset nextcloud --replicas=1
 
 Vault secrets consumed from `vault_file`: `k3s_token`, `k3s_api_server_url`, `pushover_app_token`, `pushover_user_key`.
 
-### homelab/shoebox-ansible-setup.yaml
+### shoebox/shoebox-ansible-setup.yaml
 
 One-time bootstrap, run from the operator's workstation.
 
@@ -230,7 +230,7 @@ All five must be set up before running the playbook. Add the four vault entries 
 ### Lint (automated, every push)
 
 `.github/workflows/lint.yaml` runs `ansible-lint` + `--syntax-check`
-on all playbooks on every push to `cluster/ansible/` or `homelab/`.
+on all playbooks on every push to `cluster/ansible/` or `shoebox/`.
 
 ### Integration test protocol
 
@@ -271,7 +271,7 @@ nuc2 is the canary node: amd64 agent, standard `ansible_user`, no pinned workloa
 
 ## Semaphore setup
 
-After `homelab/shoebox-ansible-setup.yaml` runs:
+After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 1. SSH-tunnel to shoebox: `ssh -L 3000:localhost:3000 shoebox`
 2. Open `http://localhost:3000`

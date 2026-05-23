@@ -56,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run shellcheck
-        run: find cluster homelab -name "*.sh" -exec shellcheck {} +
+        run: find cluster shoebox -name "*.sh" -exec shellcheck {} +
 
   ansible:
     name: Ansible playbooks
@@ -71,7 +71,7 @@ jobs:
         working-directory: cluster/ansible
         run: |
           ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml \
-            ../../homelab/shoebox-ansible-setup.yaml
+            ../../shoebox/shoebox-ansible-setup.yaml
 
   policy:
     name: Kubernetes policy (advisory)
