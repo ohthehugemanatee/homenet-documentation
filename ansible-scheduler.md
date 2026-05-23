@@ -273,9 +273,10 @@ nuc2 is the canary node: amd64 agent, standard `ansible_user`, no pinned workloa
 
 After `shoebox/shoebox-ansible-setup.yaml` runs:
 
-1. SSH-tunnel to shoebox: `ssh -L 3000:localhost:3000 shoebox`
-2. Open `http://localhost:3000`
-3. **Key Store**: add Ansible Vault password as "LoginPassword" key named `vault`
+1. Fill in shoebox's static LAN IP in `cluster/ingress-only/semaphore.yaml` (replace `192.168.1.SHOEBOX_IP`)
+2. Apply the ingress manifest: `kubectl apply -f cluster/ingress-only/semaphore.yaml`
+3. Open `http://semaphore.vert`
+4. **Key Store**: add Ansible Vault password as "LoginPassword" key named `vault`
 4. **Repository**: point to `/repo` (bind-mounted from `/home/user/homenet-documentation`)
 5. **Inventory**: `/repo/cluster/ansible/inventory.yaml`
 6. **Environment**: set `KUBECONFIG=/home/semaphore/.kube/config`

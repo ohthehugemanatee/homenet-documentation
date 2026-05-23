@@ -3,15 +3,13 @@
 # Semaphore process runs as uid 1001. All bind-mounted files must be readable
 # by gid 1001 on the host. See shoebox/shoebox-ansible-setup.yaml for setup.
 #
-# Access: SSH-tunnel only. From your workstation:
-#   ssh -L 3000:localhost:3000 shoebox
-# Then open http://localhost:3000
+# Access: http://semaphore.vert (via cluster ingress → cluster/ingress-only/semaphore.yaml)
 
 services:
   semaphore:
     image: semaphoreui/semaphore:v2.10.22
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     volumes:
       # Semaphore data (database, task history)
       - /opt/semaphore/data:/home/semaphore

@@ -47,6 +47,25 @@
     log_dir: /var/log/ansible
 
   tasks:
+    # ── Ansible installation ──────────────────────────────────────────────────
+
+    - name: Install ansible
+      ansible.builtin.apt:
+        name: ansible
+        state: present
+        update_cache: true
+
+    - name: Install ansible collections for playbook runtime
+      ansible.builtin.command:
+        argv:
+          - ansible-galaxy
+          - collection
+          - install
+          - ansible.posix
+          - -p
+          - /usr/share/ansible/collections
+      changed_when: false
+
     # ── Ansible user ─────────────────────────────────────────────────────────
 
     - name: Create ansible system user
