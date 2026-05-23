@@ -47,7 +47,7 @@
   pre_tasks:
     - name: Ensure upgrade state dir exists on controller
       ansible.builtin.file:
-        path: /var/lib/ansible-upgrade
+        path: "{{ state_dir }}"
         state: directory
         mode: '0755'
       delegate_to: localhost
@@ -56,7 +56,7 @@
 
     - name: Clear stale failure state from previous run
       ansible.builtin.file:
-        path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+        path: {{ state_dir }}/rolling-upgrade-failed
         state: absent
       delegate_to: localhost
       become: false
@@ -65,7 +65,7 @@
     - name: Signal maintenance in progress
       ansible.builtin.copy:
         content: "{{ ansible_date_time.iso8601 }}"
-        dest: /var/lib/ansible-upgrade/maintenance-in-progress
+        dest: {{ state_dir }}/maintenance-in-progress
         mode: '0644'
       delegate_to: localhost
       become: false
@@ -108,13 +108,13 @@
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
-            path: /var/lib/ansible-upgrade
+            path: "{{ state_dir }}"
             state: directory
             mode: '0755'
 
         - name: Record pre-upgrade package versions
           ansible.builtin.shell:
-            cmd: dpkg-query -W -f='${Package}=${Version}\n' > /var/lib/ansible-upgrade/pre-upgrade.txt
+            cmd: dpkg-query -W -f='${Package}=${Version}\n' > {{ state_dir }}/pre-upgrade.txt
             executable: /bin/bash
           changed_when: false
 
@@ -190,7 +190,7 @@
       rescue:
         - name: Record play failure for subsequent plays
           ansible.builtin.file:
-            path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+            path: {{ state_dir }}/rolling-upgrade-failed
             state: touch
             mode: '0644'
           delegate_to: localhost
@@ -239,7 +239,7 @@
 
             - name: Clear failure flag — rebuild succeeded, safe to continue
               ansible.builtin.file:
-                path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+                path: {{ state_dir }}/rolling-upgrade-failed
                 state: absent
               delegate_to: localhost
               become: false
@@ -293,7 +293,7 @@
   pre_tasks:
     - name: Check if a previous play failed
       ansible.builtin.stat:
-        path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+        path: {{ state_dir }}/rolling-upgrade-failed
       delegate_to: localhost
       become: false
       register: prev_play_failed
@@ -360,13 +360,13 @@
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
-            path: /var/lib/ansible-upgrade
+            path: "{{ state_dir }}"
             state: directory
             mode: '0755'
 
         - name: Record pre-upgrade package versions
           ansible.builtin.shell:
-            cmd: dpkg-query -W -f='${Package}=${Version}\n' > /var/lib/ansible-upgrade/pre-upgrade.txt
+            cmd: dpkg-query -W -f='${Package}=${Version}\n' > {{ state_dir }}/pre-upgrade.txt
             executable: /bin/bash
           changed_when: false
 
@@ -451,7 +451,7 @@
       rescue:
         - name: Record play failure for subsequent plays
           ansible.builtin.file:
-            path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+            path: {{ state_dir }}/rolling-upgrade-failed
             state: touch
             mode: '0644'
           delegate_to: localhost
@@ -495,7 +495,7 @@
   pre_tasks:
     - name: Check if a previous play failed
       ansible.builtin.stat:
-        path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+        path: {{ state_dir }}/rolling-upgrade-failed
       delegate_to: localhost
       become: false
       register: prev_play_failed
@@ -565,13 +565,13 @@
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
-            path: /var/lib/ansible-upgrade
+            path: "{{ state_dir }}"
             state: directory
             mode: '0755'
 
         - name: Record pre-upgrade package versions
           ansible.builtin.shell:
-            cmd: dpkg-query -W -f='${Package}=${Version}\n' > /var/lib/ansible-upgrade/pre-upgrade.txt
+            cmd: dpkg-query -W -f='${Package}=${Version}\n' > {{ state_dir }}/pre-upgrade.txt
             executable: /bin/bash
           changed_when: false
 
@@ -658,7 +658,7 @@
       rescue:
         - name: Record play failure for subsequent plays
           ansible.builtin.file:
-            path: /var/lib/ansible-upgrade/rolling-upgrade-failed
+            path: {{ state_dir }}/rolling-upgrade-failed
             state: touch
             mode: '0644'
           delegate_to: localhost
@@ -691,5 +691,5 @@
   tasks:
     - name: Clear maintenance flag
       ansible.builtin.file:
-        path: /var/lib/ansible-upgrade/maintenance-in-progress
+        path: {{ state_dir }}/maintenance-in-progress
         state: absent

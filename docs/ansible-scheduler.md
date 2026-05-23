@@ -205,6 +205,7 @@ kubectl scale statefulset nextcloud --replicas=1
 | `vault_file` | **Yes** | — | Path to vault secrets file, e.g. `group_vars/vault.yaml` |
 | `strict_mode` | No | `false` | `true` stops the run on the first node failure; use for all scheduled/Semaphore runs |
 | `target` | No | play-specific | Overrides the hosts pattern for all three plays simultaneously |
+| `state_dir` | No | `/var/lib/ansible-upgrade` | Controller-side directory for run-state files; override to a temp dir for local test runs |
 
 Vault secrets consumed from `vault_file`: `k3s_token`, `k3s_api_server_url`, `pushover_app_token`, `pushover_user_key`.
 

@@ -6,3 +6,7 @@
 # k3s API server URL used for agent re-joins (rolling-upgrade rescue path).
 # Points to the cluster VIP or the primary master.
 k3s_api_server_url: "https://10.10.10.10:6443"
+
+# Controller-side state directory for rolling-upgrade run flags.
+# Override with -e state_dir=/tmp/... for local test runs.
+state_dir: /var/lib/ansible-upgrade

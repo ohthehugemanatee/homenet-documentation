@@ -8,14 +8,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANSIBLE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 INVENTORY="${SCRIPT_DIR}/inventory.yml"
 TEST_SECRETS="${SCRIPT_DIR}/test_secrets.yml"
-STATE_DIR="/var/lib/ansible-upgrade"
+STATE_DIR="$(mktemp -d)"
+trap 'rm -rf "$STATE_DIR"' EXIT
 
 cd "$ANSIBLE_DIR"
 
 # Enable the hpe.monkeyble callback plugin (installed via ansible-galaxy collection)
 export ANSIBLE_CALLBACKS_ENABLED=hpe.monkeyble.monkeyble_callback
-
-mkdir -p "$STATE_DIR"
 
 run_scenario() {
   local name=$1
@@ -33,6 +32,7 @@ run_scenario() {
     -e "@${vars_file}" \
     -e "monkeyble_scenario=${name}" \
     -e "vault_file=${TEST_SECRETS}" \
+    -e "state_dir=${STATE_DIR}" \
     "${extra[@]+"${extra[@]}"}" \
     rolling-upgrade.yaml
 
@@ -65,6 +65,7 @@ if env -u ANSIBLE_CALLBACKS_ENABLED ansible-playbook \
     --limit multimasters \
     -e "strict_mode=true" \
     -e "vault_file=${TEST_SECRETS}" \
+    -e "state_dir=${STATE_DIR}" \
     rolling-upgrade.yaml 2>&1; then
   echo "  ERROR: expected playbook to abort but it succeeded"
   exit 1
@@ -76,10 +77,6 @@ if [[ ! -f "${STATE_DIR}/rolling-upgrade-failed" ]]; then
 fi
 
 echo "  PASSED: cross_play_abort (play aborted, failure flag persists)"
-
-# ── Cleanup ───────────────────────────────────────────────────────────────────
-rm -f "${STATE_DIR}/rolling-upgrade-failed" \
-      "${STATE_DIR}/maintenance-in-progress"
 
 echo ""
 echo "All Monkeyble scenarios passed."
