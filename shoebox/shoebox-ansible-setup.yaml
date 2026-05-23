@@ -20,10 +20,13 @@
 # file on shoebox itself):
 #   vault_password — the same password supplied to --ask-vault-pass
 #
-# After running: SSH into shoebox and verify connectivity:
-#   # All cluster nodes respond to Ansible:
-#   ansible all -m ping -i cluster/ansible/inventory.yaml \
-#     -u ansible --private-key /home/ansible/.ssh/id_ed25519
+# After running: SSH into shoebox as the ansible user and verify:
+#   ssh ansible@shoebox
+#
+#   # All cluster nodes respond (ansible-adhoc runner, same package as ansible-playbook):
+#   ansible all -m ping \
+#     -i /home/user/homenet-documentation/cluster/ansible/inventory.yaml \
+#     --private-key ~/.ssh/id_ed25519
 #
 #   # kubectl works with the primary kubeconfig:
 #   kubectl get nodes
