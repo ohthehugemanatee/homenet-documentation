@@ -238,7 +238,7 @@ One-time bootstrap, run from the operator's workstation.
 | `pushover_app_token` | **Yes** | vault | Pushover application token |
 | `pushover_user_key` | **Yes** | vault | Pushover user key |
 | `semaphore_admin_password` | **Yes** | vault | Semaphore admin login password |
-| `semaphore_access_key_encryption` | **Yes** | vault | Standard base64 AES key for Semaphore secret-at-rest encryption. Generate with: `openssl rand -base64 32 \| tr -d '\n'`. Must be standard base64 (not URL-safe); newlines cause "illegal base64" errors when adding keys in the UI. |
+| `semaphore_access_key_encryption` | **Yes** | vault | Standard base64 AES key for Semaphore secret-at-rest encryption. Generate with: `openssl rand -base64 32 \| tr -d '\n'`. Must be standard base64 (not URL-safe — `-` and `_` cause "illegal base64 data at input byte N" when adding keys). The bootstrap playbook validates the format via `shoebox/scripts/validate-semaphore-key.sh` and fails fast if malformed; the same validator runs in CI against good and bad inputs. |
 
 All five must be set up before running the playbook. Add the four vault entries to `cluster/ansible/group_vars/vault.yaml` (encrypt with `ansible-vault encrypt`); the `vault_password` is supplied interactively each run.
 

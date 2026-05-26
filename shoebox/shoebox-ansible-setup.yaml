@@ -285,6 +285,16 @@
         group: "1001"
         mode: '0755'
 
+    # Catch malformed SEMAPHORE_ACCESS_KEY_ENCRYPTION values before Semaphore
+    # starts — a bad value here causes "illegal base64 data at input byte N"
+    # when the operator tries to add a key in the Semaphore UI.
+    - name: Validate SEMAPHORE_ACCESS_KEY_ENCRYPTION format
+      ansible.builtin.command:
+        cmd: bash {{ playbook_dir }}/scripts/validate-semaphore-key.sh
+        stdin: "{{ semaphore_access_key_encryption }}"
+      changed_when: false
+      no_log: true
+
     - name: Write Semaphore environment file
       ansible.builtin.copy:
         content: |

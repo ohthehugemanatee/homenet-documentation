@@ -11,8 +11,11 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Semaphore data (database, task history)
-      - /opt/semaphore/data:/home/semaphore
+      # Semaphore database, task history. Container writes the bolt DB to
+      # /var/lib/semaphore — confirmed via runtime logs. The container's
+      # /home/semaphore directory is its uid 1001 home and remains
+      # container-local except for the .ssh and .kube nested mounts below.
+      - /opt/semaphore/data:/var/lib/semaphore
       # SSH key for ansible user — hosts must trust this key
       - /home/ansible/.ssh:/home/semaphore/.ssh:ro
       # Primary kubeconfig — points to cluster1 (default for agents + multimasters)

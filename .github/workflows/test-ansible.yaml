@@ -6,6 +6,17 @@ name: Ansible tests
 
 jobs:
 
+  shoebox-validators:
+    name: Shoebox config validators
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semaphore encryption-key validator tests
+        run: bash shoebox/tests/test-validate-semaphore-key.sh
+
   monkeyble:
     name: Monkeyble rescue-logic tests
     runs-on: ubuntu-latest
