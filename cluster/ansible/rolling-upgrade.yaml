@@ -250,6 +250,7 @@
               ansible.builtin.uri:
                 url: https://api.pushover.net/1/messages.json
                 method: POST
+                timeout: 10
                 body_format: form-urlencoded
                 body:
                   token: "{{ pushover_app_token }}"
@@ -266,6 +267,7 @@
               ansible.builtin.uri:
                 url: https://api.pushover.net/1/messages.json
                 method: POST
+                timeout: 10
                 body_format: form-urlencoded
                 body:
                   token: "{{ pushover_app_token }}"
