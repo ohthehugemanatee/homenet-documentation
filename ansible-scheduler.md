@@ -188,6 +188,8 @@ kubectl uncordon <node>
 
 # 4. Clear state flags (from shoebox host shell or via docker exec into Semaphore —
 #    /var/lib/ansible-upgrade is bind-mounted so both paths write the same files)
+#    Note: only needed when re-running with --limit (skipping the agents play).
+#    A full re-run clears rolling-upgrade-failed automatically in agents pre_tasks.
 rm /var/lib/ansible-upgrade/rolling-upgrade-failed
 # Also clear if maintenance-in-progress is stale (e.g. Semaphore was killed mid-run):
 rm -f /var/lib/ansible-upgrade/maintenance-in-progress
