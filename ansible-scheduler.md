@@ -149,6 +149,10 @@ which includes the local-path-provisioner storage root (`/var/lib/rancher/k3s/st
 Any PVCs backed by the node's local-path storage class are destroyed. Check which pods were
 scheduled on the node before the upgrade run and whether they used local-path PVCs.
 
+**Labels and taints**: the reinstalled node joins with default k3s labels only. Any custom
+labels or taints (e.g. `node-role=storage`, topology labels, Longhorn tags) must be
+re-applied manually before scaling workloads back onto the node.
+
 If rebuild also fails:
 - Sends Pushover **CRITICAL** (priority 2, repeat every 5 min for 1 hour)
 - Node stays drained

@@ -72,7 +72,6 @@
         pkg:
           - linux-modules-extra-{{ ansible_kernel }}
       when: ansible_virtualization_type != 'docker'
-      failed_when: false
 
     - name: Install x86 media packages
       when: ansible_architecture == "x86_64"

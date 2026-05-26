@@ -312,17 +312,22 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    # run_once with serial:1 fires once per batch (1 host per batch), so this runs
-    # before every drain — each node waits for the previous one to rejoin before proceeding.
+    # run_once fires once per play (first host only). Per-node recovery guarantee
+    # is provided by the block's kubectl wait and NRestarts checks after each upgrade.
     - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
           # Match STATUS column (col 2) exactly — substring grep would treat
           # 'Ready,SchedulingDisabled' (cordoned) as Ready.
-          not_ready=$(kubectl get nodes \
+          output=$(kubectl get nodes \
             -l node-role.kubernetes.io/control-plane \
-            --no-headers | awk '$2 != "Ready" { c++ } END { print c+0 }')
+            --no-headers)
+          if [ -z "$output" ]; then
+            echo "ERROR: no nodes matched label node-role.kubernetes.io/control-plane"
+            exit 1
+          fi
+          not_ready=$(echo "$output" | awk '$2 != "Ready" { c++ } END { print c+0 }')
           echo "$not_ready"
           exit $((not_ready > 0 ? 1 : 0))
         executable: /bin/bash
@@ -517,17 +522,22 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    # run_once with serial:1 fires once per batch (1 host per batch), so this runs
-    # before every drain — each node waits for the previous one to rejoin before proceeding.
+    # run_once fires once per play (first host only). Per-node recovery guarantee
+    # is provided by the block's kubectl wait and NRestarts checks after each upgrade.
     - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
           # Match STATUS column (col 2) exactly — substring grep would treat
           # 'Ready,SchedulingDisabled' (cordoned) as Ready.
-          not_ready=$(kubectl get nodes \
+          output=$(kubectl get nodes \
             -l node-role.kubernetes.io/control-plane \
-            --no-headers | awk '$2 != "Ready" { c++ } END { print c+0 }')
+            --no-headers)
+          if [ -z "$output" ]; then
+            echo "ERROR: no nodes matched label node-role.kubernetes.io/control-plane"
+            exit 1
+          fi
+          not_ready=$(echo "$output" | awk '$2 != "Ready" { c++ } END { print c+0 }')
           echo "$not_ready"
           exit $((not_ready > 0 ? 1 : 0))
         executable: /bin/bash
