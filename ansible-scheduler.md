@@ -144,6 +144,11 @@ On any task failure after drain, the rescue block:
 4. Uncordons automatically and clears the failure flag
 5. Sends Pushover **WARNING** — rebuilt successfully
 
+**Data loss surface**: `k3s-agent-uninstall.sh` removes `/var/lib/rancher/k3s/` on the node,
+which includes the local-path-provisioner storage root (`/var/lib/rancher/k3s/storage/`).
+Any PVCs backed by the node's local-path storage class are destroyed. Check which pods were
+scheduled on the node before the upgrade run and whether they used local-path PVCs.
+
 If rebuild also fails:
 - Sends Pushover **CRITICAL** (priority 2, repeat every 5 min for 1 hour)
 - Node stays drained
@@ -277,10 +282,10 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 2. Apply the ingress manifest: `kubectl apply -f cluster/ingress-only/semaphore.yaml`
 3. Open `http://semaphore.vert`
 4. **Key Store**: add Ansible Vault password as "LoginPassword" key named `vault`
-4. **Repository**: point to `/repo` (bind-mounted from `/home/user/homenet-documentation`)
-5. **Inventory**: `/repo/cluster/ansible/inventory.yaml`
-6. **Environment**: set `KUBECONFIG=/home/semaphore/.kube/config`
-7. **Task templates**:
+5. **Repository**: point to `/repo` (bind-mounted from `/home/user/homenet-documentation`)
+6. **Inventory**: `/repo/cluster/ansible/inventory.yaml`
+7. **Environment**: set `KUBECONFIG=/home/semaphore/.kube/config`
+8. **Task templates**:
    - node-state: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password node-state.yaml`
    - rolling-upgrade: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password -e vault_file=group_vars/vault.yaml -e strict_mode=true rolling-upgrade.yaml`
 
