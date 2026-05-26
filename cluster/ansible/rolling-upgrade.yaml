@@ -500,9 +500,6 @@
   vars:
     k3s_svc: k3s
 
-  environment:
-    KUBECONFIG: /etc/ansible/kubeconfig-cluster3
-
   pre_tasks:
     - name: Check if a previous play failed
       ansible.builtin.stat:
@@ -629,6 +626,7 @@
           delay: 10
           changed_when: false
 
+        # cluster1 API is down during reboot — use cluster3 kubeconfig for kubectl tasks
         - name: Wait for node to rejoin cluster
           ansible.builtin.command: >
             kubectl wait node/{{ ansible_hostname }}
@@ -637,12 +635,16 @@
           delegate_to: localhost
           become: false
           changed_when: false
+          environment:
+            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Uncordon node
           ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
           delegate_to: localhost
           become: false
           changed_when: true
+          environment:
+            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Verify node is Ready after uncordon
           ansible.builtin.command: >
@@ -652,6 +654,8 @@
           delegate_to: localhost
           become: false
           changed_when: false
+          environment:
+            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Verify k3s not in restart loop  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
@@ -665,6 +669,8 @@
           become: false
           changed_when: false
           register: node_status
+          environment:
+            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Final cluster state
           ansible.builtin.debug:
