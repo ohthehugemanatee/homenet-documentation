@@ -99,7 +99,7 @@ Two kubeconfigs are required on shoebox:
 | Path | Endpoint | Used by |
 |---|---|---|
 | `/home/ansible/.kube/config` | `https://10.10.10.10:6443` | agents + multimasters plays |
-| `/etc/ansible/kubeconfig-cluster3` | `https://<cluster3-IP>:6443` | masters play |
+| `/etc/ansible/kubeconfig-cluster3` | `https://10.10.10.111:6443` | masters play |
 
 The masters play sets `environment: KUBECONFIG: /etc/ansible/kubeconfig-cluster3`
 at play level. When cluster1 is drained and rebooting, kubectl reaches the cluster
