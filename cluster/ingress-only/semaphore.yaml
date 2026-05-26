@@ -7,7 +7,7 @@ metadata:
   name: semaphore
 subsets:
   - addresses:
-      - ip: 192.0.2.1  # PLACEHOLDER — replace with shoebox's static LAN IP before applying
+      - ip: 10.10.10.127
     ports:
       - port: 3000
 ---
