@@ -14,11 +14,8 @@
 #   pushover_app_token: <Pushover application token>
 #   pushover_user_key:  <Pushover user key>
 #   semaphore_admin_password:        <Semaphore admin password>
-#   semaphore_access_key_encryption: <random 32-char string>
-#
-# Prompted at run time (not stored in vault — used to seed the vault password
-# file on shoebox itself):
-#   vault_password — the same password supplied to --ask-vault-pass
+#   semaphore_access_key_encryption: <32 char output from `head -c32 /dev/urandom | base64` >
+#   vault_password: the same password supplied to --ask-vault-pass
 #
 # After running: SSH into shoebox as the ansible user and verify:
 #   ssh ansible@shoebox
@@ -293,6 +290,7 @@
         content: |
           SEMAPHORE_DB_DIALECT=bolt
           SEMAPHORE_ADMIN=admin
+          SEMAPHORE_ADMIN_NAME=admin
           SEMAPHORE_ADMIN_EMAIL=admin@localhost
           SEMAPHORE_ADMIN_PASSWORD={{ semaphore_admin_password }}
           SEMAPHORE_ACCESS_KEY_ENCRYPTION={{ semaphore_access_key_encryption }}
