@@ -661,6 +661,29 @@ exceptions:
       Scope creep. Rotation procedure is a follow-up doc, not a
       blocker for the scheduler design.
 
+  - pattern: "group: 1001 missing on state_dir in rolling-upgrade pre_task"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. The delegate_to: localhost + become: false task runs as
+      the ansible user (or Semaphore uid 1001 inside the container), neither
+      of which can chgrp to an arbitrary gid they don't own. The bootstrap
+      playbook (shoebox-ansible-setup.yaml) creates the directory with the
+      correct gid 1001 as a documented prerequisite; the rolling-upgrade task
+      only ensures the directory exists (mode 0775) and does not override
+      group ownership.
+
+  - pattern: "exit PIPESTATUS[0] is redundant in molecule step with continue-on-error"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      False premise. Without exit "${PIPESTATUS[0]}", the step would always
+      exit 0 because tee (the last command in the pipe) always succeeds.
+      steps.molecule.outcome would then always be 'success', making the
+      downstream "Fail if molecule failed" gate inoperable. The exit is
+      necessary to propagate molecule's exit code through continue-on-error
+      so outcome reflects the actual molecule result.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-

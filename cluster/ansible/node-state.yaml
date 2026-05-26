@@ -284,6 +284,11 @@
         masked: true
       when: ansible_virtualization_type != 'docker'
 
+    # Flush immediately so daemon_reload fires even if the play fails before
+    # the later flush_handlers (e.g. iscsid task failure).
+    - name: Flush handlers after multipath removal
+      ansible.builtin.meta: flush_handlers
+
     # ── iSCSI (required by Longhorn) ─────────────────────────────────────────
 
     - name: Ensure iscsid is enabled and running
