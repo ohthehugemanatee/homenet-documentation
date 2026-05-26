@@ -76,6 +76,225 @@ exceptions:
       hpe.monkeyble is the actual upstream Galaxy publisher (Hewlett Packard
       Enterprise). The namespace is correct.
 
+  - pattern: "Molecule prepare.yml 20-second pause is flaky"
+    files:
+      - cluster/ansible/molecule/default/prepare.yml
+    reason: >-
+      Known limitation. Acceptable for a homelab CI matrix; will swap to
+      systemd-readiness polling only if it actually starts failing.
+
+  - pattern: "Molecule image :latest tag drift"
+    files:
+      - cluster/ansible/molecule/default/molecule.yml
+    reason: >-
+      geerlingguy/docker-ubuntu2204-ansible:latest is the maintained tag
+      upstream. Pinning to a digest would create maintenance burden for a
+      homelab test environment.
+
+  - pattern: "all.yaml plaintext but was previously vault-encrypted"
+    files:
+      - cluster/ansible/group_vars/all.yaml
+    reason: >-
+      Intentional split. all.yaml now contains only non-secret defaults
+      (k3s_api_server_url, state_dir). Secrets live in group_vars/vault.yaml.
+      Confirmed no secrets were lost in the conversion.
+
+  - pattern: "failed_when: false on Record play failure"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Required so the rescue block continues to the Pushover alert and
+      auto-rebuild tasks even if the touch itself fails. State_dir is
+      created by the bootstrap playbook with the correct gid 1001 perms.
+
+  - pattern: "Quorum check missing in agents play"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Agents do not participate in etcd quorum. kubectl drain failing is
+      the natural gate when the control plane is unreachable. Workers are
+      designed to lose pods to rescheduling.
+
+  - pattern: "Hardcoded kubeconfig-cluster3 path / variable-ize as failover_kubeconfig"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Single-cluster homelab. Variable indirection adds complexity without
+      operational benefit. The path is documented in the setup runbook.
+
+  - pattern: "StatefulSet pre-flight assertion (Plex/Nextcloud)"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Documented as a manual pre-flight step. Auto-scaling cluster services
+      from the upgrade playbook is scope creep and tightly couples
+      ansible to the helm releases.
+
+  - pattern: "Pre-upgrade package snapshot clobbed each run / add timestamp"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Forensic only. The file's mtime is the signal. History retention is
+      not needed since auto-rebuild discards the OS anyway.
+
+  - pattern: "failed_when: false on node-state systemctl tasks"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is intentionally not modified by this PR — alerting is
+      via the shell wrapper run-node-state.sh on non-zero exit.
+
+  - pattern: "multipathd mask on non-existent unit creates dangling symlink"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      systemctl mask on a non-existent unit creates a harmless /dev/null
+      symlink. Defensive masking is intentional in case the package is
+      installed later. node-state.yaml is not modified by this PR.
+
+  - pattern: ".ansible-lint vault_file default could leak to production runs"
+    files:
+      - .ansible-lint
+    reason: >-
+      False premise. extra_vars in .ansible-lint apply only to ansible-lint
+      invocations, never to ansible-playbook. Production runs are unaffected.
+
+  - pattern: "mktemp empty guard / STATE_DIR could be unset"
+    files:
+      - cluster/ansible/tests/monkeyble/run-tests.sh
+    reason: >-
+      Script runs with set -euo pipefail. An empty STATE_DIR would trigger
+      an error on the rm itself. Extreme edge case not worth defensive code.
+
+  - pattern: "Test rescue path doc instructs manual edit of failed_when"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Explicit test-runbook instruction with a "revert the threshold change"
+      step. Adding a force_rescue_test variable bloats the playbook for a
+      test-only concern in a homelab.
+
+  - pattern: "Race condition in agent rescue with serial:1"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. serial:1 executes hosts sequentially — host A's entire
+      task list (including the inner block/rescue) completes before host B
+      starts. No race is possible.
+
+  - pattern: "Scenario 3 grep for abort message can pass on wrong failure"
+    files:
+      - cluster/ansible/tests/monkeyble/run-tests.sh
+    reason: >-
+      False premise. The grep for "previous play left nodes in a failed
+      state" is a SECOND gate; unexpected failures produce different output
+      and fail the grep check with an explicit error.
+
+  - pattern: "&& after command substitution doesn't capture exit code"
+    files:
+      - cluster/ansible/tests/monkeyble/run-tests.sh
+    reason: >-
+      False premise. Bash propagates the command substitution's exit code
+      to the assignment expression, so `var=$(cmd) && {...}` correctly
+      fires only when cmd succeeded.
+
+  - pattern: "No success notification on rolling-upgrade completion"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. The design focuses on failure alerting; success is
+      indicated by absence of alerts and by Semaphore run history.
+
+  - pattern: "No Pushover on pre_task quorum check failure"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Pre_task failures indicate broken cluster state that is already
+      covered by Alertmanager→Pushover (cluster/helm/loki/values.yaml).
+
+  - pattern: "Cleanup clears maintenance-in-progress while failure flag is set"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. maintenance-in-progress means "Ansible is currently
+      running"; rolling-upgrade-failed is the "needs attention" signal.
+      External monitors should key off the failure flag for that semantic.
+
+  - pattern: "cluster4 not documented as failover kubeconfig endpoint"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      cluster3 as the single failover endpoint is sufficient. If both
+      cluster3 and cluster4 are simultaneously down, the cluster needs
+      manual recovery regardless of playbook resilience.
+
+  - pattern: "No audit trail / node label for auto-rebuilt agents"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      The Pushover WARNING is the audit signal. Adding kubectl annotate
+      tasks adds complexity for marginal benefit in a homelab.
+
+  - pattern: "strict_mode default false lets multimasters proceed after agent failure"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. Scheduled/Semaphore runs use -e strict_mode=true.
+      Manual runs may legitimately want to continue past an isolated
+      failure (e.g., one already-broken agent).
+
+  - pattern: "PR comment from forks won't work with GITHUB_TOKEN"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Homelab single-user repo; no PRs from forks are expected.
+
+  - pattern: "Agent rescue could nuke a node that didn't need nuking on transient blip"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. Auto-rebuild is the documented recovery path: any failure
+      after drain leaves the node drained anyway, so wiping and rejoining is
+      the simplest reliable path back to service. Gating with a "drain
+      succeeded" marker adds complexity for marginal benefit in a homelab.
+
+  - pattern: "kubectl missing --request-timeout=10s"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      kubectl defaults are sufficient for a single-cluster homelab. Adding
+      timeouts to every kubectl call is noise.
+
+  - pattern: "Mixed DNS / ansible_host IP in inventory"
+    files:
+      - cluster/ansible/inventory.yaml
+    reason: >-
+      Intentional. cluster3/cluster4 hostnames don't resolve from shoebox;
+      ansible_host gives them explicit IPs. Other hosts resolve via DNS.
+
+  - pattern: "ansible_connection: local with become: true in test inventory"
+    files:
+      - cluster/ansible/tests/monkeyble/inventory.yml
+    reason: >-
+      CI runners have passwordless sudo. The Monkeyble tests need become
+      to exercise the playbook's task structure even though no real changes
+      are applied.
+
+  - pattern: "KUBECONFIG should be at play level not task level"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Task-level is intentional after prior review feedback. Play-level
+      affected pre_tasks too; per-task gives explicit control over which
+      kubectl calls use the failover endpoint.
+
+  - pattern: "pipefail in quorum check has no pipe"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. The quorum check has `echo "$output" | awk ...`, so
+      pipefail is correctly applied to that pipeline.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
