@@ -27,7 +27,7 @@ fi
 
 if printf '%s' "$val" | LC_ALL=C grep -q '[[:space:]]'; then
   echo "ERROR: SEMAPHORE_ACCESS_KEY_ENCRYPTION contains whitespace" >&2
-  echo "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\n'" >&2
+  printf "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\\\n'\n" >&2
   exit 1
 fi
 
@@ -35,14 +35,14 @@ if printf '%s' "$val" | LC_ALL=C grep -q '[-_]'; then
   echo "ERROR: SEMAPHORE_ACCESS_KEY_ENCRYPTION contains URL-safe base64 chars (- or _)." >&2
   echo "Semaphore requires STANDARD base64. Causes the 'illegal base64 data at input byte N'" >&2
   echo "error when adding keys in the UI." >&2
-  echo "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\n'" >&2
+  printf "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\\\n'\n" >&2
   exit 1
 fi
 
 decoded_len=$(printf '%s' "$val" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
 if [ "$decoded_len" != "32" ]; then
   echo "ERROR: SEMAPHORE_ACCESS_KEY_ENCRYPTION must base64-decode to 32 bytes, got ${decoded_len}." >&2
-  echo "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\n'" >&2
+  printf "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\\\n'\n" >&2
   exit 1
 fi
 
