@@ -66,14 +66,20 @@ touch "${STATE_DIR}/rolling-upgrade-failed"
 # flag so the multimasters pre_task abort logic can be exercised.
 #
 # Disable monkeyble callback — this scenario tests Ansible logic, not task assertions.
-if env -u ANSIBLE_CALLBACKS_ENABLED ansible-playbook \
+scenario3_output=$(env -u ANSIBLE_CALLBACKS_ENABLED ansible-playbook \
     -i "$INVENTORY" \
     --limit multimasters \
     -e "strict_mode=true" \
     -e "vault_file=${TEST_SECRETS}" \
     -e "state_dir=${STATE_DIR}" \
-    rolling-upgrade.yaml 2>&1; then
+    rolling-upgrade.yaml 2>&1) && {
   echo "  ERROR: expected playbook to abort but it succeeded"
+  exit 1
+}
+
+if ! echo "$scenario3_output" | grep -q "previous play left nodes in a failed state"; then
+  echo "  ERROR: playbook failed but not with the expected cross-play abort message"
+  echo "$scenario3_output"
   exit 1
 fi
 
@@ -82,7 +88,7 @@ if [[ ! -f "${STATE_DIR}/rolling-upgrade-failed" ]]; then
   exit 1
 fi
 
-echo "  PASSED: cross_play_abort (play aborted, failure flag persists)"
+echo "  PASSED: cross_play_abort (play aborted with expected message, failure flag persists)"
 
 echo ""
 echo "All Monkeyble scenarios passed."
