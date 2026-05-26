@@ -195,7 +195,7 @@
             mode: '0644'
           delegate_to: localhost
           become: false
-          failed_when: false
+          failed_when: false  # must not abort rescue — Pushover alert tasks below must still run
 
         - name: Attempt automatic node rebuild
           block:
@@ -462,7 +462,7 @@
             mode: '0644'
           delegate_to: localhost
           become: false
-          failed_when: false
+          failed_when: false  # must not abort rescue — Pushover alert tasks below must still run
 
         - name: Alert CRITICAL — control-plane node upgrade failed
           ansible.builtin.uri:
@@ -670,7 +670,7 @@
             mode: '0644'
           delegate_to: localhost
           become: false
-          failed_when: false
+          failed_when: false  # must not abort rescue — Pushover alert tasks below must still run
 
         - name: Alert CRITICAL — control-plane node upgrade failed
           ansible.builtin.uri:
