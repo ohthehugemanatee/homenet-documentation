@@ -102,8 +102,9 @@ Two kubeconfigs are required on shoebox:
 | `/etc/ansible/kubeconfig-cluster3` | `https://10.10.10.111:6443` | masters play |
 
 The masters play sets `environment: KUBECONFIG: /etc/ansible/kubeconfig-cluster3`
-at play level. When cluster1 is drained and rebooting, kubectl reaches the cluster
-via cluster3's API server instead. The primary kubeconfig is never mutated.
+on each kubectl task (pre_tasks + post-reboot). When cluster1 is drained and
+rebooting, kubectl reaches the cluster via cluster3's API server instead.
+The primary kubeconfig is never mutated.
 
 Both files must be group-readable by gid 1001 (Semaphore container):
 

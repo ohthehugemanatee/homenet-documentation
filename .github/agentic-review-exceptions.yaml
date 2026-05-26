@@ -295,6 +295,75 @@ exceptions:
       False premise. The quorum check has `echo "$output" | awk ...`, so
       pipefail is correctly applied to that pipeline.
 
+  - pattern: "Molecule privileged: true + SYS_ADMIN is redundant/unsafe"
+    files:
+      - cluster/ansible/molecule/default/molecule.yml
+    reason: >-
+      Required to run systemd inside the test container. The
+      geerlingguy/docker-ubuntu2204-ansible upstream documentation prescribes
+      this combination. CI runners are ephemeral; the trade-off is accepted.
+
+  - pattern: "multimasters pre_task missing cluster3 KUBECONFIG"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. cluster1 is always up during the multimasters play
+      (cluster1 is the first-master, drained last in the masters play).
+      The default kubeconfig pointing to cluster1 is always reachable.
+
+  - pattern: "tail -150 truncation in PR comment"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Acceptable for a homelab CI. The full log remains in the workflow run
+      output; the tail is a convenience. Grepping for FAILED!/fatal: would
+      miss preceding context.
+
+  - pattern: "Add concurrency group to test-ansible.yaml"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Nice-to-have. Wasted CI minutes are not a concern on a homelab repo.
+
+  - pattern: "Pre-rescue kubectl get pv snapshot for audit"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Same family as the "no audit trail / node label" dismissal. The
+      Pushover WARNING is the audit signal; the recovery doc names the
+      data-loss surface explicitly.
+
+  - pattern: "k3s reinstall task should have retries"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      A transient network blip during recovery legitimately escalates to
+      CRITICAL — operator should investigate. Hiding failures behind
+      automatic retries defeats the alert.
+
+  - pattern: "Molecule only tests cluster_role: agent"
+    files:
+      - cluster/ansible/molecule/default/molecule.yml
+    reason: >-
+      Single platform is sufficient for verifying idempotence and
+      non-destructive task structure. Multi-platform matrices add CI time
+      for marginal coverage in a homelab.
+
+  - pattern: "unsafe_writes ansible_virtualization_type covers docker only"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is intentionally not modified by this PR. The docker
+      guard is sufficient for the actual test matrix.
+
+  - pattern: "Pre-flight checklist doesn't connect StatefulSet skip to data loss"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      The data-loss surface is documented in the recovery section. The
+      pre-flight is a checklist, not a teaching document — operators read
+      both.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-

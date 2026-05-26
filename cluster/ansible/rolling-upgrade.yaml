@@ -224,6 +224,7 @@
                 K3S_URL: "{{ k3s_api_server_url }}"
                 K3S_TOKEN: "{{ k3s_token }}"
               changed_when: true
+              no_log: true
 
             - name: Wait for k3s-agent to become active after rebuild  # noqa: command-instead-of-module
               ansible.builtin.command: systemctl is-active k3s-agent

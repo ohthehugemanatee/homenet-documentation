@@ -8,8 +8,10 @@
 | `node-state.yaml` | Idempotent state enforcement — packages, config, services | Yes |
 | `rolling-upgrade.yaml` | Rolling OS dist-upgrade with drain/uncordon | Yes |
 
-Note that to keep CI happy, the encrypted vault file is not loaded by default. In 
-real-world runs you have to add `-e @group_vars/vault.yaml` to every run.
+Note that to keep CI happy, the encrypted vault file is not loaded by default. In
+real-world runs add `-e vault_file=group_vars/vault.yaml` to every run — the
+playbooks load it via `vars_files: ["{{ vault_file }}"]` so the path is passed
+as a variable, not appended with `@`.
 
 ---
 
