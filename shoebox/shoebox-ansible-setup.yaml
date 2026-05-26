@@ -211,8 +211,8 @@
         path: "{{ state_dir }}"
         state: directory
         owner: ansible
-        group: ansible
-        mode: '0755'
+        group: "1001"
+        mode: '0775'
 
     - name: Create log dir
       ansible.builtin.file:

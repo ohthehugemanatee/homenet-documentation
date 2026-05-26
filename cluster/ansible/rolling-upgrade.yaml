@@ -312,9 +312,7 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    # run_once fires once per play (first host only). Per-node recovery guarantee
-    # is provided by the block's kubectl wait and NRestarts checks after each upgrade.
-    - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
+    - name: Verify all control-plane nodes Ready before draining
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
@@ -334,7 +332,6 @@
       delegate_to: localhost
       become: false
       changed_when: false
-      run_once: true
 
     - name: Verify k8s node name matches ansible_hostname
       ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
@@ -522,9 +519,7 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    # run_once fires once per play (first host only). Per-node recovery guarantee
-    # is provided by the block's kubectl wait and NRestarts checks after each upgrade.
-    - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
+    - name: Verify all control-plane nodes Ready before draining
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
@@ -544,7 +539,6 @@
       delegate_to: localhost
       become: false
       changed_when: false
-      run_once: true
 
     - name: Verify k8s node name matches ansible_hostname
       ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
