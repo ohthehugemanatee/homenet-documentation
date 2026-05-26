@@ -257,9 +257,11 @@
     # Catch malformed SEMAPHORE_ACCESS_KEY_ENCRYPTION values before Semaphore
     # starts — a bad value here causes "illegal base64 data at input byte N"
     # when the operator tries to add a key in the Semaphore UI.
+    # script: transfers the local file to the target and runs it (so the path
+    # resolves on the operator's workstation, but execution happens on shoebox).
     - name: Validate SEMAPHORE_ACCESS_KEY_ENCRYPTION format
-      ansible.builtin.command:
-        cmd: bash {{ playbook_dir }}/scripts/validate-semaphore-key.sh
+      ansible.builtin.script:
+        cmd: scripts/validate-semaphore-key.sh
         stdin: "{{ semaphore_access_key_encryption }}"
       changed_when: false
       no_log: true
