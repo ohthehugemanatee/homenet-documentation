@@ -309,6 +309,7 @@
         owner: root
         group: root
         mode: '0644'
+      notify: Restart Semaphore
 
     - name: Install Semaphore Docker systemd service
       ansible.builtin.copy:
@@ -334,6 +335,7 @@
         owner: root
         group: root
         mode: '0644'
+      notify: Restart Semaphore
 
     - name: Enable and start Semaphore
       ansible.builtin.systemd:
@@ -341,3 +343,10 @@
         daemon_reload: true
         enabled: true
         state: started
+
+  handlers:
+    - name: Restart Semaphore
+      ansible.builtin.systemd:
+        name: semaphore.service
+        daemon_reload: true
+        state: restarted
