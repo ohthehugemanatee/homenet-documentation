@@ -8,8 +8,7 @@ Scheduled Ansible automation for the homenet k3s cluster, with alerting on failu
 
 ```
 shoebox (external, always-on NFS server)
-├── Semaphore (Docker)          ← web UI, manual triggers, run history
-├── ansible-node-state.timer   ← weekly node-state run; Pushover on failure
+├── Semaphore (Docker)          ← schedules + runs both playbooks; alerts on failure
 ├── kubectl + kubeconfigs       ← for rolling-upgrade.yaml delegate_to tasks
 ├── /var/log/ansible/           ← playbook logs, logrotated weekly (12 weeks)
 └── /var/lib/ansible-upgrade/  ← run state files (failure flag, maintenance flag)
@@ -41,16 +40,15 @@ external watchdog (RPi Zero script) can be added later without changing this des
 
 ## Scheduled jobs
 
-### node-state.yaml — weekly systemd timer
+### node-state.yaml — Semaphore weekly schedule
 
 Enforces idempotent node state (packages, kernel config, sysctl, NTP, iSCSI, k3s
 service health). No kubectl. Targets `all:!ubuntu`.
 
-Timer: `ansible-node-state.timer` fires Sunday 02:00, with 10-minute random jitter.
-If shoebox was off, runs within 1 hour of next boot (`Persistent=true`).
-
-Failure → Pushover WARNING via `/usr/local/bin/run-node-state.sh`.
-Log: `/var/log/ansible/node-state-YYYYMMDD-HHMMSS.log`
+Scheduled as a Semaphore task template with a cron expression (e.g. weekly
+`0 2 * * 0` for Sunday 02:00). Semaphore handles execution, run history, and
+log retention; configure project notifications (email/Slack/webhook) to surface
+failures, or point the notification email at a Pushover email-to-app address.
 
 ### rolling-upgrade.yaml — manual via Semaphore
 

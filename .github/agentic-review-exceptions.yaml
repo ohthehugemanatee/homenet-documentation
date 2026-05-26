@@ -141,8 +141,8 @@ exceptions:
     files:
       - cluster/ansible/node-state.yaml
     reason: >-
-      node-state.yaml is intentionally not modified by this PR — alerting is
-      via the shell wrapper run-node-state.sh on non-zero exit.
+      node-state.yaml is intentionally not modified by this PR. Failure
+      alerting is delivered via Semaphore's task-failure notifications.
 
   - pattern: "multipathd mask on non-existent unit creates dangling symlink"
     files:

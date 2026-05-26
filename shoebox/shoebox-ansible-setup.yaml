@@ -236,40 +236,9 @@
         group: root
         mode: '0644'
 
-    # ── node-state systemd timer ──────────────────────────────────────────────
-
-    - name: Install run-node-state.sh wrapper
-      ansible.builtin.copy:
-        src: scripts/run-node-state.sh
-        dest: /usr/local/bin/run-node-state.sh
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Install systemd service unit
-      ansible.builtin.copy:
-        src: systemd/ansible-node-state.service
-        dest: /etc/systemd/system/ansible-node-state.service
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Install systemd timer unit
-      ansible.builtin.copy:
-        src: systemd/ansible-node-state.timer
-        dest: /etc/systemd/system/ansible-node-state.timer
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Enable and start node-state timer
-      ansible.builtin.systemd:
-        name: ansible-node-state.timer
-        daemon_reload: true
-        enabled: true
-        state: started
-
     # ── Semaphore Docker ──────────────────────────────────────────────────────
+    # node-state.yaml is scheduled and run by Semaphore (not a separate systemd
+    # timer) — Semaphore is the single execution and scheduling layer.
 
     - name: Ensure Docker is installed
       ansible.builtin.apt:
