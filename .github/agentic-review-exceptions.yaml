@@ -419,6 +419,60 @@ exceptions:
       matches what apt just installed, so the matching package should
       exist; if not, apt's own error is clear enough.
 
+  - pattern: "k3s-agent.yaml has vars_files but no vault consumption"
+    files:
+      - cluster/ansible/k3s-agent.yaml
+    reason: >-
+      False premise. k3s-agent.yaml consumes k3s_token from vault at three
+      separate task locations (initial install + retries) — see lines
+      referencing K3S_TOKEN.
+
+  - pattern: "ansible_kernel stale after k3s reinstall in rescue"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      k3s reinstall doesn't change the kernel; the rescue path doesn't
+      consume ansible_kernel after reinstall. The setup task ran post-reboot
+      before the rescue fired.
+
+  - pattern: "pre-upgrade.txt survives k3s-agent-uninstall.sh"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. The forensic snapshot is in /var/lib/ansible-upgrade/
+      which the k3s uninstall script does not touch — that's the point of
+      preserving it across auto-rebuild.
+
+  - pattern: "vars_files + -e override timing in older Ansible versions"
+    files:
+      - cluster/ansible/group_vars/all.yaml
+    reason: >-
+      Acknowledged in requirements.txt — minimum Ansible 9.0 handles this
+      pattern correctly.
+
+  - pattern: "NFS option casing Soft=True vs soft=True"
+    files:
+      - cluster/ansible/molecule/default/verify.yml
+    reason: >-
+      The Molecule test asserts what node-state.yaml writes; both are
+      controlled by us. Upstream NFS casing changes would not affect
+      Ansible-managed config.
+
+  - pattern: "Recovery doc should mention bind mount must be rw"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Docker bind mounts are read-write by default; the docker-compose
+      entry shows no :ro suffix. No explicit note needed.
+
+  - pattern: "chown commands in doc should be in bootstrap playbook"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      shoebox-ansible-setup.yaml does enforce these permissions via the
+      file module with group: "1001". The doc shows the equivalent shell
+      commands for operators verifying state by hand.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
