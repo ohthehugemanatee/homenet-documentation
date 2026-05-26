@@ -516,6 +516,8 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
+    # Use cluster3 kubeconfig for all kubectl pre-tasks — these must work even on
+    # --limit masters re-runs when cluster1's API is already down.
     - name: Verify all control-plane nodes Ready before draining
       ansible.builtin.shell:
         cmd: |
@@ -536,12 +538,16 @@
       delegate_to: localhost
       become: false
       changed_when: false
+      environment:
+        KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
     - name: Verify k8s node name matches ansible_hostname
       ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
       delegate_to: localhost
       become: false
       changed_when: false
+      environment:
+        KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
   tasks:
     - name: Upgrade node
