@@ -512,6 +512,62 @@ exceptions:
       with explicit mode. Manual rm + recreate is not a documented path;
       operators rm only, the playbook recreates with correct perms.
 
+  - pattern: "vault.yaml committed but .gitignore not shown for vault-password file"
+    files:
+      - cluster/ansible/group_vars/vault.yaml
+    reason: >-
+      False premise. /etc/ansible/vault-password lives on the shoebox
+      host filesystem, never in the repo. .gitignore is unnecessary for
+      a path outside the repository.
+
+  - pattern: "Quorum check fails after first multimaster drained"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. With serial: 1, host 2's pre_tasks run AFTER host 1
+      has fully completed (including uncordon → Ready). The quorum check
+      sees host 1 as Ready when it runs for host 2.
+
+  - pattern: "Maintenance flag won't set if first host is unreachable"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Edge case acceptable for homelab. If the first host is unreachable
+      the playbook has bigger problems; cleanup play still clears the
+      maintenance flag at the end regardless.
+
+  - pattern: "Pre/post ansible_kernel sanity check after reboot"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Edge case (GRUB pinned to old kernel) too rare to justify the
+      added complexity in a homelab playbook.
+
+  - pattern: "rename-node.yaml stale placeholders in .ansible-lint"
+    files:
+      - .ansible-lint
+    reason: >-
+      False premise. rename-node.yaml exists at
+      cluster/ansible/rename-node.yaml and the lint placeholders satisfy
+      its required extra-vars.
+
+  - pattern: "lint workflow doesn't install from requirements.txt"
+    files:
+      - .github/workflows/lint.yaml
+    reason: >-
+      Cosmetic. lint and test workflows install different sets (lint:
+      ansible+ansible-lint only; test: full Molecule + Monkeyble).
+      Unifying would pull unnecessary deps into lint.
+
+  - pattern: "Semaphore Key Store step doesn't connect to vault-password-file"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Acceptable doc layering. Step 4 (Key Store entry) is preparation;
+      task templates currently consume the bind-mounted file directly.
+      An operator wanting Semaphore-managed vault password switches the
+      task template to reference the Key Store key instead.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
