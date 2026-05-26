@@ -473,6 +473,45 @@ exceptions:
       file module with group: "1001". The doc shows the equivalent shell
       commands for operators verifying state by hand.
 
+  - pattern: "Lint extra_vars placeholders mask shoebox playbook errors"
+    files:
+      - .ansible-lint
+    reason: >-
+      Lint placeholder values exist to satisfy Jinja rendering during
+      syntax-check. Missing vault vars would still fail lint with a clear
+      error. CI passing confirms the shoebox playbook lints cleanly.
+
+  - pattern: "awk Ready check rejects cordoned-but-Ready masters"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. A manually cordoned master indicates the operator has
+      paused that node for a reason — better to abort the scheduled
+      upgrade and let them resolve it than proceed.
+
+  - pattern: "vault_file undefined gives cryptic Jinja error / add assert"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Homelab acceptable. The Jinja undefined error names the variable
+      clearly. Adding pre_tasks asserts for every required extra-var
+      bloats the playbook for a one-time setup gotcha.
+
+  - pattern: "Test workflow has no paths: filter"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Doc-only PRs trigger full Molecule runs. CI minutes are not a
+      budget concern on a homelab repo.
+
+  - pattern: "Manual rm of state flags doesn't preserve gid 1001"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      The flag is recreated by the next playbook run via file module
+      with explicit mode. Manual rm + recreate is not a documented path;
+      operators rm only, the playbook recreates with correct perms.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-

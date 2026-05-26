@@ -45,13 +45,14 @@
     k3s_svc: k3s-agent
 
   pre_tasks:
-    # Match shoebox-ansible-setup.yaml: gid 1001 (Semaphore container) needs
-    # write access via group, so Semaphore-triggered runs can touch the flag.
+    # mode 0775 keeps group-write so Semaphore (gid 1001) can touch the flag.
+    # Group ownership is set by shoebox-ansible-setup.yaml (which runs as root);
+    # we don't set it here because the ansible user isn't a member of gid 1001
+    # and would hit chgrp permission errors without become.
     - name: Ensure upgrade state dir exists on controller
       ansible.builtin.file:
         path: "{{ state_dir }}"
         state: directory
-        group: "1001"
         mode: '0775'
       delegate_to: localhost
       become: false
