@@ -105,9 +105,7 @@
 
     - name: Check fstab has no active swap entries
       ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          grep -E '^[^#].*\sswap\s' /etc/fstab | wc -l || echo 0
+        cmd: grep -cE '^[^#].*\sswap\s' /etc/fstab || true
         executable: /bin/bash
       register: active_swap_lines
       changed_when: false
