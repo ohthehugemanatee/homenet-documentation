@@ -312,6 +312,8 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
+    # run_once with serial:1 fires once per batch (1 host per batch), so this runs
+    # before every drain — each node waits for the previous one to rejoin before proceeding.
     - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
       ansible.builtin.shell:
         cmd: |
@@ -515,6 +517,8 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
+    # run_once with serial:1 fires once per batch (1 host per batch), so this runs
+    # before every drain — each node waits for the previous one to rejoin before proceeding.
     - name: Verify all control-plane nodes Ready before draining  # noqa: run-once[task]
       ansible.builtin.shell:
         cmd: |

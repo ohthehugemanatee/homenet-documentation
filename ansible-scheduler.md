@@ -172,6 +172,10 @@ Manual recovery required.
 ssh <node>
 journalctl -u k3s[-agent] -n 100
 systemctl status k3s[-agent]
+# NOTE: if the CRITICAL alert says "rebuild failed", k3s-agent-uninstall.sh already ran —
+# the k3s service is gone, so journalctl shows nothing useful. Check instead:
+#   /var/log/apt/history.log   (what the dist-upgrade changed)
+#   /var/lib/ansible-upgrade/pre-upgrade.txt   (package snapshot before upgrade)
 
 # 2. Fix the underlying issue manually
 
