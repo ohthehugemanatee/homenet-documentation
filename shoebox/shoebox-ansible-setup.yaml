@@ -14,7 +14,7 @@
 #   pushover_app_token: <Pushover application token>
 #   pushover_user_key:  <Pushover user key>
 #   semaphore_admin_password:        <Semaphore admin password>
-#   semaphore_access_key_encryption: <32 char output from `head -c32 /dev/urandom | base64` >
+#   semaphore_access_key_encryption: <output of: openssl rand -base64 32 | tr -d '\n'>
 #   vault_password: the same password supplied to --ask-vault-pass
 #
 # After running: SSH into shoebox as the ansible user and verify:

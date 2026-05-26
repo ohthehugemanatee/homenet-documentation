@@ -237,7 +237,7 @@ One-time bootstrap, run from the operator's workstation.
 | `pushover_app_token` | **Yes** | vault | Pushover application token |
 | `pushover_user_key` | **Yes** | vault | Pushover user key |
 | `semaphore_admin_password` | **Yes** | vault | Semaphore admin login password |
-| `semaphore_access_key_encryption` | **Yes** | vault | 32-character random string for Semaphore secret-at-rest encryption |
+| `semaphore_access_key_encryption` | **Yes** | vault | Standard base64 AES key for Semaphore secret-at-rest encryption. Generate with: `openssl rand -base64 32 \| tr -d '\n'`. Must be standard base64 (not URL-safe); newlines cause "illegal base64" errors when adding keys in the UI. |
 
 All five must be set up before running the playbook. Add the four vault entries to `cluster/ansible/group_vars/vault.yaml` (encrypt with `ansible-vault encrypt`); the `vault_password` is supplied interactively each run.
 
@@ -295,12 +295,12 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 2. Apply the ingress manifest: `kubectl apply -f cluster/ingress-only/semaphore.yaml`
 3. Open `http://semaphore.vert`
 4. **Key Store**: add Ansible Vault password as "LoginPassword" key named `vault`
-5. **Repository**: point to `/repo` (bind-mounted from `/home/user/homenet-documentation`)
-6. **Inventory**: `/repo/cluster/ansible/inventory.yaml`
+5. **Repository**: URL `https://github.com/ohthehugemanatee/homenet-documentation` — public repo, HTTPS, no auth needed. Semaphore clones it for each run; no bind-mount required.
+6. **Inventory**: `cluster/ansible/inventory.yaml` (relative to repo root)
 7. **Environment**: set `KUBECONFIG=/home/semaphore/.kube/config`
-8. **Task templates**:
-   - node-state: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password node-state.yaml`
-   - rolling-upgrade: `ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password -e vault_file=group_vars/vault.yaml -e strict_mode=true rolling-upgrade.yaml`
+8. **Task templates** (playbook path relative to repo root; vault_file relative to playbook dir):
+   - node-state: `ansible-playbook -i cluster/ansible/inventory.yaml --vault-password-file /etc/ansible/vault-password cluster/ansible/node-state.yaml`
+   - rolling-upgrade: `ansible-playbook -i cluster/ansible/inventory.yaml --vault-password-file /etc/ansible/vault-password -e vault_file=group_vars/vault.yaml -e strict_mode=true cluster/ansible/rolling-upgrade.yaml`
 
 ---
 
