@@ -71,6 +71,12 @@
       become: false
       run_once: true
 
+    - name: Verify k8s node name matches ansible_hostname
+      ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
   tasks:
     - name: Upgrade node
       block:
@@ -82,12 +88,6 @@
         - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: "Starting upgrade of {{ inventory_hostname }} ({{ os_version.stdout }})"
-
-        - name: Verify k8s node name matches ansible_hostname
-          ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
-          delegate_to: localhost
-          become: false
-          changed_when: false
 
         - name: Cordon node before drain
           ansible.builtin.command: kubectl cordon {{ ansible_hostname }}
@@ -328,6 +328,12 @@
       changed_when: false
       run_once: true
 
+    - name: Verify k8s node name matches ansible_hostname
+      ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
   tasks:
     - name: Upgrade node
       block:
@@ -339,12 +345,6 @@
         - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: "Starting upgrade of multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
-
-        - name: Verify k8s node name matches ansible_hostname
-          ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
-          delegate_to: localhost
-          become: false
-          changed_when: false
 
         - name: Cordon node before drain
           ansible.builtin.command: kubectl cordon {{ ansible_hostname }}
@@ -531,6 +531,12 @@
       changed_when: false
       run_once: true
 
+    - name: Verify k8s node name matches ansible_hostname
+      ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
   tasks:
     - name: Upgrade node
       block:
@@ -545,12 +551,6 @@
               Starting upgrade of first-master {{ inventory_hostname }} ({{ os_version.stdout }}).
               Ensure kubectl is configured to reach the cluster via a VIP or
               another server in case this node's API server is briefly unavailable.
-
-        - name: Verify k8s node name matches ansible_hostname
-          ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
-          delegate_to: localhost
-          become: false
-          changed_when: false
 
         - name: Cordon node before drain
           ansible.builtin.command: kubectl cordon {{ ansible_hostname }}
