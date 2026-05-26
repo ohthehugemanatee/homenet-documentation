@@ -54,6 +54,11 @@
       become: false
       run_once: true
 
+    # Cleared here (agents = first play) so each full playbook run starts fresh.
+    # A re-run with --limit multimasters or --limit masters skips this clear, so
+    # the failure flag from a prior run still aborts subsequent plays. Operators
+    # re-running just multimasters/masters after a partial failure must rm the
+    # flag manually — see recovery section of ansible-scheduler.md.
     - name: Clear stale failure state from previous run
       ansible.builtin.file:
         path: "{{ state_dir }}/rolling-upgrade-failed"
