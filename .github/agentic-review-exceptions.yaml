@@ -364,6 +364,61 @@ exceptions:
       pre-flight is a checklist, not a teaching document — operators read
       both.
 
+  - pattern: "group: \"1001\" as quoted string vs integer"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+      - shoebox/shoebox-ansible-setup.yaml
+    reason: >-
+      Both quoted and unquoted forms are accepted by the Ansible file
+      module. Quoted is used consistently across this repo to keep numeric
+      GIDs from being mistaken for group names by readers.
+
+  - pattern: "verify.yml asserts absence of k3s — tautological"
+    files:
+      - cluster/ansible/molecule/default/verify.yml
+    reason: >-
+      Intentional. The test verifies that node-state.yaml runs cleanly
+      against a host without k3s installed (the realistic CI environment).
+      Successful playbook completion before the assert is the real check.
+
+  - pattern: "Semaphore LoginPassword wrong key type for vault password"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      LoginPassword is the documented Semaphore pattern for vault
+      passwords — only the password field is used, username is blank.
+
+  - pattern: "No actions/cache or docker pull caching in workflow"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Acceptable for a homelab. CI minutes are not a budget concern.
+
+  - pattern: "--limit masters skips maintenance flag set by agents pre_task"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      --limit masters is an operator re-run after a partial failure;
+      the operator already knows maintenance is in progress. Moving the
+      maintenance signal to a separate localhost play adds complexity
+      for a manual-recovery scenario.
+
+  - pattern: "k3s_token (vault) + k3s_api_server_url (all.yaml) mix in environment"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Standard Ansible pattern. Both must be defined for the rescue path
+      to work; no_log on the task prevents value leakage in the failure
+      output. No additional comment needed.
+
+  - pattern: "kernel-modules-extra hard-fails without helpful message"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is intentionally not modified by this PR. The kernel
+      matches what apt just installed, so the matching package should
+      exist; if not, apt's own error is clear enough.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
