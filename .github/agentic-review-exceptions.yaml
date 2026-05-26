@@ -568,6 +568,49 @@ exceptions:
       An operator wanting Semaphore-managed vault password switches the
       task template to reference the Key Store key instead.
 
+  - pattern: "Rebuilt node missing node-state.yaml configuration"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. k3s-agent-uninstall.sh only removes k3s state
+      (/var/lib/rancher/k3s/, k3s binary, k3s services). OS-level configs
+      from node-state.yaml (sysctl, /etc/hosts, NFS, journald, multipath,
+      modules-load) live in /etc/ and persist through k3s reinstall.
+
+  - pattern: "Pushover CRITICAL should fire before uninstall not after"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Current order is intentional. WARNING on rebuild success and
+      CRITICAL on rebuild failure matches the actual outcome semantics.
+      Sending CRITICAL pre-uninstall would alert on every recovery
+      attempt regardless of outcome.
+
+  - pattern: "rm rolling-upgrade-failed permissions block Semaphore uid 1001"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      False premise. Delete permission depends on the containing
+      directory, not the file. state_dir is mode 0775 gid 1001, so uid
+      1001 (Semaphore) can delete files inside it regardless of file
+      ownership.
+
+  - pattern: "Molecule output upload-artifact backup needed"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      tee streams output as it arrives; partial output is captured even
+      on crash. The PR-comment tail is the existing diagnostic path —
+      adding artifact uploads is incremental for marginal benefit.
+
+  - pattern: "StatefulSet scale-up timing per-node vs end of run"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Plex (pinned to nuc1) and Nextcloud (pinned via longhorn) live on
+      single specific nodes; scaling back up after that node alone is
+      correct and not wasteful for other nodes being drained.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
