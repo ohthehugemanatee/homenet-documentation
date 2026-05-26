@@ -178,8 +178,10 @@ systemctl status k3s[-agent]
 # 3. Uncordon (only after verifying node health)
 kubectl uncordon <node>
 
-# 4. Clear the failure flag on shoebox (not inside Semaphore container)
+# 4. Clear state flags on shoebox (not inside Semaphore container)
 rm /var/lib/ansible-upgrade/rolling-upgrade-failed
+# Also clear if maintenance-in-progress is stale (e.g. Semaphore was killed mid-run):
+rm -f /var/lib/ansible-upgrade/maintenance-in-progress
 
 # 5. Scale StatefulSets back up if needed
 kubectl scale statefulset plex --replicas=1

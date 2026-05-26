@@ -322,7 +322,7 @@
             -l node-role.kubernetes.io/control-plane \
             --no-headers | awk '$2 != "Ready" { c++ } END { print c+0 }')
           echo "$not_ready"
-          exit "$not_ready"
+          exit $((not_ready > 0 ? 1 : 0))
         executable: /bin/bash
       delegate_to: localhost
       become: false
@@ -525,7 +525,7 @@
             -l node-role.kubernetes.io/control-plane \
             --no-headers | awk '$2 != "Ready" { c++ } END { print c+0 }')
           echo "$not_ready"
-          exit "$not_ready"
+          exit $((not_ready > 0 ? 1 : 0))
         executable: /bin/bash
       delegate_to: localhost
       become: false

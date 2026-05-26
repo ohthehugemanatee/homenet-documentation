@@ -67,7 +67,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const output = fs.readFileSync('/tmp/molecule-output.txt', 'utf8');
+            const path = '/tmp/molecule-output.txt';
+            const output = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : '(no output — molecule may have crashed before writing output)';
             const lines = output.split('\n');
             const tail = lines.slice(-150).join('\n');
             await github.rest.issues.createComment({
