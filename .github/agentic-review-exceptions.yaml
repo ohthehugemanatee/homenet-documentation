@@ -611,6 +611,56 @@ exceptions:
       single specific nodes; scaling back up after that node alone is
       correct and not wasteful for other nodes being drained.
 
+  - pattern: "all.yaml header should explicitly forbid adding secrets"
+    files:
+      - cluster/ansible/group_vars/all.yaml
+    reason: >-
+      Current header already says "Non-secret cluster-wide defaults" and
+      points to vault.yaml. Adding "DO NOT ADD SECRETS HERE" is redundant
+      with the existing wording.
+
+  - pattern: "masters play strict_mode gate too permissive"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. strict_mode is the operator's explicit control surface
+      for fail-fast behavior. Scheduled runs use strict_mode=true;
+      manual debugging runs default to false because operators often
+      want to continue past a known prior failure during recovery.
+
+  - pattern: "kubectl wait could pass on stale Node object"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      After uninstall the Node's heartbeat stops; it goes NotReady before
+      the new k3s registers. The wait window is sufficient to require
+      the new k3s to bring the Node back to Ready.
+
+  - pattern: "k3s reinstall doesn't pin INSTALL_K3S_VERSION"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      k3s skew tolerance (1 minor version) covers the realistic gap
+      between cluster install time and rebuild time. Auto-detecting the
+      cluster version adds infrastructure complexity for marginal benefit
+      in a homelab; the rebuild is rare and any skew issues would be
+      caught by the post-reinstall kubectl wait.
+
+  - pattern: "vault_file test override path not in README"
+    files:
+      - cluster/ansible/README.md
+    reason: >-
+      The CI-relevant override is documented in rolling-upgrade.yaml's
+      header and Monkeyble run-tests.sh. The README targets operators,
+      not test contributors.
+
+  - pattern: "k3s_token rotation procedure not documented"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Scope creep. Rotation procedure is a follow-up doc, not a
+      blocker for the scheduler design.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-

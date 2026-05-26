@@ -147,8 +147,12 @@ On any task failure after drain, the rescue block:
 
 **Data loss surface**: `k3s-agent-uninstall.sh` removes `/var/lib/rancher/k3s/` on the node,
 which includes the local-path-provisioner storage root (`/var/lib/rancher/k3s/storage/`).
-Any PVCs backed by the node's local-path storage class are destroyed. Check which pods were
-scheduled on the node before the upgrade run and whether they used local-path PVCs.
+Any PVCs backed by the node's local-path storage class are destroyed. After a CRITICAL
+alert, enumerate what was lost on the affected node:
+```bash
+kubectl get pv -o wide | grep <node>            # local-path PVs that were on the node
+kubectl get pods -A --field-selector spec.nodeName=<node>  # pods that ran there
+```
 
 **Labels and taints**: the reinstalled node joins with default k3s labels only. Any custom
 labels or taints (e.g. `node-role=storage`, topology labels, Longhorn tags) must be
