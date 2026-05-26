@@ -231,7 +231,7 @@ One-time bootstrap, run from the operator's workstation.
 
 | Variable | Required | Source | Description |
 |---|---|---|---|
-| `vault_password` | **Yes** | vault | The Ansible vault password itself, written to `/etc/ansible/vault-password` on shoebox. |
+| `vault_password` | **Yes** | vault | The Ansible vault password itself, written to `/etc/ansible/vault-password` on shoebox (mode 0400, owner ansible). |
 | `pushover_app_token` | **Yes** | vault | Pushover application token |
 | `pushover_user_key` | **Yes** | vault | Pushover user key |
 | `semaphore_admin_password` | **Yes** | vault | Semaphore admin login password |
