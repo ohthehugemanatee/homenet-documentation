@@ -257,12 +257,23 @@
     # Catch malformed SEMAPHORE_ACCESS_KEY_ENCRYPTION values before Semaphore
     # starts — a bad value here causes "illegal base64 data at input byte N"
     # when the operator tries to add a key in the Semaphore UI.
-    # script: transfers the local file to the target and runs it (so the path
-    # resolves on the operator's workstation, but execution happens on shoebox).
     - name: Validate SEMAPHORE_ACCESS_KEY_ENCRYPTION format
-      ansible.builtin.script:
-        cmd: scripts/validate-semaphore-key.sh
-        stdin: "{{ semaphore_access_key_encryption }}"
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          val="{{ semaphore_access_key_encryption }}"
+          if [ -z "$val" ] || printf '%s' "$val" | LC_ALL=C grep -q '[[:space:]]'; then
+            echo "ERROR: value is empty or contains whitespace" >&2; exit 1
+          fi
+          if printf '%s' "$val" | LC_ALL=C grep -q '[-_]'; then
+            printf 'ERROR: URL-safe base64 chars (- or _) detected — Semaphore requires standard base64.\n' >&2
+            printf 'Regenerate with: openssl rand -base64 32 | tr -d newline\n' >&2; exit 1
+          fi
+          bytes=$(printf '%s' "$val" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
+          if [ "$bytes" != "32" ]; then
+            echo "ERROR: must base64-decode to exactly 32 bytes, got $bytes" >&2; exit 1
+          fi
+        executable: /bin/bash
       changed_when: false
       no_log: true
 
