@@ -45,11 +45,14 @@
     k3s_svc: k3s-agent
 
   pre_tasks:
+    # Match shoebox-ansible-setup.yaml: gid 1001 (Semaphore container) needs
+    # write access via group, so Semaphore-triggered runs can touch the flag.
     - name: Ensure upgrade state dir exists on controller
       ansible.builtin.file:
         path: "{{ state_dir }}"
         state: directory
-        mode: '0755'
+        group: "1001"
+        mode: '0775'
       delegate_to: localhost
       become: false
       run_once: true
