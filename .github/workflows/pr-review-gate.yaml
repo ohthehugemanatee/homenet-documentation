@@ -1,0 +1,35 @@
+name: AI Review Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: read
+  actions: read
+
+jobs:
+  gate:
+    name: AI review required
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if AI review has run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          RESULT=$(gh api "/repos/$REPO/actions/workflows/pr-review.yaml/runs" \
+            --jq "[.workflow_runs[] | select(
+              (.pull_requests | length > 0) and
+              (.pull_requests[].number == ($PR_NUMBER | tonumber)) and
+              .conclusion == \"success\"
+            )] | length")
+
+          if [ "${RESULT:-0}" -gt 0 ]; then
+            echo "AI Infrastructure Review has passed for PR #$PR_NUMBER."
+          else
+            echo "No passing AI Infrastructure Review found for PR #$PR_NUMBER."
+            echo "Trigger it via: Actions → AI Infrastructure Review → Run workflow (pr_number: $PR_NUMBER)"
+            exit 1
+          fi
