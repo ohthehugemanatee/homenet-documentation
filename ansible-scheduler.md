@@ -180,7 +180,9 @@ ssh <node>
 journalctl -u k3s[-agent] -n 100
 systemctl status k3s[-agent]
 # NOTE: if the CRITICAL alert says "rebuild failed", k3s-agent-uninstall.sh already ran —
-# the k3s service is gone, so journalctl shows nothing useful. Check instead:
+# the k3s service is gone, so journalctl shows nothing useful. The node is now a bare
+# OS with no k3s; re-run cluster/ansible/k3s-agent.yaml against it after fixing the
+# underlying issue. Check for diagnosis:
 #   /var/log/apt/history.log   (what the dist-upgrade changed)
 #   /var/lib/ansible-upgrade/pre-upgrade.txt   (package snapshot before upgrade)
 
@@ -305,6 +307,8 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 8. **Task templates** (playbook path relative to repo root; vault_file relative to playbook dir):
    - node-state: `ansible-playbook -i cluster/ansible/inventory.yaml --vault-password-file /etc/ansible/vault-password cluster/ansible/node-state.yaml`
    - rolling-upgrade: `ansible-playbook -i cluster/ansible/inventory.yaml --vault-password-file /etc/ansible/vault-password -e vault_file=group_vars/vault.yaml -e strict_mode=true cluster/ansible/rolling-upgrade.yaml`
+
+> All required bind mounts (vault-password, kubeconfigs, kubectl binary, SSH keys, state dirs) are configured in `shoebox/semaphore/docker-compose.yaml` and set up by the bootstrap playbook.
 
 ---
 

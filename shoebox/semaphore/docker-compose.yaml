@@ -4,12 +4,18 @@
 # by gid 1001 on the host. See shoebox/shoebox-ansible-setup.yaml for setup.
 #
 # Access: http://semaphore.vert (via cluster ingress → cluster/ingress-only/semaphore.yaml)
+#
+# DNS NOTE: Docker replaces 127.0.0.53 (systemd-resolved stub) with 8.8.8.8, which
+# cannot resolve homelab hostnames. Set dns: to your actual LAN DNS server IP.
+# Find it with: resolvectl status | grep 'DNS Servers'
 
 services:
   semaphore:
     image: semaphoreui/semaphore:v2.10.22
     ports:
       - "3000:3000"
+    dns:
+      - 10.10.10.1  # replace with your LAN DNS server (Pi-hole, router, etc.)
     volumes:
       # Semaphore database, task history. Container writes the bolt DB to
       # /var/lib/semaphore — confirmed via runtime logs. The container's
