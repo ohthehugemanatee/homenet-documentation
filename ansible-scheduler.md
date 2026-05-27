@@ -111,6 +111,11 @@ chown ansible:1001 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
 chmod 640 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
 ```
 
+The Semaphore container runs as `uid=1001 gid=0` by default. Docker-compose adds
+gid 1001 as a supplementary group via `group_add: ["1001"]` so the process can
+read these files. gid 1001 has no name on shoebox — that's fine, the numeric gid
+is what matters.
+
 ---
 
 ## State files on shoebox

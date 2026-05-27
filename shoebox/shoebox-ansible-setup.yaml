@@ -133,13 +133,19 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Set ownership on .ssh
+    # Set group ownership to gid 1001 so the Semaphore container (uid 1001 with
+    # supplementary gid 1001 via group_add in docker-compose) can enter both dirs.
+    # gid 1001 has no name on the host — that's fine, numeric gid is sufficient.
+    - name: Set ownership on .ssh and .kube for Semaphore container (gid 1001)
       ansible.builtin.file:
-        path: "{{ ansible_user_home }}/.ssh"
+        path: "{{ item }}"
         owner: ansible
-        group: "1001"  # Semaphore container uid
+        group: "1001"
         mode: '0750'
         recurse: false
+      loop:
+        - "{{ ansible_user_home }}/.ssh"
+        - "{{ ansible_user_home }}/.kube"
 
     - name: Set permissions on SSH files for Semaphore container (gid 1001)
       ansible.builtin.file:
