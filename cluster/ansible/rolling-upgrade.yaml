@@ -5,7 +5,7 @@
 # no packages were upgraded.
 #
 # Prerequisites:
-#   - kubectl configured on localhost pointing at the cluster
+#   - kubernetes.core collection installed; kubernetes Python library available
 #   - ansible-playbook run from a machine with kubectl access
 #
 # Usage:
@@ -81,9 +81,13 @@
       run_once: true
 
     - name: Verify k8s node name matches ansible_hostname
-      ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
+      kubernetes.core.k8s_info:
+        kind: Node
+        name: "{{ ansible_hostname }}"
       delegate_to: localhost
       become: false
+      register: node_check
+      failed_when: node_check.resources | length == 0
       changed_when: false
 
   tasks:
@@ -99,21 +103,23 @@
             msg: "Starting upgrade of {{ inventory_hostname }} ({{ os_version.stdout }})"
 
         - name: Cordon node before drain
-          ansible.builtin.command: kubectl cordon {{ ansible_hostname }}
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: cordon
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Drain node
-          ansible.builtin.command: >
-            kubectl drain {{ ansible_hostname }}
-            --ignore-daemonsets
-            --delete-emptydir-data
-            --grace-period=30
-            --timeout=300s
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: drain
+            ignore_daemonsets: true
+            delete_options:
+              deleteEmptyDirData: true
+            grace_period: 30
+            drain_timeout: 300
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
@@ -167,16 +173,21 @@
           changed_when: false
 
         - name: Uncordon node
-          ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: uncordon
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Verify node is Ready
-          ansible.builtin.command: >
-            kubectl wait node/{{ ansible_hostname }}
-            --for=condition=Ready
-            --timeout=120s
+          kubernetes.core.k8s_info:
+            kind: Node
+            name: "{{ ansible_hostname }}"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 120
           delegate_to: localhost
           become: false
           changed_when: false
@@ -236,18 +247,24 @@
               changed_when: false
 
             - name: Wait for node to rejoin cluster after rebuild
-              ansible.builtin.command: >
-                kubectl wait node/{{ ansible_hostname }}
-                --for=condition=Ready --timeout=180s
+              kubernetes.core.k8s_info:
+                kind: Node
+                name: "{{ ansible_hostname }}"
+                wait: true
+                wait_condition:
+                  type: Ready
+                  status: "True"
+                wait_timeout: 180
               delegate_to: localhost
               become: false
               changed_when: false
 
             - name: Uncordon node after successful rebuild
-              ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
+              kubernetes.core.k8s_drain:
+                name: "{{ ansible_hostname }}"
+                state: uncordon
               delegate_to: localhost
               become: false
-              changed_when: true
 
             - name: Clear failure flag — rebuild succeeded, safe to continue
               ansible.builtin.file:
@@ -323,31 +340,40 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    - name: Verify all control-plane nodes Ready before draining
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          # Match STATUS column (col 2) exactly — substring grep would treat
-          # 'Ready,SchedulingDisabled' (cordoned) as Ready.
-          output=$(kubectl get nodes \
-            -l node-role.kubernetes.io/control-plane \
-            --no-headers)
-          if [ -z "$output" ]; then
-            echo "ERROR: no nodes matched label node-role.kubernetes.io/control-plane"
-            exit 1
-          fi
-          not_ready=$(echo "$output" | awk '$2 != "Ready" { c++ } END { print c+0 }')
-          echo "$not_ready"
-          exit $((not_ready > 0 ? 1 : 0))
-        executable: /bin/bash
+    - name: Get control-plane node statuses for quorum check
+      kubernetes.core.k8s_info:
+        kind: Node
+        label_selectors:
+          - "node-role.kubernetes.io/control-plane"
       delegate_to: localhost
       become: false
+      register: cp_nodes
       changed_when: false
+      failed_when: cp_nodes.resources | length == 0
+
+    - name: Verify all control-plane nodes Ready before draining
+      ansible.builtin.fail:
+        msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting."
+      when: >-
+        (item.status.conditions |
+         selectattr('type', 'equalto', 'Ready') |
+         selectattr('status', 'equalto', 'True') |
+         list | length) == 0 or
+        (item.spec.taints | default([]) |
+         selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
+         list | length) > 0
+      loop: "{{ cp_nodes.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
 
     - name: Verify k8s node name matches ansible_hostname
-      ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
+      kubernetes.core.k8s_info:
+        kind: Node
+        name: "{{ ansible_hostname }}"
       delegate_to: localhost
       become: false
+      register: node_check
+      failed_when: node_check.resources | length == 0
       changed_when: false
 
   tasks:
@@ -363,21 +389,23 @@
             msg: "Starting upgrade of multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
 
         - name: Cordon node before drain
-          ansible.builtin.command: kubectl cordon {{ ansible_hostname }}
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: cordon
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Drain node
-          ansible.builtin.command: >
-            kubectl drain {{ ansible_hostname }}
-            --ignore-daemonsets
-            --delete-emptydir-data
-            --grace-period=60
-            --timeout=300s
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: drain
+            ignore_daemonsets: true
+            delete_options:
+              deleteEmptyDirData: true
+            grace_period: 60
+            drain_timeout: 300
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
@@ -431,25 +459,34 @@
           changed_when: false
 
         - name: Wait for node to rejoin cluster
-          ansible.builtin.command: >
-            kubectl wait node/{{ ansible_hostname }}
-            --for=condition=Ready
-            --timeout=180s
+          kubernetes.core.k8s_info:
+            kind: Node
+            name: "{{ ansible_hostname }}"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 180
           delegate_to: localhost
           become: false
           changed_when: false
 
         - name: Uncordon node
-          ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: uncordon
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Verify node is Ready after uncordon
-          ansible.builtin.command: >
-            kubectl wait node/{{ ansible_hostname }}
-            --for=condition=Ready
-            --timeout=60s
+          kubernetes.core.k8s_info:
+            kind: Node
+            name: "{{ ansible_hostname }}"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 60
           delegate_to: localhost
           become: false
           changed_when: false
@@ -528,38 +565,45 @@
         - strict_mode | default(false) | bool
         - prev_play_failed.stat.exists
 
-    # Use cluster3 kubeconfig for all kubectl pre-tasks — these must work even on
+    # Use cluster3 kubeconfig for all kubernetes.core pre-tasks — these must work even on
     # --limit masters re-runs when cluster1's API is already down.
-    - name: Verify all control-plane nodes Ready before draining
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          # Match STATUS column (col 2) exactly — substring grep would treat
-          # 'Ready,SchedulingDisabled' (cordoned) as Ready.
-          output=$(kubectl get nodes \
-            -l node-role.kubernetes.io/control-plane \
-            --no-headers)
-          if [ -z "$output" ]; then
-            echo "ERROR: no nodes matched label node-role.kubernetes.io/control-plane"
-            exit 1
-          fi
-          not_ready=$(echo "$output" | awk '$2 != "Ready" { c++ } END { print c+0 }')
-          echo "$not_ready"
-          exit $((not_ready > 0 ? 1 : 0))
-        executable: /bin/bash
+    - name: Get control-plane node statuses for quorum check
+      kubernetes.core.k8s_info:
+        kind: Node
+        label_selectors:
+          - "node-role.kubernetes.io/control-plane"
+        kubeconfig: /etc/ansible/kubeconfig-cluster3
       delegate_to: localhost
       become: false
+      register: cp_nodes
       changed_when: false
-      environment:
-        KUBECONFIG: /etc/ansible/kubeconfig-cluster3
+      failed_when: cp_nodes.resources | length == 0
+
+    - name: Verify all control-plane nodes Ready before draining
+      ansible.builtin.fail:
+        msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting."
+      when: >-
+        (item.status.conditions |
+         selectattr('type', 'equalto', 'Ready') |
+         selectattr('status', 'equalto', 'True') |
+         list | length) == 0 or
+        (item.spec.taints | default([]) |
+         selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
+         list | length) > 0
+      loop: "{{ cp_nodes.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
 
     - name: Verify k8s node name matches ansible_hostname
-      ansible.builtin.command: kubectl get node {{ ansible_hostname }} --no-headers
+      kubernetes.core.k8s_info:
+        kind: Node
+        name: "{{ ansible_hostname }}"
+        kubeconfig: /etc/ansible/kubeconfig-cluster3
       delegate_to: localhost
       become: false
+      register: node_check
+      failed_when: node_check.resources | length == 0
       changed_when: false
-      environment:
-        KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
   tasks:
     - name: Upgrade node
@@ -577,21 +621,23 @@
               another server in case this node's API server is briefly unavailable.
 
         - name: Cordon node before drain
-          ansible.builtin.command: kubectl cordon {{ ansible_hostname }}
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: cordon
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Drain node
-          ansible.builtin.command: >
-            kubectl drain {{ ansible_hostname }}
-            --ignore-daemonsets
-            --delete-emptydir-data
-            --grace-period=60
-            --timeout=300s
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: drain
+            ignore_daemonsets: true
+            delete_options:
+              deleteEmptyDirData: true
+            grace_period: 60
+            drain_timeout: 300
           delegate_to: localhost
           become: false
-          changed_when: true
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
@@ -644,36 +690,42 @@
           delay: 10
           changed_when: false
 
-        # cluster1 API is down during reboot — use cluster3 kubeconfig for kubectl tasks
+        # cluster1 API is down during reboot — use cluster3 kubeconfig for kubernetes.core tasks
         - name: Wait for node to rejoin cluster
-          ansible.builtin.command: >
-            kubectl wait node/{{ ansible_hostname }}
-            --for=condition=Ready
-            --timeout=300s
+          kubernetes.core.k8s_info:
+            kind: Node
+            name: "{{ ansible_hostname }}"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 300
+            kubeconfig: /etc/ansible/kubeconfig-cluster3
           delegate_to: localhost
           become: false
           changed_when: false
-          environment:
-            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Uncordon node
-          ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
+          kubernetes.core.k8s_drain:
+            name: "{{ ansible_hostname }}"
+            state: uncordon
+            kubeconfig: /etc/ansible/kubeconfig-cluster3
           delegate_to: localhost
           become: false
-          changed_when: true
-          environment:
-            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Verify node is Ready after uncordon
-          ansible.builtin.command: >
-            kubectl wait node/{{ ansible_hostname }}
-            --for=condition=Ready
-            --timeout=60s
+          kubernetes.core.k8s_info:
+            kind: Node
+            name: "{{ ansible_hostname }}"
+            wait: true
+            wait_condition:
+              type: Ready
+              status: "True"
+            wait_timeout: 60
+            kubeconfig: /etc/ansible/kubeconfig-cluster3
           delegate_to: localhost
           become: false
           changed_when: false
-          environment:
-            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
 
         - name: Verify k3s not in restart loop  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
@@ -681,18 +733,21 @@
           failed_when: post_restarts.stdout | int > 3
           changed_when: false
 
-        - name: Show cluster node status
-          ansible.builtin.command: kubectl get nodes -o wide
+        - name: Get final cluster node status
+          kubernetes.core.k8s_info:
+            kind: Node
+            kubeconfig: /etc/ansible/kubeconfig-cluster3
           delegate_to: localhost
           become: false
           changed_when: false
-          register: node_status
-          environment:
-            KUBECONFIG: /etc/ansible/kubeconfig-cluster3
+          register: final_nodes
 
         - name: Final cluster state
           ansible.builtin.debug:
-            msg: "{{ node_status.stdout_lines }}"
+            msg: "{{ item.metadata.name }}: {{ item.status.conditions | selectattr('type', 'equalto', 'Ready') | map(attribute='status') | first | default('Unknown') }}"
+          loop: "{{ final_nodes.resources }}"
+          loop_control:
+            label: "{{ item.metadata.name }}"
 
       rescue:
         - name: Record play failure for subsequent plays

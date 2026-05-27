@@ -23,6 +23,8 @@ services:
     dns:
       - 10.10.10.40  # Pi-hole
     volumes:
+      # Python packages required by ansible collections (kubernetes.core needs 'kubernetes')
+      - /opt/semaphore/requirements.txt:/etc/semaphore/requirements.txt:ro
       # Semaphore database, task history. Container writes the bolt DB to
       # /var/lib/semaphore — confirmed via runtime logs. The container's
       # /home/semaphore directory is its uid 1001 home and remains

@@ -75,9 +75,15 @@
           - install
           - ansible.posix
           - community.crypto
+          - kubernetes.core
           - -p
           - /usr/share/ansible/collections
       changed_when: false
+
+    - name: Install kubernetes Python library (required by kubernetes.core collection)
+      ansible.builtin.pip:
+        name: kubernetes
+        state: present
 
     # ── Ansible user ─────────────────────────────────────────────────────────
 
@@ -312,6 +318,14 @@
       ansible.builtin.copy:
         src: semaphore/docker-compose.yaml
         dest: /opt/semaphore/docker-compose.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Copy Python requirements for Semaphore container
+      ansible.builtin.copy:
+        src: semaphore/requirements.txt
+        dest: /opt/semaphore/requirements.txt
         owner: root
         group: root
         mode: '0644'
