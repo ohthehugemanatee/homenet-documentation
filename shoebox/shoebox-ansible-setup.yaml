@@ -2,13 +2,19 @@
 # One-time bootstrap for the Ansible runner on shoebox.
 # Run from the OPERATOR'S WORKSTATION (not from shoebox itself):
 #
-#   ansible-playbook -i shoebox, --ask-become-pass \
-#     -e @cluster/ansible/group_vars/vault.yaml
-#     --ask-vault-pass shoebox/shoebox-ansible-setup.yaml
+#   ansible-playbook \
+#     -i shoebox, -i cluster/ansible/inventory.yaml \
+#     --ask-become-pass --ask-vault-pass \
+#     -e @cluster/ansible/group_vars/vault.yaml \
+#     shoebox/shoebox-ansible-setup.yaml
 #
 # Prerequisites on the operator's workstation:
 #   - SSH access to shoebox as a user with sudo
+#   - SSH agent forwarding enabled (ForwardAgent yes, or ssh -A) so the
+#     operator's keys reach cluster nodes during play 2 key distribution
+#   - SSH access to each cluster node as its ansible_user (ubuntu / ohthehugemanatee)
 #   - Ansible vault password for the homenet vault
+#   - Collections: ansible-galaxy collection install community.crypto ansible.posix
 #
 # Vault variables required (add to cluster/ansible/group_vars/vault.yaml):
 #   pushover_app_token: <Pushover application token>
@@ -20,7 +26,7 @@
 # After running: SSH into shoebox as the ansible user and verify:
 #   ssh ansible@shoebox
 #
-#   # All cluster nodes respond (ansible-adhoc runner, same package as ansible-playbook):
+#   # All cluster nodes respond:
 #   ansible all -m ping \
 #     -i /home/user/homenet-documentation/cluster/ansible/inventory.yaml \
 #     --private-key ~/.ssh/id_ed25519
@@ -32,7 +38,7 @@
 #   kubectl get nodes --kubeconfig /etc/ansible/kubeconfig-cluster3
 
 - name: Bootstrap shoebox as Ansible runner
-  hosts: all
+  hosts: shoebox
   become: true
 
   vars:
@@ -59,6 +65,7 @@
           - collection
           - install
           - ansible.posix
+          - community.crypto
           - -p
           - /usr/share/ansible/collections
       changed_when: false
@@ -85,29 +92,18 @@
         - "{{ ansible_user_home }}/.kube"
 
     # ── SSH key ───────────────────────────────────────────────────────────────
-    # Generate a key pair if absent; distribute the public key to all nodes
-    # via your normal key management process (cloud-init, authorized_keys, etc.)
+    # Generate a key pair if absent. The public key is distributed to all
+    # cluster nodes by play 2 below using ansible.posix.authorized_key.
 
-    - name: Generate SSH key for ansible user (if absent)
-      ansible.builtin.command:
-        argv:
-          - ssh-keygen
-          - -t
-          - ed25519
-          - -f
-          - "{{ ansible_user_home }}/.ssh/id_ed25519"
-          - -N
-          - ""
-        creates: "{{ ansible_user_home }}/.ssh/id_ed25519"
-
-    - name: Read SSH public key
-      ansible.builtin.slurp:
-        src: "{{ ansible_user_home }}/.ssh/id_ed25519.pub"
-      register: ssh_pubkey
-
-    - name: Show public key (add to authorized_keys on all cluster nodes)
-      ansible.builtin.debug:
-        msg: "{{ ssh_pubkey.content | b64decode }}"
+    - name: Generate SSH keypair for ansible user
+      community.crypto.openssh_keypair:
+        path: "{{ ansible_user_home }}/.ssh/id_ed25519"
+        type: ed25519
+        owner: ansible
+        group: ansible
+        mode: '0600'
+        regenerate: never
+      register: ssh_keypair
 
     - name: Scan SSH host keys for cluster nodes
       ansible.builtin.command: ssh-keyscan -H {{ item }}
@@ -337,3 +333,17 @@
         daemon_reload: true
         enabled: true
         state: restarted
+
+# ── Play 2: distribute ansible@shoebox public key to cluster nodes ────────────
+# Runs with the operator's forwarded SSH keys (no become needed — writing to
+# the connecting user's own authorized_keys file).
+- name: Distribute ansible SSH public key to cluster nodes
+  hosts: all:!shoebox
+  gather_facts: false
+
+  tasks:
+    - name: Authorize ansible@shoebox SSH key on cluster node
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user | default('ubuntu') }}"
+        key: "{{ hostvars['shoebox'].ssh_keypair.public_key }}"
+        state: present
