@@ -15,7 +15,7 @@ services:
     ports:
       - "3000:3000"
     dns:
-      - 10.10.10.1  # replace with your LAN DNS server (Pi-hole, router, etc.)
+      - 10.10.10.40  # Pi-hole
     volumes:
       # Semaphore database, task history. Container writes the bolt DB to
       # /var/lib/semaphore — confirmed via runtime logs. The container's

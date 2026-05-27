@@ -154,7 +154,9 @@ kubectl get pods -A --field-selector spec.nodeName=<node>  # pods that ran there
 
 **Labels and taints**: the reinstalled node joins with default k3s labels only. Any custom
 labels or taints (e.g. `node-role=storage`, topology labels, Longhorn tags) must be
-re-applied manually before scaling workloads back onto the node.
+re-applied manually before scaling workloads back onto the node. Run
+`kubectl get node <node> --show-labels` on a healthy peer node to see which custom
+labels are expected, then `kubectl label node <node> <key>=<value>` for each.
 
 If rebuild also fails:
 - Sends Pushover **CRITICAL** (priority 2, repeat every 5 min for 1 hour)
@@ -196,6 +198,8 @@ kubectl uncordon <node>
 #    see shoebox/semaphore/docker-compose.yaml for the bind mount)
 #    Note: only needed when re-running with --limit (skipping the agents play).
 #    A full re-run clears rolling-upgrade-failed automatically in agents pre_tasks.
+#    Verify the bind mount is working: docker exec semaphore ls /var/lib/ansible-upgrade/
+#    should list the same files as: ls /var/lib/ansible-upgrade/ on the host.
 rm /var/lib/ansible-upgrade/rolling-upgrade-failed
 # Also clear if maintenance-in-progress is stale (e.g. Semaphore was killed mid-run):
 rm -f /var/lib/ansible-upgrade/maintenance-in-progress
@@ -316,12 +320,12 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 Configured in `cluster/helm/loki/values.yaml` under `prometheus.alertmanagerFiles`.
 
-**Replace placeholder credentials** before applying:
+**Replace placeholder credentials** before applying. **Do not commit the file with real credentials in place.**
 
 ```bash
-# Decrypt values.yaml, replace CHANGEME_ tokens, re-encrypt or template with vault
-# Then apply:
+# Decrypt values.yaml, replace CHANGEME_ tokens in a local working copy, then apply:
 helm upgrade -n loki loki grafana/loki-stack -f cluster/helm/loki/values.yaml
+# Re-encrypt or discard the working copy — do not git add the replaced file.
 ```
 
 Covers: NodeNotReady, pod OOMKill, CrashLoopBackOff, PVC near full, and any future

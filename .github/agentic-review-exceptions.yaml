@@ -673,6 +673,31 @@ exceptions:
       only ensures the directory exists (mode 0775) and does not override
       group ownership.
 
+  - pattern: "package_facts stale on rerun / second pass through play"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is a standalone play, not looped or dynamically
+      included. package_facts is gathered once per run; there is no
+      second pass through the multipath block within a single execution.
+
+  - pattern: "monkeyble job has no PR comment on failure"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Homelab acceptable. Monkeyble failures are visible in the workflow
+      run log. Adding a duplicate github-script comment block for a second
+      job is noise for a single-maintainer repo.
+
+  - pattern: "shoebox test script not visible in diff / forward reference"
+    files:
+      - .github/workflows/test-ansible.yaml
+      - shoebox/tests/test-validate-semaphore-key.sh
+    reason: >-
+      shoebox/tests/test-validate-semaphore-key.sh exists in the branch.
+      The reviewer cannot see it because it was added in an earlier commit
+      outside the current diff window, not because it is missing.
+
   - pattern: "exit PIPESTATUS[0] is redundant in molecule step with continue-on-error"
     files:
       - .github/workflows/test-ansible.yaml
