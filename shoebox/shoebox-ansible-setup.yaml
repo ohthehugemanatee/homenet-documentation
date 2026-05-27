@@ -2,8 +2,7 @@
 # One-time bootstrap for the Ansible runner on shoebox.
 # Run from the OPERATOR'S WORKSTATION (not from shoebox itself):
 #
-#   ansible-playbook \
-#     -i shoebox, -i cluster/ansible/inventory.yaml \
+#   ansible-playbook -i shoebox, \
 #     --ask-become-pass --ask-vault-pass \
 #     -e @cluster/ansible/group_vars/vault.yaml \
 #     shoebox/shoebox-ansible-setup.yaml
@@ -12,7 +11,7 @@
 #   - SSH access to shoebox as a user with sudo
 #   - SSH agent forwarding enabled (ForwardAgent yes, or ssh -A) so the
 #     operator's keys reach cluster nodes during play 2 key distribution
-#   - SSH access to each cluster node as its ansible_user (ubuntu / ohthehugemanatee)
+#   - SSH access to each cluster node as its ansible_user (see cluster_nodes var)
 #   - Ansible vault password for the homenet vault
 #   - Collections: ansible-galaxy collection install community.crypto ansible.posix
 #
@@ -48,6 +47,16 @@
     semaphore_env_file: /opt/semaphore/.env
     state_dir: /var/lib/ansible-upgrade
     log_dir: /var/log/ansible
+    # Cluster nodes for known_hosts pre-population and SSH key distribution (play 2).
+    # ansible_user must match what the cluster inventory uses for each host.
+    cluster_nodes:
+      - { host: cluster1, ansible_user: ubuntu }
+      - { host: cluster3, ansible_user: ubuntu }
+      - { host: cluster4, ansible_user: ubuntu }
+      - { host: nuc1,     ansible_user: ohthehugemanatee }
+      - { host: nuc2,     ansible_user: ubuntu }
+      - { host: fuji,     ansible_user: ohthehugemanatee }
+      - { host: celery,   ansible_user: ubuntu }
 
   tasks:
     # ── Ansible installation ──────────────────────────────────────────────────
@@ -106,28 +115,33 @@
       register: ssh_keypair
 
     - name: Scan SSH host keys for cluster nodes
-      ansible.builtin.command: ssh-keyscan -H {{ item }}
-      loop:
-        - cluster1
-        - cluster3
-        - cluster4
-        - nuc1
-        - nuc2
-        - fuji
-        - celery
+      ansible.builtin.command: ssh-keyscan -H {{ item.host }}
+      loop: "{{ cluster_nodes }}"
+      loop_control:
+        label: "{{ item.host }}"
       register: keyscan
       failed_when: false
       changed_when: false
 
     - name: Pre-populate known_hosts for reachable cluster nodes
       ansible.builtin.known_hosts:
-        name: "{{ item.item }}"
+        name: "{{ item.item.host }}"
         state: present
         key: "{{ item.stdout }}"
         path: "{{ ansible_user_home }}/.ssh/known_hosts"
       loop: "{{ keyscan.results | selectattr('rc', 'equalto', 0) | list }}"
       loop_control:
-        label: "{{ item.item }}"
+        label: "{{ item.item.host }}"
+
+    - name: Register cluster nodes for SSH key distribution
+      ansible.builtin.add_host:
+        name: "{{ item.host }}"
+        ansible_user: "{{ item.ansible_user }}"
+        groups: cluster_key_targets
+      loop: "{{ cluster_nodes }}"
+      loop_control:
+        label: "{{ item.host }}"
+      changed_when: false
 
     # Set group ownership to gid 1001 so the Semaphore container (uid 1001 with
     # supplementary gid 1001 via group_add in docker-compose) can enter both dirs.
@@ -338,7 +352,7 @@
 # Runs with the operator's forwarded SSH keys (no become needed — writing to
 # the connecting user's own authorized_keys file).
 - name: Distribute ansible SSH public key to cluster nodes
-  hosts: all:!shoebox
+  hosts: cluster_key_targets
   gather_facts: false
 
   tasks:
