@@ -84,6 +84,7 @@
       ansible.builtin.pip:
         name: kubernetes
         state: present
+        extra_args: "--break-system-packages"
 
     # ── Ansible user ─────────────────────────────────────────────────────────
 
