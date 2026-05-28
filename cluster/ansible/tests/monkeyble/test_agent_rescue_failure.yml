@@ -12,8 +12,9 @@ monkeyble_scenarios:
             hpe.monkeyble.monkeyble_module:
               consider_changed: false
               result_dict:
-                stdout: "testnode   Ready   agent   <none>"
-                rc: 0
+                resources:
+                  - metadata:
+                      name: testnode
 
       - task: "Cordon node before drain"
         mock:

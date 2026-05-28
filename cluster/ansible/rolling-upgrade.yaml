@@ -43,6 +43,7 @@
 
   vars:
     k3s_svc: k3s-agent
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
 
   pre_tasks:
     # mode 0775 keeps group-write so Semaphore (gid 1001) can touch the flag.
@@ -84,6 +85,7 @@
       kubernetes.core.k8s_info:
         kind: Node
         name: "{{ ansible_hostname }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
       delegate_to: localhost
       become: false
       register: node_check
@@ -106,6 +108,7 @@
           kubernetes.core.k8s_drain:
             name: "{{ ansible_hostname }}"
             state: cordon
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
 
@@ -118,6 +121,7 @@
               deleteEmptyDirData: true
             grace_period: 30
             drain_timeout: 300
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
 
@@ -176,6 +180,7 @@
           kubernetes.core.k8s_drain:
             name: "{{ ansible_hostname }}"
             state: uncordon
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
 
@@ -188,6 +193,7 @@
               type: Ready
               status: "True"
             wait_timeout: 120
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
           changed_when: false
@@ -255,6 +261,7 @@
                   type: Ready
                   status: "True"
                 wait_timeout: 180
+                kubeconfig: "{{ k8s_kubeconfig }}"
               delegate_to: localhost
               become: false
               changed_when: false
@@ -263,6 +270,7 @@
               kubernetes.core.k8s_drain:
                 name: "{{ ansible_hostname }}"
                 state: uncordon
+                kubeconfig: "{{ k8s_kubeconfig }}"
               delegate_to: localhost
               become: false
 
@@ -323,6 +331,7 @@
 
   vars:
     k3s_svc: k3s
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
 
   pre_tasks:
     - name: Check if a previous play failed
@@ -345,6 +354,7 @@
         kind: Node
         label_selectors:
           - "node-role.kubernetes.io/control-plane"
+        kubeconfig: "{{ k8s_kubeconfig }}"
       delegate_to: localhost
       become: false
       register: cp_nodes
@@ -370,6 +380,7 @@
       kubernetes.core.k8s_info:
         kind: Node
         name: "{{ ansible_hostname }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
       delegate_to: localhost
       become: false
       register: node_check
@@ -392,6 +403,7 @@
           kubernetes.core.k8s_drain:
             name: "{{ ansible_hostname }}"
             state: cordon
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
 
@@ -404,6 +416,7 @@
               deleteEmptyDirData: true
             grace_period: 60
             drain_timeout: 300
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
 
@@ -467,6 +480,7 @@
               type: Ready
               status: "True"
             wait_timeout: 180
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
           changed_when: false
@@ -475,6 +489,7 @@
           kubernetes.core.k8s_drain:
             name: "{{ ansible_hostname }}"
             state: uncordon
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
 
@@ -487,6 +502,7 @@
               type: Ready
               status: "True"
             wait_timeout: 60
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
           changed_when: false

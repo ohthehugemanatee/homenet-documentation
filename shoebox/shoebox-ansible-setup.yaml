@@ -50,13 +50,20 @@
     # Cluster nodes for known_hosts pre-population and SSH key distribution (play 2).
     # ansible_user must match what the cluster inventory uses for each host.
     cluster_nodes:
-      - { host: cluster1, ansible_user: ubuntu }
-      - { host: cluster3, ansible_user: ubuntu }
-      - { host: cluster4, ansible_user: ubuntu }
-      - { host: nuc1,     ansible_user: ohthehugemanatee }
-      - { host: nuc2,     ansible_user: ubuntu }
-      - { host: fuji,     ansible_user: ohthehugemanatee }
-      - { host: celery,   ansible_user: ubuntu }
+      - host: cluster1
+        ansible_user: ubuntu
+      - host: cluster3
+        ansible_user: ubuntu
+      - host: cluster4
+        ansible_user: ubuntu
+      - host: nuc1
+        ansible_user: ohthehugemanatee
+      - host: nuc2
+        ansible_user: ubuntu
+      - host: fuji
+        ansible_user: ohthehugemanatee
+      - host: celery
+        ansible_user: ubuntu
 
   tasks:
     # ── Ansible installation ──────────────────────────────────────────────────
