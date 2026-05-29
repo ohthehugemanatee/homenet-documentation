@@ -360,17 +360,22 @@
       changed_when: false
       failed_when: cp_nodes.resources | length == 0
 
-    - name: Verify all control-plane nodes Ready before draining
+    - name: Verify other control-plane nodes Ready before draining this one
       ansible.builtin.fail:
-        msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting."
-      when: >-
-        (item.status.conditions |
-         selectattr('type', 'equalto', 'Ready') |
-         selectattr('status', 'equalto', 'True') |
-         list | length) == 0 or
-        (item.spec.taints | default([]) |
-         selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
-         list | length) > 0
+        msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting to preserve etcd quorum."
+      when:
+        # Skip the node being upgraded — it may already be NotReady/cordoned,
+        # which is exactly why we're upgrading it. We only need the OTHER
+        # control-plane nodes healthy so etcd keeps quorum once this one drains.
+        - item.metadata.name != ansible_hostname
+        - >-
+          (item.status.conditions |
+           selectattr('type', 'equalto', 'Ready') |
+           selectattr('status', 'equalto', 'True') |
+           list | length) == 0 or
+          (item.spec.taints | default([]) |
+           selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
+           list | length) > 0
       loop: "{{ cp_nodes.resources }}"
       loop_control:
         label: "{{ item.metadata.name }}"
@@ -593,17 +598,22 @@
       changed_when: false
       failed_when: cp_nodes.resources | length == 0
 
-    - name: Verify all control-plane nodes Ready before draining
+    - name: Verify other control-plane nodes Ready before draining this one
       ansible.builtin.fail:
-        msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting."
-      when: >-
-        (item.status.conditions |
-         selectattr('type', 'equalto', 'Ready') |
-         selectattr('status', 'equalto', 'True') |
-         list | length) == 0 or
-        (item.spec.taints | default([]) |
-         selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
-         list | length) > 0
+        msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting to preserve etcd quorum."
+      when:
+        # Skip the node being upgraded — it may already be NotReady/cordoned,
+        # which is exactly why we're upgrading it. We only need the OTHER
+        # control-plane nodes healthy so etcd keeps quorum once this one drains.
+        - item.metadata.name != ansible_hostname
+        - >-
+          (item.status.conditions |
+           selectattr('type', 'equalto', 'Ready') |
+           selectattr('status', 'equalto', 'True') |
+           list | length) == 0 or
+          (item.spec.taints | default([]) |
+           selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
+           list | length) > 0
       loop: "{{ cp_nodes.resources }}"
       loop_control:
         label: "{{ item.metadata.name }}"
