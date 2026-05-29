@@ -112,18 +112,17 @@
           delegate_to: localhost
           become: false
 
-        - name: Drain node
-          kubernetes.core.k8s_drain:
-            name: "{{ ansible_hostname }}"
-            state: drain
-            ignore_daemonsets: true
-            delete_options:
-              deleteEmptyDirData: true
-            grace_period: 30
-            drain_timeout: 300
-            kubeconfig: "{{ k8s_kubeconfig }}"
+        - name: Drain node  # noqa: command-instead-of-module
+          ansible.builtin.command: >-
+            kubectl drain {{ ansible_hostname }}
+            --ignore-daemonsets
+            --delete-emptydir-data
+            --grace-period=30
+            --timeout=300s
+            --kubeconfig={{ k8s_kubeconfig }}
           delegate_to: localhost
           become: false
+          changed_when: true
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
@@ -407,18 +406,17 @@
           delegate_to: localhost
           become: false
 
-        - name: Drain node
-          kubernetes.core.k8s_drain:
-            name: "{{ ansible_hostname }}"
-            state: drain
-            ignore_daemonsets: true
-            delete_options:
-              deleteEmptyDirData: true
-            grace_period: 60
-            drain_timeout: 300
-            kubeconfig: "{{ k8s_kubeconfig }}"
+        - name: Drain node  # noqa: command-instead-of-module
+          ansible.builtin.command: >-
+            kubectl drain {{ ansible_hostname }}
+            --ignore-daemonsets
+            --delete-emptydir-data
+            --grace-period=60
+            --timeout=300s
+            --kubeconfig={{ k8s_kubeconfig }}
           delegate_to: localhost
           become: false
+          changed_when: true
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
@@ -640,20 +638,21 @@
           kubernetes.core.k8s_drain:
             name: "{{ ansible_hostname }}"
             state: cordon
+            kubeconfig: /etc/ansible/kubeconfig-cluster3
           delegate_to: localhost
           become: false
 
-        - name: Drain node
-          kubernetes.core.k8s_drain:
-            name: "{{ ansible_hostname }}"
-            state: drain
-            ignore_daemonsets: true
-            delete_options:
-              deleteEmptyDirData: true
-            grace_period: 60
-            drain_timeout: 300
+        - name: Drain node  # noqa: command-instead-of-module
+          ansible.builtin.command: >-
+            kubectl drain {{ ansible_hostname }}
+            --ignore-daemonsets
+            --delete-emptydir-data
+            --grace-period=60
+            --timeout=300s
+            --kubeconfig=/etc/ansible/kubeconfig-cluster3
           delegate_to: localhost
           become: false
+          changed_when: true
 
         - name: Ensure upgrade state dir exists on node
           ansible.builtin.file:
