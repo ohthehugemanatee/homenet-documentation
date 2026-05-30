@@ -187,8 +187,7 @@
 
     - name: Download kubectl static binary
       ansible.builtin.get_url:
-        url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/linux/\
-          {{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}/kubectl"
+        url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/linux/{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}/kubectl"
         dest: /usr/local/bin/kubectl
         mode: '0755'
         owner: root
