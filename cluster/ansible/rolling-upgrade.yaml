@@ -476,7 +476,7 @@
           poll: 30
           register: release_upgrade
 
-        - name: Refresh facts 
+        - name: Refresh facts
           ansible.builtin.setup:
 
         - name: Refresh inventory
