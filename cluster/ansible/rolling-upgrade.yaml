@@ -464,13 +464,30 @@
             regexp: '^Prompt='
             line: "Prompt=lts"
 
+        - name: Check the release version before upgrade
+          ansible.builtin.command: lsb_release -r
+          register: os_version_pre
+          ignore_errors: true
+
         - name: Upgrade Ubuntu with the do-release-upgrade tool
           ansible.builtin.shell: |
             do-release-upgrade -f DistUpgradeViewNonInteractive
-          async: 3600
-          poll: 0
-          become: true
+          async: 14400
+          poll: 30
           register: release_upgrade
+
+        - name: Refresh facts 
+          ansible.builtin.setup:
+
+        - name: Refresh inventory
+          ansible.builtin.meta: refresh_inventory
+
+        - name: Reset ssh connection
+          ansible.builtin.meta: reset_connection
+
+        - name: Check the release version post-upgrade
+          ansible.builtin.command: lsb_release -r
+          register: os_version_post
 
         - name: Check if reboot is required
           ansible.builtin.stat:
@@ -481,7 +498,7 @@
           ansible.builtin.reboot:
             reboot_timeout: 3600
             post_reboot_delay: 20
-          when: reboot_required_file.stat.exists or release_upgrade.changed
+          when: (reboot_required_file.stat_exists) or (os_version_pre.stdout != os_version_post.stdout)
 
         - name: Refresh facts to pick up new kernel version
           ansible.builtin.setup:
