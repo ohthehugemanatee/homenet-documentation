@@ -1,0 +1,6 @@
+ansible>=9.0
+ansible-lint>=24.0
+molecule>=6.0
+molecule-plugins[docker]>=23.5
+monkeyble>=0.6
+docker>=7.0

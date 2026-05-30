@@ -3,9 +3,9 @@
 # Safe to re-run at any time — converges to declared state.
 #
 # Usage:
-#   All nodes:    ansible-playbook -i inventory.yaml --ask-vault-pass node-state.yaml
-#   Single node:  ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 node-state.yaml
-#   Dry-run:      ansible-playbook -i inventory.yaml --ask-vault-pass --check --diff node-state.yaml
+#   All nodes:    ansible-playbook -i inventory.yaml node-state.yaml
+#   Single node:  ansible-playbook -i inventory.yaml --limit cluster1 node-state.yaml
+#   Dry-run:      ansible-playbook -i inventory.yaml --check --diff node-state.yaml
 #
 # Override target group:  -e target=masters
 # Override NTP servers:   -e '{"ntp_servers": ["192.168.1.1"]}'
@@ -31,16 +31,24 @@
         name: systemd-timesyncd
         state: restarted
         enabled: true
+      when: ansible_virtualization_type != 'docker'
 
     - name: Restart journald
       ansible.builtin.systemd:
         name: systemd-journald
         state: restarted
+      when: ansible_virtualization_type != 'docker'
 
     - name: Restart iscsid
       ansible.builtin.systemd:
         name: iscsid
         state: restarted
+      when: ansible_virtualization_type != 'docker'
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: ansible_virtualization_type != 'docker'
 
   tasks:
     # ── Packages ────────────────────────────────────────────────────────────
@@ -55,9 +63,15 @@
           - nfs-common
           - vim
           - open-iscsi
-          - linux-modules-extra-{{ ansible_kernel }}
           - unattended-upgrades
           - apt-listchanges
+
+    - name: Install kernel extra modules package
+      ansible.builtin.apt:
+        state: present
+        pkg:
+          - linux-modules-extra-{{ ansible_kernel }}
+      when: ansible_virtualization_type != 'docker'
 
     - name: Install x86 media packages
       when: ansible_architecture == "x86_64"
@@ -66,6 +80,7 @@
         pkg:
           - intel-media-va-driver-non-free
           - libmfx1
+      tags: [molecule-notest]  # multiverse not enabled in Docker test containers
 
     # ── Hostname ─────────────────────────────────────────────────────────────
 
@@ -82,6 +97,7 @@
         owner: root
         group: root
         mode: '0644'
+        unsafe_writes: "{{ (ansible_virtualization_type == 'docker') | bool }}"
 
     # ── NFS client ───────────────────────────────────────────────────────────
 
@@ -111,6 +127,7 @@
         - br_netfilter
         - overlay
       changed_when: false
+      when: ansible_virtualization_type != 'docker'
 
     # ── Kernel parameters ────────────────────────────────────────────────────
 
@@ -147,6 +164,7 @@
 
     - name: X86 — ensure cgroup v2 unified hierarchy in GRUB
       when: ansible_architecture == "x86_64"
+      tags: [molecule-notest]
       ansible.builtin.lineinfile:
         path: /etc/default/grub
         backrefs: true
@@ -156,6 +174,7 @@
 
     - name: X86 — ensure cgroup memory/cpuset flags in GRUB
       when: ansible_architecture == "x86_64"
+      tags: [molecule-notest]
       ansible.builtin.lineinfile:
         path: /etc/default/grub
         backrefs: true
@@ -165,7 +184,9 @@
 
     - name: X86 — update GRUB config
       when: ansible_architecture == "x86_64" and (x86_cgroup_v2.changed or x86_cgroup_memory.changed)
+      tags: [molecule-notest]
       ansible.builtin.command: update-grub
+      changed_when: true
 
     - name: Flag reboot required for cgroup changes
       when: (arm_cgroup_v2.changed | default(false)) or (x86_cgroup_v2.changed | default(false)) or (x86_cgroup_memory.changed | default(false))
@@ -210,7 +231,7 @@
 
     - name: Disable swap immediately
       ansible.builtin.command: swapoff -a
-      when: ansible_swaptotal_mb | int > 0
+      when: ansible_swaptotal_mb | int > 0 and ansible_virtualization_type != 'docker'
       changed_when: ansible_swaptotal_mb | int > 0
 
     - name: Disable swap in fstab
@@ -230,37 +251,43 @@
 
     # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
 
-    # Unmask first — dpkg's pre-removal script calls invoke-rc.d which calls
-    # `systemctl stop multipath-tools.service`, and that fails if the unit is
-    # masked. Unmask → stop → remove → reload → re-mask is idempotent in all
-    # states: unmasked units, masked units, and absent packages.
+    - name: Gather package facts for multipath check
+      ansible.builtin.package_facts:
+        manager: apt
+
+    # Unmask first so dpkg's pre-removal invoke-rc.d doesn't fail on a masked unit.
+    # Skipped when package is already absent — prevents the unmask/re-mask toggle
+    # that would otherwise make every run non-idempotent.
     - name: Unmask multipathd before removal
       ansible.builtin.systemd:
         name: multipathd
         masked: false
-      failed_when: false
+      when: "'multipath-tools' in ansible_facts.packages"
 
     - name: Stop multipathd
       ansible.builtin.systemd:
         name: multipathd
         state: stopped
         enabled: false
-      failed_when: false
+      when: "'multipath-tools' in ansible_facts.packages"
 
     - name: Remove multipath-tools package
       ansible.builtin.apt:
         name: multipath-tools
         state: absent
-
-    - name: Reload systemd after package removal
-      ansible.builtin.systemd:
-        daemon_reload: true
+      when: "'multipath-tools' in ansible_facts.packages"
+      notify: Reload systemd
 
     - name: Mask multipathd to prevent accidental start
       ansible.builtin.systemd:
         name: multipathd
         masked: true
-      failed_when: false
+      when: ansible_virtualization_type != 'docker'
+
+    # Flush immediately so daemon_reload fires even if the play fails before
+    # the later flush_handlers (e.g. iscsid task failure).
+    - name: Flush handlers after multipath removal
+      ansible.builtin.meta: flush_handlers
 
     # ── iSCSI (required by Longhorn) ─────────────────────────────────────────
 
@@ -269,6 +296,7 @@
         name: iscsid
         state: started
         enabled: true
+      when: ansible_virtualization_type != 'docker'
 
     # ── k3s service ──────────────────────────────────────────────────────────
     # Flush config handlers first — sysctl, modules, etc. must be current
@@ -297,14 +325,14 @@
         enabled: true
       failed_when: false
 
-    - name: Get k3s ActiveState
+    - name: Get k3s ActiveState  # noqa: command-instead-of-module
       when: k3s_unit.stat.exists
       ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
       register: k3s_active_state
       changed_when: false
       failed_when: false
 
-    - name: Get k3s restart count
+    - name: Get k3s restart count  # noqa: command-instead-of-module
       when: k3s_unit.stat.exists
       ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
       register: k3s_nrestarts
@@ -354,7 +382,7 @@
         # NRestarts resets to 0 on explicit systemctl restart, then increments
         # for each auto-restart thereafter. Wait for 'active', then pause so
         # any restart loop has time to accumulate a non-zero count.
-        - name: Wait for k3s to become active (up to 2 minutes)
+        - name: Wait for k3s to become active (up to 2 minutes)  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
           register: k3s_post_state
           until: k3s_post_state.stdout == 'active'
@@ -368,12 +396,12 @@
           ansible.builtin.pause:
             seconds: 30
 
-        - name: Re-check ActiveState after stability window
+        - name: Re-check ActiveState after stability window  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
           register: k3s_final_state
           changed_when: false
 
-        - name: Re-check NRestarts after stability window
+        - name: Re-check NRestarts after stability window  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
           register: k3s_final_nrestarts
           changed_when: false

@@ -1,0 +1,131 @@
+---
+# Scenario: upgrade health check fails, auto-rebuild succeeds.
+# Expected: WARNING Pushover alert fires, failure flag cleared.
+monkeyble_scenarios:
+  agent_rescue_success:
+    tasks_to_test:
+      # ── Mock infrastructure tasks that require a real cluster ──────────────
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      - task: "Cordon node before drain"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Drain node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # Mock apt tasks to avoid modifying the CI runner and for speed
+      - task: "Update apt cache"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Run dist-upgrade"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false   # prevents Reboot task from running
+
+      - task: "Install linux-modules-extra for running kernel (required for iSCSI)"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Wait for k3s-agent to become active"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "active"
+                rc: 0
+
+      - task: "Uncordon node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Verify node is Ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                rc: 0
+
+      # ── Trigger rescue: simulate NRestarts > 3 ───────────────────────────
+      # failed_when: post_restarts.stdout | int > 3 evaluates True with stdout="5"
+      - task: "Verify k3s not in restart loop"
+        should_fail: true
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "5"
+                rc: 0
+
+      # ── Rescue path: rebuild succeeds ─────────────────────────────────────
+      - task: "Reinstall k3s agent"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Wait for k3s-agent to become active after rebuild"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "active"
+                rc: 0
+
+      - task: "Wait for node to rejoin cluster after rebuild"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                rc: 0
+
+      - task: "Uncordon node after successful rebuild"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # ── Key assertions ────────────────────────────────────────────────────
+      - task: "Alert WARNING — node auto-rebuilt and back in service"
+        should_be_skipped: false   # assert it ran (not skipped)
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false

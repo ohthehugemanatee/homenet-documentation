@@ -1,0 +1,104 @@
+---
+# Scenario: upgrade health check fails, auto-rebuild also fails.
+# Expected: CRITICAL Pushover alert fires, failure flag set.
+monkeyble_scenarios:
+  agent_rescue_failure:
+    tasks_to_test:
+      # ── Mock infrastructure tasks that require a real cluster ──────────────
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      - task: "Cordon node before drain"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Drain node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Update apt cache"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Run dist-upgrade"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Install linux-modules-extra for running kernel (required for iSCSI)"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Wait for k3s-agent to become active"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "active"
+                rc: 0
+
+      - task: "Uncordon node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Verify node is Ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                rc: 0
+
+      # ── Trigger rescue: simulate NRestarts > 3 ───────────────────────────
+      - task: "Verify k3s not in restart loop"
+        should_fail: true
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "5"
+                rc: 0
+
+      # ── Rescue path: rebuild fails → inner rescue fires ───────────────────
+      # Use ansible.builtin.fail as the mock module to trigger a real failure.
+      - task: "Reinstall k3s agent"
+        should_fail: true
+        mock:
+          config:
+            ansible.builtin.fail:
+              msg: "Mocked k3s reinstall failure (CI test)"
+
+      # ── Key assertion ─────────────────────────────────────────────────────
+      - task: "Alert CRITICAL — upgrade and rebuild both failed"
+        should_be_skipped: false   # assert it ran (not skipped)
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
