@@ -469,6 +469,7 @@
             do-release-upgrade -f DistUpgradeViewNonInteractive
           async: 3600
           poll: 0
+          become: true
           register: release_upgrade
 
         - name: Check if reboot is required
