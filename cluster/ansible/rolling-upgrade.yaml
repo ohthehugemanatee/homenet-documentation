@@ -498,7 +498,7 @@
           ansible.builtin.reboot:
             reboot_timeout: 3600
             post_reboot_delay: 20
-          when: (reboot_required_file.stat_exists) or (os_version_pre.stdout != os_version_post.stdout)
+          when: (reboot_required_file.stat.exists) or (os_version_pre.stdout != os_version_post.stdout)
 
         - name: Refresh facts to pick up new kernel version
           ansible.builtin.setup:
