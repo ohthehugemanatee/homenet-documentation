@@ -35,7 +35,7 @@
 #   kubectl scale statefulset nextcloud --replicas=0
 # Scale back up after each node is verified Ready.
 
-- name: Rolling OS release upgrade: agents
+- name: "Rolling OS release upgrade: agents"
   hosts: "{{ target | default('agents:!ubuntu') }}"
   become: true
   serial: 1
