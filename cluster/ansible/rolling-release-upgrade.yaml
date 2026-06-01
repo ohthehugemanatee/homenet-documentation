@@ -1,6 +1,9 @@
 ---
-# Rolling OS upgrade for k3s nodes.
-# Drains each node, runs apt dist-upgrade, reboots, uncordons, verifies Ready.
+# Rolling OS major release upgrade for k3s nodes.
+# Generally it's recommended to re-image rather than upgrade major versions,
+# but that would mean going _all the way_ to the other room to pull the sd card.
+#
+# Drains each node, runs apt dist-upgrade, reboots, runs do-release-upgrade, uncordons, verifies Ready.
 # Safe to re-run — skips reboot if /var/run/reboot-required is absent and
 # no packages were upgraded.
 #
@@ -32,7 +35,7 @@
 #   kubectl scale statefulset nextcloud --replicas=0
 # Scale back up after each node is verified Ready.
 
-- name: Rolling OS upgrade — agents
+- name: Rolling OS release upgrade: agents
   hosts: "{{ target | default('agents:!ubuntu') }}"
   become: true
   serial: 1
@@ -167,6 +170,52 @@
             name: "linux-modules-extra-{{ ansible_kernel }}"
             state: present
 
+        - name: Set /etc/update-manager/release-upgrades to "lts"
+          ansible.builtin.lineinfile:
+            path: /etc/update-manager/release-upgrades
+            regexp: '^Prompt='
+            line: "Prompt=lts"
+
+        - name: Check the release version before upgrade
+          ansible.builtin.command: lsb_release -r
+          register: os_version_pre
+          ignore_errors: true
+
+        - name: Upgrade Ubuntu with the do-release-upgrade tool
+          ansible.builtin.shell: |
+            do-release-upgrade -f DistUpgradeViewNonInteractive
+          async: 14400
+          poll: 30
+          register: release_upgrade
+
+        - name: Refresh facts
+          ansible.builtin.setup:
+
+        - name: Refresh inventory
+          ansible.builtin.meta: refresh_inventory
+
+        - name: Check the release version post-upgrade
+          ansible.builtin.command: lsb_release -r
+          register: os_version_post
+
+        - name: Check if reboot is required (very likely)
+          ansible.builtin.stat:
+            path: /var/run/reboot-required
+          register: reboot_required_file
+
+        - name: Reboot with a long timeout
+          ansible.builtin.reboot:
+            reboot_timeout: 3600
+            post_reboot_delay: 20
+          when: (reboot_required_file.stat.exists) or (os_version_pre.stdout != os_version_post.stdout)
+
+        - name: Refresh facts to pick up new kernel version
+          ansible.builtin.setup:
+
+        - name: Install linux-modules-extra for running kernel (required for iSCSI)
+          ansible.builtin.apt:
+            name: "linux-modules-extra-{{ ansible_kernel }}"
+            state: present
         - name: Wait for k3s-agent to become active  # noqa: command-instead-of-module
           ansible.builtin.command: systemctl is-active k3s-agent
           register: k3s_status
@@ -308,7 +357,7 @@
                   user: "{{ pushover_user_key }}"
                   message: >-
                     CRITICAL: {{ inventory_hostname }} upgrade+rebuild failed
-                    at task '{{ ansible_failed_task.name | default('unknown') }}'.
+                    at task "{{ ansible_failed_task.name | default('unknown') }}".
                     Node DRAINED. Manual fix required.
                   priority: "2"
                   retry: "300"
@@ -458,6 +507,14 @@
             post_reboot_delay: 20
           when: reboot_required_file.stat.exists or apt_upgrade.changed
 
+        - name: Refresh facts to pick up new kernel version
+          ansible.builtin.setup:
+
+        - name: Install linux-modules-extra for running kernel (required for iSCSI)
+          ansible.builtin.apt:
+            name: "linux-modules-extra-{{ ansible_kernel }}"
+            state: present
+
         - name: Set /etc/update-manager/release-upgrades to "lts"
           ansible.builtin.lineinfile:
             path: /etc/update-manager/release-upgrades
@@ -482,14 +539,11 @@
         - name: Refresh inventory
           ansible.builtin.meta: refresh_inventory
 
-        - name: Reset ssh connection
-          ansible.builtin.meta: reset_connection
-
         - name: Check the release version post-upgrade
           ansible.builtin.command: lsb_release -r
           register: os_version_post
 
-        - name: Check if reboot is required
+        - name: Check if reboot is required (very likely)
           ansible.builtin.stat:
             path: /var/run/reboot-required
           register: reboot_required_file
@@ -577,7 +631,7 @@
           become: false
           failed_when: false  # must not abort rescue — Pushover alert tasks below must still run
 
-        - name: Alert CRITICAL — control-plane node upgrade failed
+        - name: Alert CRITICAL — control-plane node release upgrade failed
           ansible.builtin.uri:
             url: https://api.pushover.net/1/messages.json
             method: POST
@@ -749,6 +803,53 @@
             name: "linux-modules-extra-{{ ansible_kernel }}"
             state: present
 
+        - name: Set /etc/update-manager/release-upgrades to "lts"
+          ansible.builtin.lineinfile:
+            path: /etc/update-manager/release-upgrades
+            regexp: '^Prompt='
+            line: "Prompt=lts"
+
+        - name: Check the release version before upgrade
+          ansible.builtin.command: lsb_release -r
+          register: os_version_pre
+          ignore_errors: true
+
+        - name: Upgrade Ubuntu with the do-release-upgrade tool
+          ansible.builtin.shell: |
+            do-release-upgrade -f DistUpgradeViewNonInteractive
+          async: 14400
+          poll: 30
+          register: release_upgrade
+
+        - name: Refresh facts
+          ansible.builtin.setup:
+
+        - name: Refresh inventory
+          ansible.builtin.meta: refresh_inventory
+
+        - name: Check the release version post-upgrade
+          ansible.builtin.command: lsb_release -r
+          register: os_version_post
+
+        - name: Check if reboot is required (very likely)
+          ansible.builtin.stat:
+            path: /var/run/reboot-required
+          register: reboot_required_file
+
+        - name: Reboot with a long timeout
+          ansible.builtin.reboot:
+            reboot_timeout: 3600
+            post_reboot_delay: 20
+          when: (reboot_required_file.stat.exists) or (os_version_pre.stdout != os_version_post.stdout)
+
+        - name: Refresh facts to pick up new kernel version
+          ansible.builtin.setup:
+
+        - name: Install linux-modules-extra for running kernel (required for iSCSI)
+          ansible.builtin.apt:
+            name: "linux-modules-extra-{{ ansible_kernel }}"
+            state: present
+
         - name: Wait for k3s server to become active  # noqa: command-instead-of-module
           ansible.builtin.command: systemctl is-active k3s
           register: k3s_status
@@ -826,7 +927,7 @@
           become: false
           failed_when: false  # must not abort rescue — Pushover alert tasks below must still run
 
-        - name: Alert CRITICAL — control-plane node upgrade failed
+        - name: Alert CRITICAL — agent node release upgrade failed
           ansible.builtin.uri:
             url: https://api.pushover.net/1/messages.json
             method: POST
