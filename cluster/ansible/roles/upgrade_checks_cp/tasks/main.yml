@@ -1,0 +1,58 @@
+---
+- name: Check if a previous play failed
+  ansible.builtin.stat:
+    path: "{{ state_dir }}/rolling-upgrade-failed"
+  delegate_to: localhost
+  become: false
+  register: upgrade_checks_cp_prev_failed
+
+- name: Abort — previous play failed, not proceeding
+  ansible.builtin.fail:
+    msg: "A previous play left nodes in a failed state. Fix nodes and clear the flag, then re-run."
+  become: false
+  when:
+    - strict_mode | default(false) | bool
+    - upgrade_checks_cp_prev_failed.stat.exists
+
+- name: Get control-plane node statuses for quorum check
+  kubernetes.core.k8s_info:
+    kind: Node
+    label_selectors:
+      - "node-role.kubernetes.io/control-plane"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  register: upgrade_checks_cp_nodes
+  changed_when: false
+  failed_when: upgrade_checks_cp_nodes.resources | length == 0
+
+- name: Verify other control-plane nodes Ready before draining this one
+  ansible.builtin.fail:
+    msg: "Control-plane node {{ item.metadata.name }} is not Ready or is cordoned — aborting to preserve etcd quorum."
+  when:
+    # Skip the node being upgraded — it may already be NotReady/cordoned,
+    # which is exactly why we're upgrading it. We only need the OTHER
+    # control-plane nodes healthy so etcd keeps quorum once this one drains.
+    - item.metadata.name != ansible_hostname
+    - >-
+      (item.status.conditions |
+       selectattr('type', 'equalto', 'Ready') |
+       selectattr('status', 'equalto', 'True') |
+       list | length) == 0 or
+      (item.spec.taints | default([]) |
+       selectattr('key', 'equalto', 'node.kubernetes.io/unschedulable') |
+       list | length) > 0
+  loop: "{{ upgrade_checks_cp_nodes.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
+- name: Verify k8s node name matches ansible_hostname
+  kubernetes.core.k8s_info:
+    kind: Node
+    name: "{{ ansible_hostname }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  register: upgrade_checks_cp_node_check
+  failed_when: upgrade_checks_cp_node_check.resources | length == 0
+  changed_when: false
