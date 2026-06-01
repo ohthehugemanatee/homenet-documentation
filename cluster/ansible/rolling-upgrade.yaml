@@ -794,7 +794,7 @@
               user: "{{ pushover_user_key }}"
               message: >-
                 CRITICAL: {{ inventory_hostname }} (master) upgrade failed
-                at task '{{ ansible_failed_task.name | default('unknown') }}'.
+                at task "{{ ansible_failed_task.name | default('unknown') }}".
                 Node DRAINED. Manual fix required.
               priority: "2"
               retry: "300"
