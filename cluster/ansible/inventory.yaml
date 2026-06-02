@@ -23,7 +23,7 @@ all:
         nuc2:
         fuji:
           ansible_user: ohthehugemanatee
-        celery:
+#        celery: # down for hardware maintenance
         ubuntu:
       vars:
         cluster_role: "agent"
