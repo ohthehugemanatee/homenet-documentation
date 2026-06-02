@@ -1,0 +1,4 @@
+---
+k3s_health_wait_retries: 30
+k3s_health_node_ready_timeout: 120
+k3s_health_wait_before_uncordon: false

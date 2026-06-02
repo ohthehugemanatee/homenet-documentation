@@ -1,0 +1,44 @@
+---
+# mode 0775 keeps group-write so Semaphore (gid 1001) can touch the flag.
+# Group ownership is set by shoebox-ansible-setup.yaml which runs as root;
+# the ansible user isn't a member of gid 1001 so chgrp here would fail.
+- name: Ensure upgrade state dir exists on controller
+  ansible.builtin.file:
+    path: "{{ state_dir }}"
+    state: directory
+    mode: '0775'
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+# Cleared here (agents = first play) so each full playbook run starts fresh.
+# A --limit multimasters or --limit masters re-run skips this clear, so the
+# failure flag from a prior run still aborts subsequent plays. To re-run just
+# multimasters/masters after a partial failure, rm the flag manually first.
+- name: Clear stale failure state from previous run
+  ansible.builtin.file:
+    path: "{{ state_dir }}/rolling-upgrade-failed"
+    state: absent
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Signal maintenance in progress
+  ansible.builtin.copy:
+    content: "{{ ansible_date_time.iso8601 }}"
+    dest: "{{ state_dir }}/maintenance-in-progress"
+    mode: '0644'
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Verify k8s node name matches ansible_hostname
+  kubernetes.core.k8s_info:
+    kind: Node
+    name: "{{ ansible_hostname }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  register: upgrade_pre_state_node_check
+  failed_when: upgrade_pre_state_node_check.resources | length == 0
+  changed_when: false

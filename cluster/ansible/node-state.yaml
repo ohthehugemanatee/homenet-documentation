@@ -3,272 +3,24 @@
 # Safe to re-run at any time — converges to declared state.
 #
 # Usage:
-#   All nodes:    ansible-playbook -i inventory.yaml --ask-vault-pass node-state.yaml
-#   Single node:  ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 node-state.yaml
-#   Dry-run:      ansible-playbook -i inventory.yaml --ask-vault-pass --check --diff node-state.yaml
+#   All nodes:    ansible-playbook -i inventory.yaml node-state.yaml
+#   Single node:  ansible-playbook -i inventory.yaml --limit cluster1 node-state.yaml
+#   Dry-run:      ansible-playbook -i inventory.yaml --check --diff node-state.yaml
 #
 # Override target group:  -e target=masters
-# Override NTP servers:   -e '{"ntp_servers": ["192.168.1.1"]}'
+# Override NTP servers:   -e '{"node_state_ntp_servers": ["192.168.1.1"]}'
 
 - name: Enforce k3s node state
   hosts: "{{ target | default('all:!ubuntu') }}"
   become: true
 
   vars:
-    ntp_servers:
-      - ntp.ubuntu.com
-      - 0.pool.ntp.org
-      - 1.pool.ntp.org
     k3s_svc: "{{ 'k3s-agent' if cluster_role == 'agent' else 'k3s' }}"
 
-  handlers:
-    - name: Apply sysctl
-      ansible.builtin.command: sysctl --system
-      changed_when: false
-
-    - name: Restart timesyncd
-      ansible.builtin.systemd:
-        name: systemd-timesyncd
-        state: restarted
-        enabled: true
-
-    - name: Restart journald
-      ansible.builtin.systemd:
-        name: systemd-journald
-        state: restarted
-
-    - name: Restart iscsid
-      ansible.builtin.systemd:
-        name: iscsid
-        state: restarted
-
   tasks:
-    # ── Packages ────────────────────────────────────────────────────────────
-
-    - name: Install base packages
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 3600
-        lock_timeout: 300
-        state: present
-        pkg:
-          - nfs-common
-          - vim
-          - open-iscsi
-          - linux-modules-extra-{{ ansible_kernel }}
-          - unattended-upgrades
-          - apt-listchanges
-
-    - name: Install x86 media packages
-      when: ansible_architecture == "x86_64"
-      ansible.builtin.apt:
-        state: present
-        pkg:
-          - intel-media-va-driver-non-free
-          - libmfx1
-
-    # ── Hostname ─────────────────────────────────────────────────────────────
-
-    - name: Set hostname
-      ansible.builtin.hostname:
-        name: "{{ inventory_hostname }}"
-
-    # ── /etc/hosts ───────────────────────────────────────────────────────────
-
-    - name: Template /etc/hosts
-      ansible.builtin.template:
-        src: templates/hosts.j2
-        dest: /etc/hosts
-        owner: root
-        group: root
-        mode: '0644'
-
-    # ── NFS client ───────────────────────────────────────────────────────────
-
-    - name: Template NFS global mount options (soft mounts)
-      ansible.builtin.template:
-        src: templates/nfsmount.conf.j2
-        dest: /etc/nfsmount.conf
-        owner: root
-        group: root
-        mode: '0644'
-
-    # ── Kernel modules ───────────────────────────────────────────────────────
-
-    - name: Ensure k3s kernel modules load on boot
-      ansible.builtin.copy:
-        content: |
-          br_netfilter
-          overlay
-        dest: /etc/modules-load.d/k3s.conf
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Load k3s kernel modules now
-      ansible.builtin.command: "modprobe {{ item }}"
-      loop:
-        - br_netfilter
-        - overlay
-      changed_when: false
-
-    # ── Kernel parameters ────────────────────────────────────────────────────
-
-    - name: Template k3s sysctl parameters
-      ansible.builtin.template:
-        src: templates/sysctl-k3s.conf.j2
-        dest: /etc/sysctl.d/99-k3s.conf
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Apply sysctl
-
-    # ── cgroup v2 kernel command line ────────────────────────────────────────
-    # k3s >= 1.35 requires cgroup v2 (unified hierarchy). Older kernels
-    # (e.g. 5.4 on Ubuntu 20.04) still need the explicit cgroup_enable
-    # flags to expose memory/cpuset controllers in v2 mode.
-
-    - name: ARM — ensure cgroup memory/cpuset flags in kernel cmdline
-      when: ansible_architecture == "aarch64"
-      ansible.builtin.lineinfile:
-        path: /boot/firmware/cmdline.txt
-        backrefs: true
-        regexp: '^((?!.*cgroup_enable=memory).*)$'
-        line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
-
-    - name: ARM — ensure cgroup v2 unified hierarchy in kernel cmdline
-      when: ansible_architecture == "aarch64"
-      ansible.builtin.lineinfile:
-        path: /boot/firmware/cmdline.txt
-        backrefs: true
-        regexp: '^((?!.*systemd\.unified_cgroup_hierarchy).*)$'
-        line: '\1 systemd.unified_cgroup_hierarchy=1'
-      register: arm_cgroup_v2
-
-    - name: X86 — ensure cgroup v2 unified hierarchy in GRUB
-      when: ansible_architecture == "x86_64"
-      ansible.builtin.lineinfile:
-        path: /etc/default/grub
-        backrefs: true
-        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*systemd\.unified_cgroup_hierarchy).*)"$'
-        line: '\1 systemd.unified_cgroup_hierarchy=1"'
-      register: x86_cgroup_v2
-
-    - name: X86 — ensure cgroup memory/cpuset flags in GRUB
-      when: ansible_architecture == "x86_64"
-      ansible.builtin.lineinfile:
-        path: /etc/default/grub
-        backrefs: true
-        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*cgroup_enable=memory).*)"$'
-        line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory"'
-      register: x86_cgroup_memory
-
-    - name: X86 — update GRUB config
-      when: ansible_architecture == "x86_64" and (x86_cgroup_v2.changed or x86_cgroup_memory.changed)
-      ansible.builtin.command: update-grub
-
-    - name: Flag reboot required for cgroup changes
-      when: (arm_cgroup_v2.changed | default(false)) or (x86_cgroup_v2.changed | default(false)) or (x86_cgroup_memory.changed | default(false))
-      ansible.builtin.file:
-        path: /var/run/reboot-required
-        state: touch
-        mode: '0644'
-
-    # ── NTP ──────────────────────────────────────────────────────────────────
-
-    - name: Template timesyncd NTP config
-      ansible.builtin.template:
-        src: templates/timesyncd.conf.j2
-        dest: /etc/systemd/timesyncd.conf
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Restart timesyncd
-
-    # ── Security updates ─────────────────────────────────────────────────────
-
-    - name: Template unattended-upgrades config
-      ansible.builtin.template:
-        src: templates/50unattended-upgrades.j2
-        dest: /etc/apt/apt.conf.d/50unattended-upgrades
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Enable automatic security updates
-      ansible.builtin.copy:
-        content: |
-          APT::Periodic::Update-Package-Lists "1";
-          APT::Periodic::Unattended-Upgrade "1";
-          APT::Periodic::AutocleanInterval "7";
-        dest: /etc/apt/apt.conf.d/20auto-upgrades
-        owner: root
-        group: root
-        mode: '0644'
-
-    # ── Swap ─────────────────────────────────────────────────────────────────
-
-    - name: Disable swap immediately
-      ansible.builtin.command: swapoff -a
-      when: ansible_swaptotal_mb | int > 0
-      changed_when: ansible_swaptotal_mb | int > 0
-
-    - name: Disable swap in fstab
-      ansible.builtin.replace:
-        path: /etc/fstab
-        regexp: '^([^#].*?\sswap\s+\S+\s+.*)$'
-        replace: '# \1'
-
-    # ── Journald ─────────────────────────────────────────────────────────────
-
-    - name: Configure journald volatile storage
-      ansible.builtin.lineinfile:
-        path: /etc/systemd/journald.conf
-        regexp: '^#?Storage='
-        line: 'Storage=volatile'
-      notify: Restart journald
-
-    # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
-
-    # Unmask first — dpkg's pre-removal script calls invoke-rc.d which calls
-    # `systemctl stop multipath-tools.service`, and that fails if the unit is
-    # masked. Unmask → stop → remove → reload → re-mask is idempotent in all
-    # states: unmasked units, masked units, and absent packages.
-    - name: Unmask multipathd before removal
-      ansible.builtin.systemd:
-        name: multipathd
-        masked: false
-      failed_when: false
-
-    - name: Stop multipathd
-      ansible.builtin.systemd:
-        name: multipathd
-        state: stopped
-        enabled: false
-      failed_when: false
-
-    - name: Remove multipath-tools package
-      ansible.builtin.apt:
-        name: multipath-tools
-        state: absent
-
-    - name: Reload systemd after package removal
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    - name: Mask multipathd to prevent accidental start
-      ansible.builtin.systemd:
-        name: multipathd
-        masked: true
-      failed_when: false
-
-    # ── iSCSI (required by Longhorn) ─────────────────────────────────────────
-
-    - name: Ensure iscsid is enabled and running
-      ansible.builtin.systemd:
-        name: iscsid
-        state: started
-        enabled: true
+    - name: Apply node state configuration
+      ansible.builtin.import_role:
+        name: node_state
 
     # ── k3s service ──────────────────────────────────────────────────────────
     # Flush config handlers first — sysctl, modules, etc. must be current
@@ -297,14 +49,14 @@
         enabled: true
       failed_when: false
 
-    - name: Get k3s ActiveState
+    - name: Get k3s ActiveState  # noqa: command-instead-of-module
       when: k3s_unit.stat.exists
       ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
       register: k3s_active_state
       changed_when: false
       failed_when: false
 
-    - name: Get k3s restart count
+    - name: Get k3s restart count  # noqa: command-instead-of-module
       when: k3s_unit.stat.exists
       ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
       register: k3s_nrestarts
@@ -354,7 +106,7 @@
         # NRestarts resets to 0 on explicit systemctl restart, then increments
         # for each auto-restart thereafter. Wait for 'active', then pause so
         # any restart loop has time to accumulate a non-zero count.
-        - name: Wait for k3s to become active (up to 2 minutes)
+        - name: Wait for k3s to become active (up to 2 minutes)  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
           register: k3s_post_state
           until: k3s_post_state.stdout == 'active'
@@ -368,12 +120,12 @@
           ansible.builtin.pause:
             seconds: 30
 
-        - name: Re-check ActiveState after stability window
+        - name: Re-check ActiveState after stability window  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=ActiveState --value"
           register: k3s_final_state
           changed_when: false
 
-        - name: Re-check NRestarts after stability window
+        - name: Re-check NRestarts after stability window  # noqa: command-instead-of-module
           ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
           register: k3s_final_nrestarts
           changed_when: false

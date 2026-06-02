@@ -2,5 +2,14 @@ warn_list:
   - no-changed-when
   - command-instead-of-module
   - yaml[line-length]
+  - run-once[task]  # run_once with delegate_to:localhost is correct; strategy:free not used
 skip_list:
   - galaxy  # no galaxy metadata required for homelab playbooks
+
+# Provide plaintext dummy vars so lint can syntax-check playbooks without
+# needing the vault password. Real secrets live in group_vars/vault.yaml.
+extra_vars:
+  vault_file: cluster/ansible/tests/monkeyble/test_secrets.yml
+  # rename-node.yaml requires these at runtime; dummy values satisfy syntax-check.
+  target: lint_placeholder
+  new_hostname: lint_placeholder

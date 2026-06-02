@@ -8,6 +8,15 @@
 | `node-state.yaml` | Idempotent state enforcement — packages, config, services | Yes |
 | `rolling-upgrade.yaml` | Rolling OS dist-upgrade with drain/uncordon | Yes |
 
+Note that to keep CI happy, the encrypted vault file is not loaded by default.
+`k3s-agent.yaml` and `rolling-upgrade.yaml` load it via
+`vars_files: ["{{ vault_file }}"]`, so real-world runs need
+`-e vault_file=group_vars/vault.yaml` (path passed as a variable, not
+appended with `@`). The path is resolved relative to the **playbook's directory**
+(`cluster/ansible/`), not the working directory — so `group_vars/vault.yaml`
+works regardless of where you invoke `ansible-playbook` from.
+`node-state.yaml` consumes no vault variables and doesn't need this flag.
+
 ---
 
 ## `k3s-agent.yaml` — Initial setup

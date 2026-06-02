@@ -1,0 +1,23 @@
+---
+# Monkeyble test inventory — runs rolling-upgrade.yaml against localhost.
+# The `testnode` host stands in for a real agent node; kubectl/systemctl tasks
+# are mocked so no real cluster is required.
+all:
+  children:
+    agents:
+      hosts:
+        testnode:
+          ansible_connection: local
+          ansible_host: localhost
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+          cluster_role: agent
+    multimasters:
+      hosts:
+        testmultimaster:
+          ansible_connection: local
+          ansible_host: localhost
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+          cluster_role: multi-master
+          ansible_hostname: testmultimaster
+    masters:
+      hosts: {}

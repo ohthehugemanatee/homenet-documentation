@@ -1,0 +1,267 @@
+---
+# Scenario: upgrade health check fails, auto-rebuild also fails.
+# Expected: CRITICAL Pushover alert fires, failure flag set.
+monkeyble_scenarios:
+  agent_rescue_failure:
+    tasks_to_test:
+      # ── Mock infrastructure tasks that require a real cluster ──────────────
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      - task: "Cordon node before drain"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Drain node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Update apt cache"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Run dist-upgrade"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      # ── Mock node_state role tasks (configuration, not the logic under test) ──
+
+      - task: "Install base packages"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Install kernel extra modules package"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Install x86 media packages"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Set hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Template /etc/hosts"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Template NFS global mount options (soft mounts)"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Ensure k3s kernel modules load on boot"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Load k3s kernel modules now"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Template k3s sysctl parameters"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "ARM — ensure cgroup memory/cpuset flags in kernel cmdline"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "ARM — ensure cgroup v2 unified hierarchy in kernel cmdline"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "X86 — ensure cgroup v2 unified hierarchy in GRUB"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "X86 — ensure cgroup memory/cpuset flags in GRUB"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "X86 — update GRUB config"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Flag reboot required for cgroup changes"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Template timesyncd NTP config"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Template unattended-upgrades config"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Enable automatic security updates"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Disable swap immediately"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Disable swap in fstab"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Configure journald volatile storage"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Gather package facts for multipath check"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                ansible_facts:
+                  packages: {}
+
+      - task: "Unmask multipathd before removal"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Stop multipathd"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Remove multipath-tools package"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Mask multipathd to prevent accidental start"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Ensure iscsid is enabled and running"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      # ── k3s_health role ───────────────────────────────────────────────────
+
+      - task: "Wait for k3s-agent to become active"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "active"
+                rc: 0
+
+      - task: "Uncordon node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Verify node is Ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                rc: 0
+
+      # ── Trigger rescue: simulate NRestarts > 3 ───────────────────────────
+      - task: "Verify k3s not in restart loop"
+        should_fail: true
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "5"
+                rc: 0
+
+      # ── Rescue path: rebuild fails → inner rescue fires ───────────────────
+      # Use ansible.builtin.fail as the mock module to trigger a real failure.
+      - task: "Reinstall k3s agent"
+        should_fail: true
+        mock:
+          config:
+            ansible.builtin.fail:
+              msg: "Mocked k3s reinstall failure (CI test)"
+
+      # ── Key assertion ─────────────────────────────────────────────────────
+      - task: "Alert CRITICAL — upgrade and rebuild both failed"
+        should_be_skipped: false   # assert it ran (not skipped)
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false

@@ -1,6 +1,9 @@
 ---
-# Rolling OS upgrade for k3s nodes.
-# Drains each node, runs apt dist-upgrade, reboots, uncordons, verifies Ready.
+# Rolling OS major release upgrade for k3s nodes.
+# Generally it's recommended to re-image rather than upgrade major versions,
+# but that would mean going _all the way_ to the other room to pull the sd card.
+#
+# Drains each node, runs apt dist-upgrade, reboots, runs do-release-upgrade, uncordons, verifies Ready.
 # Safe to re-run — skips reboot if /var/run/reboot-required is absent and
 # no packages were upgraded.
 #
@@ -10,16 +13,14 @@
 #
 # Usage:
 #   All nodes (rolling):  ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
-#                           -e vault_file=group_vars/vault.yaml rolling-upgrade.yaml
+#                           -e vault_file=group_vars/vault.yaml rolling-release-upgrade.yaml
 #   Single node:          ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
-#                           -e vault_file=group_vars/vault.yaml --limit cluster1 rolling-upgrade.yaml
-#   Testing (no vault):   ansible-playbook -i tests/monkeyble/inventory.yml \
-#                           -e vault_file=tests/monkeyble/test_secrets.yml rolling-upgrade.yaml
+#                           -e vault_file=group_vars/vault.yaml --limit cluster1 rolling-release-upgrade.yaml
 #
 # Node ordering: agents first, then multimasters, then masters (first-master last).
 # Override with --limit or -e target=<group>.
 #
-# strict_mode=true (strongly recommended for scheduled runs):
+# strict_mode=true (strongly recommended):
 #   - Stops on first node failure (any_errors_fatal)
 #   - Aborts subsequent plays if a prior play left nodes failed/drained
 #
@@ -32,7 +33,7 @@
 #   kubectl scale statefulset nextcloud --replicas=0
 # Scale back up after each node is verified Ready.
 
-- name: Rolling OS upgrade — agents
+- name: "Rolling OS release upgrade: agents"
   hosts: "{{ target | default('agents:!ubuntu') }}"
   become: true
   serial: 1
@@ -70,6 +71,10 @@
           ansible.builtin.import_role:
             name: apt_upgrade
 
+        - name: Run do-release-upgrade
+          ansible.builtin.import_role:
+            name: release_upgrade
+
         - name: Apply node state configuration
           ansible.builtin.import_role:
             name: node_state
@@ -93,7 +98,7 @@
             name: upgrade_rescue_agent
 
 
-- name: Rolling OS upgrade — multi-master servers
+- name: "Rolling OS release upgrade: multi-master servers"
   hosts: "{{ target | default('multimasters') }}"
   become: true
   serial: 1
@@ -135,6 +140,10 @@
           ansible.builtin.import_role:
             name: apt_upgrade
 
+        - name: Run do-release-upgrade
+          ansible.builtin.import_role:
+            name: release_upgrade
+
         - name: Apply node state configuration
           ansible.builtin.import_role:
             name: node_state
@@ -158,7 +167,7 @@
             name: upgrade_rescue_cp
 
 
-- name: Rolling OS upgrade — first master (last)
+- name: "Rolling OS release upgrade: first master (last)"
   hosts: "{{ target | default('masters') }}"
   become: true
   serial: 1
@@ -203,6 +212,10 @@
         - name: Run apt dist-upgrade and reboot
           ansible.builtin.import_role:
             name: apt_upgrade
+
+        - name: Run do-release-upgrade
+          ansible.builtin.import_role:
+            name: release_upgrade
 
         - name: Apply node state configuration
           ansible.builtin.import_role:

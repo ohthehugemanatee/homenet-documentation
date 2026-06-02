@@ -1,0 +1,2 @@
+---
+apt_upgrade_post_reboot_delay: 15

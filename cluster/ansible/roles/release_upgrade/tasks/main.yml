@@ -1,0 +1,47 @@
+---
+- name: Set /etc/update-manager/release-upgrades to "lts"
+  ansible.builtin.lineinfile:
+    path: /etc/update-manager/release-upgrades
+    regexp: '^Prompt='
+    line: "Prompt=lts"
+
+- name: Check the release version before upgrade
+  ansible.builtin.command: lsb_release -r
+  register: release_upgrade_os_pre
+  ignore_errors: true
+  changed_when: false
+
+- name: Upgrade Ubuntu with the do-release-upgrade tool
+  ansible.builtin.shell: |
+    do-release-upgrade -f DistUpgradeViewNonInteractive
+  async: 14400
+  poll: 30
+  register: release_upgrade_result
+  changed_when: true
+
+- name: Refresh facts
+  ansible.builtin.setup:
+
+- name: Refresh inventory
+  ansible.builtin.meta: refresh_inventory
+
+- name: Check the release version post-upgrade
+  ansible.builtin.command: lsb_release -r
+  register: release_upgrade_os_post
+  changed_when: false
+
+- name: Check if reboot is required (very likely)
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: release_upgrade_reboot_required
+
+- name: Reboot with a long timeout
+  ansible.builtin.reboot:
+    reboot_timeout: 3600
+    post_reboot_delay: "{{ release_upgrade_reboot_delay }}"
+  when: >-
+    release_upgrade_reboot_required.stat.exists or
+    release_upgrade_os_pre.stdout != release_upgrade_os_post.stdout
+
+- name: Refresh facts after reboot
+  ansible.builtin.setup:

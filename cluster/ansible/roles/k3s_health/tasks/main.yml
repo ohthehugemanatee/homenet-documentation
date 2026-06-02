@@ -1,0 +1,53 @@
+---
+- name: "Wait for {{ k3s_svc }} to become active"  # noqa: command-instead-of-module name[template]
+  ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
+  register: k3s_health_status
+  until: k3s_health_status.rc == 0
+  retries: "{{ k3s_health_wait_retries }}"
+  delay: 10
+  changed_when: false
+
+# CP plays set k3s_health_wait_before_uncordon: true to wait for node Ready before
+# uncordoning — etcd members need this extra gate. Agents skip it (default false).
+- name: Wait for node to rejoin cluster
+  kubernetes.core.k8s_info:
+    kind: Node
+    name: "{{ ansible_hostname }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: "{{ k3s_health_node_ready_timeout }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  when: k3s_health_wait_before_uncordon
+
+- name: Uncordon node
+  kubernetes.core.k8s_drain:
+    name: "{{ ansible_hostname }}"
+    state: uncordon
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+
+- name: Verify node is Ready
+  kubernetes.core.k8s_info:
+    kind: Node
+    name: "{{ ansible_hostname }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: "{{ k3s_health_wait_before_uncordon | ternary(60, k3s_health_node_ready_timeout) }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Verify k3s not in restart loop  # noqa: command-instead-of-module
+  ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
+  register: k3s_health_restarts
+  failed_when: k3s_health_restarts.stdout | int > 3
+  changed_when: false

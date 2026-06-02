@@ -11,7 +11,9 @@ all:
     multimasters:
       hosts:
         cluster3:
+          ansible_host: 10.10.10.111
         cluster4:
+          ansible_host: 10.10.10.114
       vars:
         cluster_role: "multi-master"
     agents:
