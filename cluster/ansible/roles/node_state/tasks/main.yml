@@ -1,0 +1,250 @@
+---
+# ── Packages ────────────────────────────────────────────────────────────
+
+- name: Install base packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+    state: present
+    pkg:
+      - nfs-common
+      - vim
+      - open-iscsi
+      - unattended-upgrades
+      - apt-listchanges
+
+- name: Install kernel extra modules package
+  ansible.builtin.apt:
+    state: present
+    pkg:
+      - linux-modules-extra-{{ ansible_kernel }}
+  when: ansible_virtualization_type != 'docker'
+
+- name: Install x86 media packages
+  when: ansible_architecture == "x86_64"
+  ansible.builtin.apt:
+    state: present
+    pkg:
+      - intel-media-va-driver-non-free
+      - libmfx1
+  tags: [molecule-notest]  # multiverse not enabled in Docker test containers
+
+# ── Hostname ─────────────────────────────────────────────────────────────
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+# ── /etc/hosts ───────────────────────────────────────────────────────────
+
+- name: Template /etc/hosts
+  ansible.builtin.template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+    unsafe_writes: "{{ (ansible_virtualization_type == 'docker') | bool }}"
+
+# ── NFS client ───────────────────────────────────────────────────────────
+
+- name: Template NFS global mount options (soft mounts)
+  ansible.builtin.template:
+    src: nfsmount.conf.j2
+    dest: /etc/nfsmount.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+# ── Kernel modules ───────────────────────────────────────────────────────
+
+- name: Ensure k3s kernel modules load on boot
+  ansible.builtin.copy:
+    content: |
+      br_netfilter
+      overlay
+    dest: /etc/modules-load.d/k3s.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Load k3s kernel modules now
+  ansible.builtin.command: "modprobe {{ item }}"
+  loop:
+    - br_netfilter
+    - overlay
+  changed_when: false
+  when: ansible_virtualization_type != 'docker'
+
+# ── Kernel parameters ────────────────────────────────────────────────────
+
+- name: Template k3s sysctl parameters
+  ansible.builtin.template:
+    src: sysctl-k3s.conf.j2
+    dest: /etc/sysctl.d/99-k3s.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Apply sysctl
+
+# ── cgroup v2 kernel command line ────────────────────────────────────────
+# k3s >= 1.35 requires cgroup v2 (unified hierarchy). Older kernels
+# (e.g. 5.4 on Ubuntu 20.04) still need the explicit cgroup_enable
+# flags to expose memory/cpuset controllers in v2 mode.
+
+- name: ARM — ensure cgroup memory/cpuset flags in kernel cmdline
+  when: ansible_architecture == "aarch64"
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/cmdline.txt
+    backrefs: true
+    regexp: '^((?!.*cgroup_enable=memory).*)$'
+    line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+
+- name: ARM — ensure cgroup v2 unified hierarchy in kernel cmdline
+  when: ansible_architecture == "aarch64"
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/cmdline.txt
+    backrefs: true
+    regexp: '^((?!.*systemd\.unified_cgroup_hierarchy).*)$'
+    line: '\1 systemd.unified_cgroup_hierarchy=1'
+  register: node_state_arm_cgroup_v2
+
+- name: X86 — ensure cgroup v2 unified hierarchy in GRUB
+  when: ansible_architecture == "x86_64"
+  tags: [molecule-notest]
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    backrefs: true
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*systemd\.unified_cgroup_hierarchy).*)"$'
+    line: '\1 systemd.unified_cgroup_hierarchy=1"'
+  register: node_state_x86_cgroup_v2
+
+- name: X86 — ensure cgroup memory/cpuset flags in GRUB
+  when: ansible_architecture == "x86_64"
+  tags: [molecule-notest]
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    backrefs: true
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?!.*cgroup_enable=memory).*)"$'
+    line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory"'
+  register: node_state_x86_cgroup_memory
+
+- name: X86 — update GRUB config
+  when: ansible_architecture == "x86_64" and (node_state_x86_cgroup_v2.changed or node_state_x86_cgroup_memory.changed)
+  tags: [molecule-notest]
+  ansible.builtin.command: update-grub
+  changed_when: true
+
+- name: Flag reboot required for cgroup changes
+  when: >-
+    (node_state_arm_cgroup_v2.changed | default(false)) or
+    (node_state_x86_cgroup_v2.changed | default(false)) or
+    (node_state_x86_cgroup_memory.changed | default(false))
+  ansible.builtin.file:
+    path: /var/run/reboot-required
+    state: touch
+    mode: '0644'
+
+# ── NTP ──────────────────────────────────────────────────────────────────
+
+- name: Template timesyncd NTP config
+  ansible.builtin.template:
+    src: timesyncd.conf.j2
+    dest: /etc/systemd/timesyncd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart timesyncd
+
+# ── Security updates ─────────────────────────────────────────────────────
+
+- name: Template unattended-upgrades config
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable automatic security updates
+  ansible.builtin.copy:
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+
+# ── Swap ─────────────────────────────────────────────────────────────────
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb | int > 0 and ansible_virtualization_type != 'docker'
+  changed_when: ansible_swaptotal_mb | int > 0
+
+- name: Disable swap in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s+\S+\s+.*)$'
+    replace: '# \1'
+
+# ── Journald ─────────────────────────────────────────────────────────────
+
+- name: Configure journald volatile storage
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: '^#?Storage='
+    line: 'Storage=volatile'
+  notify: Restart journald
+
+# ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
+
+- name: Gather package facts for multipath check
+  ansible.builtin.package_facts:
+    manager: apt
+
+# Unmask first so dpkg's pre-removal invoke-rc.d doesn't fail on a masked unit.
+# Skipped when package is already absent — prevents the unmask/re-mask toggle
+# that would otherwise make every run non-idempotent.
+- name: Unmask multipathd before removal
+  ansible.builtin.systemd:
+    name: multipathd
+    masked: false
+  when: "'multipath-tools' in (ansible_facts.packages | default({}))"
+
+- name: Stop multipathd
+  ansible.builtin.systemd:
+    name: multipathd
+    state: stopped
+    enabled: false
+  when: "'multipath-tools' in (ansible_facts.packages | default({}))"
+
+- name: Remove multipath-tools package
+  ansible.builtin.apt:
+    name: multipath-tools
+    state: absent
+  when: "'multipath-tools' in (ansible_facts.packages | default({}))"
+  notify: Reload systemd
+
+- name: Mask multipathd to prevent accidental start
+  ansible.builtin.systemd:
+    name: multipathd
+    masked: true
+  when: ansible_virtualization_type != 'docker'
+
+# Flush immediately so daemon_reload fires even if the play fails before
+# the later flush_handlers (e.g. iscsid task failure).
+- name: Flush handlers after multipath removal
+  ansible.builtin.meta: flush_handlers
+
+# ── iSCSI (required by Longhorn) ─────────────────────────────────────────
+
+- name: Ensure iscsid is enabled and running
+  ansible.builtin.systemd:
+    name: iscsid
+    state: started
+    enabled: true
+  when: ansible_virtualization_type != 'docker'

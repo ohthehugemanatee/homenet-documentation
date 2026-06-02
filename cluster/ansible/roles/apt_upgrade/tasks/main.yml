@@ -34,10 +34,5 @@
     post_reboot_delay: "{{ apt_upgrade_post_reboot_delay }}"
   when: apt_upgrade_reboot_required.stat.exists or apt_upgrade_result.changed
 
-- name: Refresh facts to pick up new kernel version
+- name: Refresh facts after reboot
   ansible.builtin.setup:
-
-- name: Install linux-modules-extra for running kernel (required for iSCSI)
-  ansible.builtin.apt:
-    name: "linux-modules-extra-{{ ansible_kernel }}"
-    state: present

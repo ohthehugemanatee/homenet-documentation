@@ -70,6 +70,10 @@
           ansible.builtin.import_role:
             name: apt_upgrade
 
+        - name: Apply node state configuration
+          ansible.builtin.import_role:
+            name: node_state
+
         - name: Verify k3s health and uncordon
           ansible.builtin.import_role:
             name: k3s_health
@@ -130,6 +134,10 @@
         - name: Run apt dist-upgrade and reboot
           ansible.builtin.import_role:
             name: apt_upgrade
+
+        - name: Apply node state configuration
+          ansible.builtin.import_role:
+            name: node_state
 
         - name: Verify k3s health and uncordon
           ansible.builtin.import_role:
@@ -195,6 +203,10 @@
         - name: Run apt dist-upgrade and reboot
           ansible.builtin.import_role:
             name: apt_upgrade
+
+        - name: Apply node state configuration
+          ansible.builtin.import_role:
+            name: node_state
 
         - name: Verify k3s health and uncordon
           ansible.builtin.import_role:
