@@ -43,7 +43,7 @@ jobs:
             --json files --jq '[.files[].path]')
           TOTAL=$(echo "$CHANGED" | jq 'length')
           DOCS=$(echo "$CHANGED" | \
-            jq '[.[] | select(test("\\.(md|txt|rst)$|^docs/|README"))] | length')
+            jq '[.[] | select(test("\\.(md|txt|rst)$|^docs/|README") and (test("(^|/)CLAUDE\\.md$|(^|/)AGENTS\\.md$") | not))] | length')
           if [ "$TOTAL" -gt 0 ] && [ "$TOTAL" -eq "$DOCS" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Skipping review: docs-only change ($TOTAL files)"
