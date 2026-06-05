@@ -26,3 +26,7 @@
 ## Exception files
 
 - `agentic-review-exceptions.yaml` documents dismissed AI-review findings. Update intentionally when adding/removing a known finding; **never** as a way to silence a real failure.
+
+## PR template
+
+`pull_request_template.md` provides the checklist for human reviewers: Part 1 is the standard code review checklist; Part 2 is the mandatory AI-specific validation checklist (omission, logic, dependency, context, drift). The AI review workflow (`pr-review.yaml`) is prompted to run the same Part 2 checks and must report each item explicitly. Recurring AI mistakes found during review belong in `agentic-review-exceptions.yaml` with rationale.
