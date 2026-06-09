@@ -132,12 +132,13 @@ jobs:
         env:
           TRIVY_VERSION: 0.71.0
         run: |
-          curl -fsSLo /tmp/trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          TARBALL="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLo "/tmp/${TARBALL}" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TARBALL}"
           curl -fsSLo /tmp/trivy.checksums \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
-          grep "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz$" /tmp/trivy.checksums | sha256sum -c -
-          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+          grep "${TARBALL}$" /tmp/trivy.checksums | (cd /tmp && sha256sum -c -)
+          tar -xzf "/tmp/${TARBALL}" -C /usr/local/bin trivy
           trivy --version
       - name: Scan Dockerfiles for misconfigurations
         run: |
