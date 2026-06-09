@@ -137,19 +137,18 @@ jobs:
           fence = '```'
           trunc_note = '\n\n*(diff truncated due to size)*' if truncated else ''
           prompt = (
-              'Review this infrastructure pull request focusing on:\n\n'
-              '1. **Security vulnerabilities** - Exposed secrets or credentials, overly permissive RBAC/network policies,'
-              ' unencrypted sensitive data, unsafe default configurations, and similar\n'
-              '2. **Reliability and idempotency** - Non-idempotent tasks, missing error handling, race conditions,'
-              ' operations that could cause downtime or data loss, and similar\n'
-              '3. **Configuration quality** - Hardcoded IPs or hostnames that should be variables, missing resource'
-              ' limits/requests, deprecated API versions, inconsistent naming conventions, and similar\n'
-              '4. **Operational concerns** - Missing health checks, absent monitoring or alerting hooks, no rollback'
-              ' strategy for destructive changes, missing backup considerations, and similar\n'
-              '5. **Documentation** - Undocumented manual prerequisites, missing runbook entries for new failure modes,'
-              ' outdated topology references, and similar\n'
-              '6. **AI-Specific Validation** - For each item below you MUST report a finding or explicitly state'
-              ' "no issue found" so the human reviewer can confirm the check ran:\n'
+              'Review this infrastructure pull request using the following process.'
+              ' Steps 1, 2, and 4 are internal reasoning — do NOT include them in your response.'
+              ' Your visible output must contain only: the AI-Specific Validation (step 3),'
+              ' the Final Review (step 5), and the completed Verification Checklist.\n\n'
+              '**Review Process (steps 1, 2, 4 are internal only):**\n\n'
+              '1. **Initial Analysis** *(internal)* — Review for security vulnerabilities, reliability and idempotency,'
+              ' configuration quality, operational concerns, and documentation gaps.\n\n'
+              '2. **Gather Findings** *(internal)* — For each issue note:'
+              ' `[SEVERITY: HIGH/MEDIUM/LOW] Issue description`\n'
+              '   Only actual issues, not style preferences.\n\n'
+              '3. **AI-Specific Validation** *(emit this section)* — For each item below report a finding or explicitly'
+              ' state "no issue found" so the human reviewer can confirm the check ran:\n'
               '   - *Omission Check*: What security controls are absent? (input validation, output encoding,'
               ' authorization, rate limiting)\n'
               '   - *Logic Check*: Is there a subtle logic error — inverted condition, `==` vs `in`, off-by-one,'
@@ -160,8 +159,22 @@ jobs:
               ' `--no-verify`, `set +e`, `|| true` masking failures) that violates the security posture?\n'
               '   - *Drift Check*: Did the change touch security-critical code (auth, crypto, RBAC, network policy,'
               ' firewall rules) outside the PR\'s declared scope?\n\n'
-              'Be concise. Only report actual issues, not style preferences.\n'
-              'Format: `[SEVERITY: HIGH/MEDIUM/LOW] Issue description`\n'
+              '4. **Verify Your Findings** *(internal)* — Verify your gathered findings:\n'
+              '   - Are all security issues identified (secrets, RBAC, network policies, unencrypted data)?\n'
+              '   - Did I check for common vulnerabilities (injection, privilege escalation, unsafe defaults)?\n'
+              '   - Are reliability/idempotency concerns accurate?\n'
+              '   - Did I miss any edge cases?\n'
+              '   - Are my recommendations actually feasible in this K8s/Ansible homelab context?\n\n'
+              '5. **Final Review** *(emit this section)* — Present your verified findings with confidence levels:\n'
+              '   Format: `[SEVERITY: HIGH/MEDIUM/LOW] [Confidence: High/Medium/Low] Issue description`\n'
+              '   If no issues were found, state that explicitly.\n\n'
+              '**Verification Checklist** *(emit this section, mark each checked)*:\n'
+              '- [ ] Checked for security vulnerabilities (secrets, RBAC, network policies)\n'
+              '- [ ] Reviewed reliability and idempotency\n'
+              '- [ ] Validated configuration quality\n'
+              '- [ ] Confirmed operational concerns addressed\n'
+              '- [ ] Reviewed documentation completeness\n'
+              '- [ ] Confirmed recommendations are implementable in this environment\n'
               + exceptions_context
               + prior_comments_context
               + '\n\n## Pull request diff\n\n'
@@ -172,7 +185,7 @@ jobs:
 
           payload = json.dumps({
               'model': 'claude-opus-4-7',
-              'max_tokens': 2048,
+              'max_tokens': 4096,
               'messages': [{'role': 'user', 'content': prompt}]
           }).encode()
 
