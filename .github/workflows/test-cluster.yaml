@@ -93,7 +93,8 @@ jobs:
           helm template kube-prometheus-stack \
             oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
             --namespace monitoring \
-            -f cluster/helm/kube-prometheus-stack/values.yaml > /dev/null
+            -f cluster/helm/kube-prometheus-stack/values.yaml \
+            | kubeconform -strict -ignore-missing-schemas -
 
       - name: Dry-run loki
         run: |
