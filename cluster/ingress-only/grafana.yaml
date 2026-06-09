@@ -1,18 +1,22 @@
-# ingress only, loki-grafana from the loki-stack helmchart does the rest.
+# ingress only, kube-prometheus-stack-grafana from the kube-prometheus-stack chart does the rest.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: grafana
-  namespace: loki
+  namespace: monitoring
 spec:
   rules:
-  - host: grafana.cluster.vert
+  - host: grafana.berlin.vertesi.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: loki-grafana
+            name: kube-prometheus-stack-grafana
             port:
               number: 80
+  tls:
+  - hosts:
+    - grafana.berlin.vertesi.com
+    secretName: berlin-vertesi-com-wildcard-tls
