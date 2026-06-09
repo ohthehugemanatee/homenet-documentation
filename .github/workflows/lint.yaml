@@ -4,6 +4,9 @@ name: Lint
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
 
   yaml:
@@ -44,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
         with:
           recursive: true
           config: .hadolint.yaml
@@ -126,9 +129,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install trivy
+        env:
+          TRIVY_VERSION: 0.71.0
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin
+          curl -fsSLo /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLo /tmp/trivy.checksums \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz$" /tmp/trivy.checksums | sha256sum -c -
+          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
           trivy --version
       - name: Scan Dockerfiles for misconfigurations
         run: |

@@ -709,6 +709,17 @@ exceptions:
       necessary to propagate molecule's exit code through continue-on-error
       so outcome reflects the actual molecule result.
 
+  - pattern: "autofix run_bash uses denylist / shell=True with LLM-controlled input"
+    files:
+      - .github/scripts/autofix.py
+    reason: >-
+      Intentional design. The bash denylist blocks the most common
+      exfiltration vectors (curl, wget, nc, ncat, netcat, /dev/tcp,
+      ANTHROPIC_*, GH_TOKEN, GITHUB_TOKEN, SECRET). The .github/ write-block
+      prevents CI config tampering. The runner sandbox bounds blast radius.
+      A full allowlist would require reimplementing the repair loop.
+      Accepted homelab tradeoff.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
