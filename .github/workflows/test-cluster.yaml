@@ -93,7 +93,7 @@ jobs:
           helm upgrade --install kube-prometheus-stack \
             oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
             --namespace monitoring --create-namespace \
-            --dry-run \
+            --dry-run=client \
             -f cluster/helm/kube-prometheus-stack/values.yaml
 
       - name: Dry-run loki
