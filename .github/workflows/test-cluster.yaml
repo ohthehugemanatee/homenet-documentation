@@ -91,7 +91,7 @@ jobs:
       - name: Dry-run kube-prometheus-stack
         run: |
           helm upgrade --install kube-prometheus-stack \
-            oci://ghcr.io/prometheus-community/helm-charts/kube-prometheus-stack \
+            oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
             --namespace monitoring --create-namespace \
             --dry-run \
             -f cluster/helm/kube-prometheus-stack/values.yaml

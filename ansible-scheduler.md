@@ -336,7 +336,7 @@ kubectl create secret generic alertmanager-pushover \
 
 # Deploy kube-prometheus-stack:
 helm upgrade --install kube-prometheus-stack \
-  oci://ghcr.io/prometheus-community/helm-charts/kube-prometheus-stack \
+  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f cluster/helm/kube-prometheus-stack/values.yaml
 

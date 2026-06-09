@@ -1,6 +1,6 @@
 #!/bin/sh
 helm upgrade --install kube-prometheus-stack \
-  oci://ghcr.io/prometheus-community/helm-charts/kube-prometheus-stack \
+  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f values.yaml
 printf 'grafana password: '
