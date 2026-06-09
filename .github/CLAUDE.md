@@ -30,4 +30,4 @@
 
 ## PR template
 
-`pull_request_template.md` provides the checklist for human reviewers: Part 1 is the standard code review checklist; Part 2 is the mandatory AI-specific validation checklist (omission, logic, dependency, context, drift). The AI review workflow (`pr-review.yaml`) is prompted to run the same Part 2 checks and must report each item explicitly. Recurring AI mistakes found during review belong in `agentic-review-exceptions.yaml` with rationale.
+`pull_request_template.md` provides the checklist for human reviewers: Part 1 is the standard code review checklist; Part 2 is the mandatory AI-specific validation checklist (omission, logic, dependency, context, drift); Part 3 is the explicit security & privacy checklist (secrets, RBAC, network exposure, container security, privacy). The AI review workflow (`pr-review.yaml`) is prompted to run the same Part 2 and Part 3 checks and must report each item explicitly. Recurring AI mistakes found during review belong in `agentic-review-exceptions.yaml` with rationale.
