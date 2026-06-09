@@ -323,14 +323,28 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 ## Alertmanager → Pushover
 
-Configured in `cluster/helm/loki/values.yaml` under `prometheus.alertmanagerFiles`.
+Configured in `cluster/helm/kube-prometheus-stack/values.yaml` under `alertmanager.config`.
 
-**Replace placeholder credentials** before applying. **Do not commit the file with real credentials in place.**
+Pushover credentials are stored in a pre-created K8s Secret (not in the values file):
 
 ```bash
-# Decrypt values.yaml, replace CHANGEME_ tokens in a local working copy, then apply:
-helm upgrade -n loki loki grafana/loki-stack -f cluster/helm/loki/values.yaml
-# Re-encrypt or discard the working copy — do not git add the replaced file.
+# Create the secret once (before first deploy):
+kubectl create secret generic alertmanager-pushover \
+  -n monitoring \
+  --from-literal=token=<PUSHOVER_APP_TOKEN> \
+  --from-literal=user_key=<PUSHOVER_USER_KEY>
+
+# Deploy kube-prometheus-stack:
+helm upgrade --install kube-prometheus-stack \
+  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+  -n monitoring --create-namespace \
+  -f cluster/helm/kube-prometheus-stack/values.yaml
+
+# Deploy community Loki chart:
+helm upgrade --install loki \
+  oci://ghcr.io/grafana-community/helm-charts/loki \
+  -n loki --create-namespace \
+  -f cluster/helm/loki/values.yaml
 ```
 
 Covers: NodeNotReady, pod OOMKill, CrashLoopBackOff, PVC near full, and any future

@@ -1,42 +1,57 @@
-grafana:
-  enabled: true
-  persistence:
-    enabled: true
-  ingress:
-    enabled: true
-    hosts:
-      - grafana.cluster.vert
-        #nodeSelector:
-    # because some grafana plugins don't support arm64 yet.
-    #kubernetes.io/arch: amd64
-prometheus:
-  enabled: true
-  alertmanager:
-    enabled: true
-    persistentVolume:
-      storageClass: "longhorn-ephemeral"
-  # Alertmanager configuration — Pushover receiver for k8s health alerts.
-  # Credentials: set PUSHOVER_TOKEN and PUSHOVER_USER in the alertmanager secret,
-  # or template this file from Ansible vault before running helm upgrade.
-  alertmanagerFiles:
-    alertmanager.yml:
-      global:
-        resolve_timeout: 5m
-      route:
-        receiver: pushover
-        group_wait: 30s
-        group_interval: 5m
-        repeat_interval: 4h
-      receivers:
-        - name: pushover
-          pushover_configs:
-            - token: CHANGEME_PUSHOVER_APP_TOKEN
-              user_key: CHANGEME_PUSHOVER_USER_KEY
-              title: 'k8s alert: {{ .GroupLabels.alertname }}'
-              message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-              priority: "0"
-loki:
-  persistence:
-    enabled: false
-
 deploymentMode: Monolithic
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 168h
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+  compactor:
+    retention_enabled: true
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: "longhorn-ephemeral"
+    size: 5Gi
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+gateway:
+  enabled: false
+
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+test:
+  enabled: false
+
+monitoring:
+  selfMonitoring:
+    enabled: false
+  lokiCanary:
+    enabled: false
