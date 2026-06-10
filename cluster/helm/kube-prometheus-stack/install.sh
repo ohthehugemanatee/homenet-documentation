@@ -1,4 +1,17 @@
-#!/bin/sh
+#!/bin/bash
+# Configures kube-prometheus stack with alertmanager/pushover.
+
+read -rp "Enter pushover user key: " user_key
+
+read -rp "Enter pushover app key: " app_key
+
+kubectl create namespace monitoring
+
+kubectl create secret generic alertmanager-pushover \
+  -n monitoring \
+  --from-literal=token="${app_key}" \
+  --from-literal=user_key="${user_key}"
+
 helm upgrade --install kube-prometheus-stack \
   oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
   -n monitoring --create-namespace \
