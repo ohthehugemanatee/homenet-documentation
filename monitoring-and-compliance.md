@@ -1,6 +1,6 @@
-# Ansible Scheduler — Architecture & Operations
+# Monitoring and Compliance - Architecture & Operations
 
-Scheduled Ansible automation for the homenet k3s cluster, with alerting on failure.
+Loki/Prometheus/Grafana monitoring and scheduled Ansible automation for the homenet k3s cluster, with pushover alerting on failure.
 
 ---
 
@@ -321,11 +321,15 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 ---
 
-## Alertmanager → Pushover
+## Monitoring and Alertmanager/Pushover
 
-Configured in `cluster/helm/kube-prometheus-stack/values.yaml` under `alertmanager.config`.
+Grafana/Prometheus configured together in `cluster/helm/kube-prometheus-stack/values.yaml` with alertmanager under `alertmanager.config`. Loki is added afterwards from `cluster/helm/loki/values.html`. There are handy "install" scrpits for both. 
 
-Pushover credentials are stored in a pre-created K8s Secret (not in the values file):
+Pushover credentials are stored in a pre-created K8s Secret (not in the values file). 
+
+Easy deployment: `cd cluster/helm/kube-prometheus-stack && ./install.sh && cd ../loki && install.sh`.
+
+Manual deployment:
 
 ```bash
 # Create the secret once (before first deploy):
