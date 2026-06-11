@@ -17,6 +17,7 @@ Every directory has its own `CLAUDE.md` (with `AGENTS.md` symlink); Claude Code 
 - **Constrain scope; minimal changes; ask before straying.** Smallest diff that satisfies the spec. No adjacent refactors. **Do not modify files outside the Issue's declared scope without asking** — a typo fix in an unrelated file is its own Issue. If the operator expands scope mid-flight, push back: name the expansion, propose it as a new Issue with its place in the graph, finish the original.
 - **Prefer established upstream/community components over scripted glue.** Order: (1) upstream Helm chart + our values, (2) community operator/controller, (3) vendored upstream manifest, (4) raw manifest we author. Bash scripts, `curl | sh` init containers, one-off `kubectl` in CI are the **last** resort and require justification in the spec. Ansible: Galaxy roles/collections in `requirements.yaml` over hand-rolled `command:` / `shell:`.
 - **Run tests before commit; fix failures, don't commit around them.** Never commit with known-failing tests, never silence a test or add to an exception file to make CI green, never `--no-verify`.
+- **Verify configuration changes in updated project documentation.** When a change touches configuration (K8s manifests, Helm values, Ansible vars/playbooks, CI workflows, docker-compose), cross-check the updated project docs (`*.md` in the affected directory and repo root) for correctness and effect — stale docs that contradict the new config are a bug. If docs need updating, include the doc fix in the same PR.
 
 ## Repository map
 

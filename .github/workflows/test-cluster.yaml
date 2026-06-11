@@ -42,7 +42,7 @@ jobs:
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
-          for ns in collabora unifi octoprint loki longhorn-system dns-bg-check; do
+          for ns in collabora unifi octoprint loki monitoring longhorn-system dns-bg-check; do
             kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
           done
           kubectl apply -f cluster/priorityClasses/
@@ -89,9 +89,17 @@ jobs:
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo update
 
-      - name: Dry-run loki-stack
+      - name: Dry-run kube-prometheus-stack
         run: |
-          helm upgrade --install loki grafana/loki-stack \
+          helm template kube-prometheus-stack \
+            oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+            --namespace monitoring \
+            -f cluster/helm/kube-prometheus-stack/values.yaml > /dev/null
+
+      - name: Dry-run loki
+        run: |
+          helm upgrade --install loki \
+            oci://ghcr.io/grafana-community/helm-charts/loki \
             --namespace loki --create-namespace \
             --dry-run \
             -f cluster/helm/loki/values.yaml
@@ -101,6 +109,13 @@ jobs:
           helm upgrade --install netdata netdata/netdata \
             --dry-run \
             -f cluster/helm/netdata/override.yaml
+
+      - name: Dry-run alloy
+        run: |
+          helm upgrade --install alloy grafana/alloy \
+            --namespace monitoring --create-namespace \
+            --dry-run \
+            -f cluster/helm/alloy/values.yaml
 
       - name: Dry-run nfs-subdir-external-provisioner
         run: |
