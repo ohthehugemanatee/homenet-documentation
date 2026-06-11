@@ -84,7 +84,6 @@ jobs:
       - name: Add helm repos
         run: |
           helm repo add grafana https://grafana.github.io/helm-charts
-          helm repo add netdata https://netdata.github.io/helmchart/
           helm repo add nfs-subdir-external-provisioner \
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo update
@@ -95,12 +94,6 @@ jobs:
             --namespace loki --create-namespace \
             --dry-run \
             -f cluster/helm/loki/values.yaml
-
-      - name: Dry-run netdata
-        run: |
-          helm upgrade --install netdata netdata/netdata \
-            --dry-run \
-            -f cluster/helm/netdata/override.yaml
 
       - name: Dry-run nfs-subdir-external-provisioner
         run: |
