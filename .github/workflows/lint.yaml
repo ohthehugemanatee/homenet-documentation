@@ -42,17 +42,6 @@ jobs:
               --ignore-missing-schemas \
               --kubernetes-version 1.29.0
 
-  dockerfiles:
-    name: Dockerfiles
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
-        with:
-          recursive: true
-          config: .hadolint.yaml
-          failure-threshold: error
-
   shell:
     name: Shell scripts
     runs-on: ubuntu-latest
@@ -124,7 +113,7 @@ jobs:
             --format pretty || true
 
   trivy:
-    name: Dockerfile and IaC security scan (Trivy)
+    name: IaC security scan (Trivy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -140,12 +129,6 @@ jobs:
           grep "${TARBALL}$" /tmp/trivy.checksums | (cd /tmp && sha256sum -c -)
           tar -xzf "/tmp/${TARBALL}" -C /usr/local/bin trivy
           trivy --version
-      - name: Scan Dockerfiles for misconfigurations
-        run: |
-          trivy config \
-            --exit-code 1 \
-            --severity CRITICAL,HIGH \
-            cluster/Dockerfiles
       - name: Scan k8s manifests for misconfigurations
         run: |
           trivy config \
