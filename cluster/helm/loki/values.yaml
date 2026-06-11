@@ -21,6 +21,7 @@ loki:
     reject_old_samples_max_age: 168h
   compactor:
     retention_enabled: true
+    delete_request_store: filesystem
 
 singleBinary:
   replicas: 1
@@ -36,6 +37,12 @@ singleBinary:
       memory: 256Mi
     limits:
       memory: 512Mi
+
+sidecar:
+  # k3s CA cert lacks Authority Key Identifier extension;
+  # Python 3.13+ in the sidecar image rejects it.
+  # Tracked: regenerate k3s CA with AKI/SKI extensions.
+  skipTlsVerify: true
 
 gateway:
   enabled: false
