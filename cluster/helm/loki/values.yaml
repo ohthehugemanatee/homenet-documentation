@@ -38,6 +38,13 @@ singleBinary:
     limits:
       memory: 512Mi
 
+sidecar:
+  rules:
+    # k3s CA cert lacks Authority Key Identifier extension;
+    # Python 3.13+ in the sidecar image rejects it.
+    # Tracked: regenerate k3s CA with AKI/SKI extensions.
+    skipTlsVerify: true
+
 gateway:
   enabled: false
 
