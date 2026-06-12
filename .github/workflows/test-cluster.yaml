@@ -102,7 +102,7 @@ jobs:
             --namespace loki --create-namespace \
             --dry-run \
             -f cluster/helm/loki/values.yaml
-      
+
       - name: Dry-run alloy
         run: |
           helm upgrade --install alloy grafana/alloy \
