@@ -1,0 +1,87 @@
+grafana:
+  enabled: true
+  sidecar:
+    # k3s CA cert lacks Authority Key Identifier extension;
+    # Python 3.13+ in the sidecar image rejects it.
+    # Tracked: regenerate k3s CA with AKI/SKI extensions.
+    skipTlsVerify: true
+  persistence:
+    enabled: true
+  ingress:
+    enabled: true
+    hosts:
+      - grafana.berlin.vertesi.com
+    tls:
+      - hosts:
+          - grafana.berlin.vertesi.com
+        secretName: berlin-vertesi-com-wildcard-tls
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki.loki.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: "longhorn-performance"
+          resources:
+            requests:
+              storage: 1Gi
+    nodeSelector:
+      kubernetes.io/arch: amd64
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: pushover
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    receivers:
+      - name: pushover
+        pushover_configs:
+          - token_file: /etc/alertmanager/secrets/alertmanager-pushover/token
+            user_key_file: /etc/alertmanager/secrets/alertmanager-pushover/user_key
+            title: 'k8s alert: {{ .GroupLabels.alertname }}'
+            message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            priority: "0"
+    secrets:
+      - alertmanager-pushover
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: "longhorn-ephemeral"
+          resources:
+            requests:
+              storage: 10Gi
+    nodeSelector:
+      kubernetes.io/arch: amd64
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
