@@ -73,6 +73,17 @@ alertmanager:
             message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             priority: "0"
 
+# k3s embeds controller-manager, scheduler, proxy, and etcd inside
+# the k3s server process — no separate pods or scrape endpoints exist.
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
 prometheus:
   prometheusSpec:
     retention: 15d
