@@ -1,5 +1,5 @@
 global:
-  domain: argocd.cluster.vert
+  domain: argocd.berlin.vertesi.com
 
 server:
   insecure: true
@@ -70,7 +70,7 @@ notifications:
               "title": "ArgoCD: {{.app.metadata.name}} OutOfSync",
               "message": "{{.app.metadata.name}} has drifted from git. Health: {{.app.status.health.status}}",
               "priority": "0",
-              "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
+              "url": "https://argocd.berlin.vertesi.com/applications/{{.app.metadata.name}}"
             }
     template.app-sync-failed: |
       webhook:
@@ -84,7 +84,7 @@ notifications:
               "title": "ArgoCD FAILED: {{.app.metadata.name}}",
               "message": "Sync failed: {{.app.status.operationState.message}}",
               "priority": "1",
-              "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
+              "url": "https://argocd.berlin.vertesi.com/applications/{{.app.metadata.name}}"
             }
     template.app-health-degraded: |
       webhook:
@@ -98,7 +98,7 @@ notifications:
               "title": "ArgoCD DEGRADED: {{.app.metadata.name}}",
               "message": "{{.app.metadata.name}} health is {{.app.status.health.status}}",
               "priority": "1",
-              "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
+              "url": "https://argocd.berlin.vertesi.com/applications/{{.app.metadata.name}}"
             }
   triggers:
     trigger.on-out-of-sync: |

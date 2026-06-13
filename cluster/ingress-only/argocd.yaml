@@ -5,23 +5,16 @@ metadata:
   namespace: argocd
 spec:
   rules:
-    - host: argocd.cluster.vert
-      http:
-        paths:
-          - pathType: Prefix
-            path: "/"
-            backend:
-              service:
-                name: argocd-server
-                port:
-                  number: 80
-    - host: argocd.vert
-      http:
-        paths:
-          - pathType: Prefix
-            path: "/"
-            backend:
-              service:
-                name: argocd-server
-                port:
-                  number: 80
+  - host: argocd.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - argocd.berlin.vertesi.com
