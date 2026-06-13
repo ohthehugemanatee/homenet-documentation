@@ -58,6 +58,7 @@ alertmanager:
       group_interval: 5m
       repeat_interval: 4h
     receivers:
+      - name: "null"
       - name: pushover
         pushover_configs:
           - token_file: /etc/alertmanager/secrets/alertmanager-pushover/token
