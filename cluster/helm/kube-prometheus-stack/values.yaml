@@ -28,6 +28,12 @@ grafana:
       url: http://loki.loki.svc.cluster.local:3100
       access: proxy
       isDefault: false
+    - name: Alertmanager
+      type: alertmanager
+      url: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
+      access: proxy
+      jsonData:
+        implementation: prometheus
 
 alertmanager:
   enabled: true
