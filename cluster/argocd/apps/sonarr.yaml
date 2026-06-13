@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sonarr
+  namespace: argocd
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.pushover: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+    targetRevision: HEAD
+    path: cluster/services
+    directory:
+      include: sonarr.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
