@@ -8,7 +8,7 @@ One Application manifest per managed workload in `apps/`. File names match the A
 - `spec.destination.namespace` matches the workload's actual namespace.
 - **Auto-sync** (prune + self-heal): stable media and utility apps.
 - **Manual sync** (no prune, no self-heal): infrastructure and complex stateful apps (nextcloud, collabora).
-- All manual-sync apps get `notifications.argoproj.io/subscribe.on-sync-status-unknown.pushover: ""` annotation.
+- All manual-sync apps get `notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""` annotation.
 - All auto-sync apps get `on-sync-failed` and `on-health-degraded` notification annotations.
 - Helm-sourced Applications use multi-source when the values file lives in this git repo.
 
