@@ -4,7 +4,7 @@ metadata:
   name: default-limits
   namespace: argocd
   annotations:
-    notifications.argoproj.io/subscribe.on-sync-status-unknown.pushover: ""
+    notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
 spec:
   project: default
   source:
