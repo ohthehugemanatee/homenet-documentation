@@ -14,7 +14,6 @@ grafana:
     tls:
       - hosts:
           - grafana.berlin.vertesi.com
-        secretName: berlin-vertesi-com-wildcard-tls
   nodeSelector:
     kubernetes.io/arch: amd64
   resources:

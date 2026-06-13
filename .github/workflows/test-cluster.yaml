@@ -61,6 +61,7 @@ jobs:
             ! -path "*/priorityClasses/*" \
             ! -name "cert-manager.yaml" \
             ! -name "l2-config.yaml" \
+            ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
             | sort)
           exit "$FAILED"
