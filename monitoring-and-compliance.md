@@ -13,8 +13,13 @@ shoebox (external, always-on NFS server)
 ├── /var/log/ansible/           ← playbook logs, logrotated weekly (12 weeks)
 └── /var/lib/ansible-upgrade/  ← run state files (failure flag, maintenance flag)
 
-In-cluster (Loki stack)
-└── Alertmanager → Pushover    ← k8s node health, pod crashloops, OOMKills
+In-cluster (observability)
+├── Prometheus        ← scrapes metrics from nodes + pods (15d retention)
+├── Alertmanager      ← fires on PrometheusRules → Pushover
+├── Grafana           ← dashboards for metrics (Prometheus) + logs (Loki)
+├── Loki              ← log aggregation (monolithic, 7d retention)
+├── Alloy (DaemonSet) ← collects pod stdout/stderr → Loki
+└── Promtail sidecars ← collects file-based logs from specific pods → Loki
 ```
 
 ### Why shoebox, not in-cluster
@@ -323,11 +328,17 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 ## Monitoring and Alertmanager/Pushover
 
-Grafana/Prometheus configured together in `cluster/helm/kube-prometheus-stack/values.yaml` with alertmanager under `alertmanager.config`. Loki is added afterwards from `cluster/helm/loki/values.html`. There are handy "install" scrpits for both. 
+Grafana/Prometheus configured together in `cluster/helm/kube-prometheus-stack/values.yaml` with alertmanager under `alertmanager.config`. Loki is added from `cluster/helm/loki/values.yaml`. Alloy (log collector DaemonSet) is configured in `cluster/helm/alloy/values.yaml`. Each chart directory has an install script.
 
-Pushover credentials are stored in a pre-created K8s Secret (not in the values file). 
+Pushover credentials are stored in a pre-created K8s Secret (not in the values file).
 
-Easy deployment: `cd cluster/helm/kube-prometheus-stack && ./install.sh && cd ../loki && install.sh`.
+Easy deployment:
+
+```bash
+cd cluster/helm/kube-prometheus-stack && ./install.sh
+cd ../loki && ./install-loki.sh
+cd ../alloy && ./install-alloy.sh
+```
 
 Manual deployment:
 
@@ -349,9 +360,113 @@ helm upgrade --install loki \
   oci://ghcr.io/grafana-community/helm-charts/loki \
   -n loki --create-namespace \
   -f cluster/helm/loki/values.yaml
+
+# Deploy Alloy log collector:
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update grafana
+helm upgrade --install alloy grafana/alloy \
+  -n monitoring --create-namespace \
+  -f cluster/helm/alloy/values.yaml
 ```
 
 Covers: NodeNotReady, pod OOMKill, CrashLoopBackOff, PVC near full, and any future
 PrometheusRule alerts.
 
 Note: Alertmanager lives in-cluster and cannot alert if the entire cluster is down.
+
+---
+
+## Log pipeline
+
+Two collection paths feed logs into Loki:
+
+| Path | What it collects | Mechanism |
+|---|---|---|
+| Alloy DaemonSet | stdout/stderr from all pods | `discovery.kubernetes` pod role, runs on every node (including control-plane) |
+| Promtail sidecars | File-based logs from specific pods | Shared volume mount, reads `*.log` from application log directories |
+
+**Alloy** (`cluster/helm/alloy/values.yaml`) runs as a DaemonSet in the `monitoring`
+namespace. It discovers all pods via the Kubernetes API, relabels with namespace/pod/
+container/node metadata, and pushes to `http://loki.loki.svc.cluster.local:3100`.
+This covers every workload that logs to stdout/stderr (the standard Kubernetes pattern).
+
+**Promtail sidecars** (`cluster/ConfigMaps/sidecar-promtail.yaml`) are deployed as
+additional containers inside pods that write logs to files rather than stdout. Currently
+used by: plex, nextcloud, duplicacy. Each sidecar mounts a shared volume with the
+application container, tails `*.log` files, and pushes to the same Loki endpoint.
+The sidecar image is `grafana/promtail:2.1.0`.
+
+Both paths are complementary: Alloy handles cluster-wide stdout collection; promtail
+sidecars handle the file-logging exceptions.
+
+---
+
+## Known workaround: skipTlsVerify
+
+The k3s CA certificate lacks the Authority Key Identifier (AKI) extension. Python 3.13+
+(used in Grafana sidecar images) rejects certificates without AKI. As a workaround,
+`skipTlsVerify: true` is set in both `kube-prometheus-stack/values.yaml` and
+`loki/values.yaml` for the sidecar configuration. This affects only the sidecar's
+communication with the Kubernetes API for dashboard/datasource discovery — not
+Prometheus scraping or Loki ingestion.
+
+Tracked: regenerate the k3s CA with AKI/SKI extensions to remove this workaround.
+
+---
+
+## Troubleshooting the observability stack
+
+### Logs not appearing in Grafana
+
+```bash
+# Check Alloy pods are running on all nodes
+kubectl get pods -n monitoring -l app.kubernetes.io/name=alloy -o wide
+
+# Check Alloy logs for push errors
+kubectl logs -n monitoring daemonset/alloy --tail=50
+
+# Check Loki is accepting writes
+kubectl logs -n loki -l app.kubernetes.io/name=loki --tail=50 | grep -i error
+
+# Verify Loki is reachable from inside the cluster
+kubectl run -n monitoring --rm -it --image=busybox test-loki -- \
+  wget -qO- http://loki.loki.svc.cluster.local:3100/ready
+```
+
+### Promtail sidecar not collecting
+
+```bash
+# Check the sidecar container logs inside the affected pod
+kubectl logs <pod> -c plex-promtail    # or nextcloud-promtail, promtail-sidecar
+# Verify the shared volume has log files
+kubectl exec <pod> -c <app-container> -- ls /sidecar-logs/
+```
+
+### Alerts not firing
+
+```bash
+# Check Alertmanager is running
+kubectl get pods -n monitoring -l app.kubernetes.io/name=alertmanager
+
+# Verify the pushover secret exists and has both keys
+kubectl get secret -n monitoring alertmanager-pushover -o jsonpath='{.data}' | \
+  python3 -c "import sys,json,base64; d=json.load(sys.stdin); print({k:len(base64.b64decode(v)) for k,v in d.items()})"
+
+# Check Alertmanager logs for send failures
+kubectl logs -n monitoring -l app.kubernetes.io/name=alertmanager --tail=50 | grep -i pushover
+
+# View currently firing alerts
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-alertmanager 9093:9093 &
+curl -s localhost:9093/api/v2/alerts | python3 -m json.tool
+```
+
+### Prometheus not scraping
+
+```bash
+# Check targets page (port-forward first)
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090 &
+# Open localhost:9090/targets in a browser
+
+# Check Prometheus logs
+kubectl logs -n monitoring -l app.kubernetes.io/name=prometheus --tail=50
+```
