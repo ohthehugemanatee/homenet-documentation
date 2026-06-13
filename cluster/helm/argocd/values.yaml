@@ -49,6 +49,67 @@ notifications:
   enabled: true
   nodeSelector:
     kubernetes.io/arch: amd64
+  secret:
+    create: false
+  notifiers:
+    service.webhook.pushover: |
+      url: https://api.pushover.net
+      headers:
+        - name: Content-Type
+          value: application/json
+  templates:
+    template.app-out-of-sync: |
+      webhook:
+        pushover:
+          method: POST
+          path: /1/messages.json
+          body: |
+            {
+              "token": "{{call .secret.get \"pushoverToken\"}}",
+              "user": "{{call .secret.get \"pushoverUserKey\"}}",
+              "title": "ArgoCD: {{.app.metadata.name}} OutOfSync",
+              "message": "{{.app.metadata.name}} has drifted from git. Health: {{.app.status.health.status}}",
+              "priority": "0",
+              "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
+            }
+    template.app-sync-failed: |
+      webhook:
+        pushover:
+          method: POST
+          path: /1/messages.json
+          body: |
+            {
+              "token": "{{call .secret.get \"pushoverToken\"}}",
+              "user": "{{call .secret.get \"pushoverUserKey\"}}",
+              "title": "ArgoCD FAILED: {{.app.metadata.name}}",
+              "message": "Sync failed: {{.app.status.operationState.message}}",
+              "priority": "1",
+              "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
+            }
+    template.app-health-degraded: |
+      webhook:
+        pushover:
+          method: POST
+          path: /1/messages.json
+          body: |
+            {
+              "token": "{{call .secret.get \"pushoverToken\"}}",
+              "user": "{{call .secret.get \"pushoverUserKey\"}}",
+              "title": "ArgoCD DEGRADED: {{.app.metadata.name}}",
+              "message": "{{.app.metadata.name}} health is {{.app.status.health.status}}",
+              "priority": "1",
+              "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
+            }
+  triggers:
+    trigger.on-sync-status-unknown: |
+      - when: app.status.sync.status == 'OutOfSync'
+        send: [app-out-of-sync]
+    trigger.on-sync-failed: |
+      - when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']
+        send: [app-sync-failed]
+    trigger.on-health-degraded: |
+      - when: app.status.health.status == 'Degraded'
+        send: [app-health-degraded]
 
 dex:
   enabled: false
