@@ -28,6 +28,7 @@ Every directory has its own `CLAUDE.md` (with `AGENTS.md` symlink); Claude Code 
 | `cluster/ansible/` | Playbooks, roles, monkeyble + molecule tests | `cluster/ansible/CLAUDE.md` |
 | `cluster/helm/` | Values overrides for upstream charts | `cluster/helm/CLAUDE.md` |
 | `cluster/storage/` | PV/PVC for stateful services | `cluster/storage/CLAUDE.md` |
+| `cluster/argocd/` | ArgoCD Application manifests (app-of-apps) | `cluster/argocd/CLAUDE.md` |
 | `shoebox/` | External Ansible runner (Semaphore in Docker) | `shoebox/CLAUDE.md` |
 | `.github/` | CI workflows + autofix script | `.github/CLAUDE.md` |
 | root `*.md` | Operator architecture docs (imported above) | — |
