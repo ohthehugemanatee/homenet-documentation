@@ -101,14 +101,17 @@ notifications:
               "url": "https://argocd.cluster.vert/applications/{{.app.metadata.name}}"
             }
   triggers:
-    trigger.on-sync-status-unknown: |
+    trigger.on-out-of-sync: |
       - when: app.status.sync.status == 'OutOfSync'
+        oncePer: app.status.sync.status
         send: [app-out-of-sync]
     trigger.on-sync-failed: |
       - when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']
+        oncePer: app.status.operationState.phase
         send: [app-sync-failed]
     trigger.on-health-degraded: |
       - when: app.status.health.status == 'Degraded'
+        oncePer: app.status.health.status
         send: [app-health-degraded]
 
 dex:

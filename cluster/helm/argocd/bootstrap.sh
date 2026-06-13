@@ -2,8 +2,10 @@
 # One-time ArgoCD bootstrap. After initial install, ArgoCD manages itself.
 set -euo pipefail
 
-read -rp "Enter Pushover app token for ArgoCD: " pushover_token
-read -rp "Enter Pushover user key: " pushover_user_key
+read -rsp "Enter Pushover app token for ArgoCD: " pushover_token
+echo
+read -rsp "Enter Pushover user key: " pushover_user_key
+echo
 
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update argo

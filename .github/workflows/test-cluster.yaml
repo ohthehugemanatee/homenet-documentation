@@ -42,7 +42,7 @@ jobs:
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
-          for ns in collabora unifi octoprint loki monitoring longhorn-system dns-bg-check; do
+          for ns in argocd collabora unifi octoprint loki monitoring longhorn-system dns-bg-check; do
             kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
           done
           kubectl apply -f cluster/priorityClasses/
@@ -57,6 +57,7 @@ jobs:
             ! -path "*/ansible/*" \
             ! -path "*/helm/*" \
             ! -path "*/localdev/*" \
+            ! -path "*/argocd/*" \
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
             ! -name "cert-manager.yaml" \
@@ -84,10 +85,17 @@ jobs:
 
       - name: Add helm repos
         run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
           helm repo add grafana https://grafana.github.io/helm-charts
           helm repo add nfs-subdir-external-provisioner \
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo update
+
+      - name: Dry-run argocd
+        run: |
+          helm template argocd argo/argo-cd \
+            --namespace argocd \
+            -f cluster/helm/argocd/values.yaml > /dev/null
 
       - name: Dry-run kube-prometheus-stack
         run: |
