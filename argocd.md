@@ -20,8 +20,8 @@ Auto-sync apps self-heal when someone `kubectl edit`s a managed resource. Manual
 
 ## Access
 
-- **LAN:** `argocd.vert` or `argocd.cluster.vert` (Traefik ingress, no TLS — internal only)
-- **Mobile:** same URLs; ArgoCD's UI is responsive
+- **LAN:** `https://argocd.berlin.vertesi.com` (Traefik ingress, wildcard TLS)
+- **Mobile:** same URL; ArgoCD's UI is responsive
 
 ## Drift alerts
 
