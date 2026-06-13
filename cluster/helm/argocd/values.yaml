@@ -1,8 +1,12 @@
 global:
   domain: argocd.berlin.vertesi.com
 
+configs:
+  params:
+    # Traefik terminates TLS; tell argocd-server to serve plain HTTP.
+    server.insecure: true
+
 server:
-  insecure: true
   nodeSelector:
     kubernetes.io/arch: amd64
   resources:
