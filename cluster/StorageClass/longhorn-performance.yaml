@@ -4,11 +4,11 @@ allowVolumeExpansion: true
 metadata:
   name: longhorn-performance
 parameters:
-  dataLocality: strict-local
+  dataLocality: best-effort
   fromBackup: ""
   fsType: ext4
   numberOfReplicas: "2"
   staleReplicaTimeout: "30"
 provisioner: driver.longhorn.io
 reclaimPolicy: Delete
-volumeBindingMode: Immediate
+volumeBindingMode: WaitForFirstConsumer
