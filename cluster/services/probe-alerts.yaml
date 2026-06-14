@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-pod-health
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack  # required for Prometheus operator to discover this rule
+spec:
+  groups:
+    - name: homelab.pod_health
+      rules:
+        - alert: HomelabPodNotReady
+          expr: >
+            kube_pod_status_ready{
+              condition="false",
+              namespace!~"kube-system|cert-manager|longhorn-system|monitoring|loki"
+            } == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: >-
+              Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not-ready
+              for more than 5 minutes.
+
+        - alert: HomelabContainerHighRestarts
+          expr: >
+            increase(kube_container_status_restarts_total{
+              namespace!~"kube-system|cert-manager|longhorn-system|monitoring|loki"
+            }[1h]) > 5
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: >-
+              Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }}
+              has restarted {{ $value | printf "%.0f" }} times in the last hour.
+
+        - alert: HomelabPodOOMKilled
+          expr: >
+            kube_pod_container_status_last_terminated_reason{
+              reason="OOMKilled",
+              namespace!~"kube-system|cert-manager|longhorn-system|monitoring|loki"
+            } == 1
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: >-
+              Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }}
+              was OOMKilled. Check memory limits.

@@ -64,6 +64,7 @@ jobs:
             ! -name "l2-config.yaml" \
             ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
+            ! -name "probe-alerts.yaml" \
             | sort)
           exit "$FAILED"
 
