@@ -26,3 +26,10 @@
   ansible.builtin.systemd:
     daemon_reload: true
   when: ansible_virtualization_type != 'docker'
+
+- name: Restart k3s
+  ansible.builtin.systemd:
+    name: "{{ 'k3s-agent' if cluster_role == 'agent' else 'k3s' }}"
+    state: restarted
+  when: ansible_virtualization_type != 'docker'
+  throttle: 1
