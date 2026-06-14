@@ -70,7 +70,6 @@ data:
             "sortBy": [{ "displayName": "Ready", "desc": false }]
           },
           "transformations": [
-            { "id": "merge", "options": {} },
             {
               "id": "filterFieldsByName",
               "options": {
