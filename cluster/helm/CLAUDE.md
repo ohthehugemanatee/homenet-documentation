@@ -1,7 +1,8 @@
 # cluster/helm/CLAUDE.md — values overrides for upstream charts
 
-This directory holds **values overrides for upstream charts, NOT chart sources.** Two carve-outs:
+This directory holds **values overrides for upstream charts, NOT chart sources.** Three carve-outs:
 
+- `argocd/` — ArgoCD GitOps controller. `bootstrap.sh` is a one-time install; after bootstrap ArgoCD manages itself and all other workloads.
 - `collabora/` — hand-built chart (Collabora Online).
 - `wip/` — experimental charts (`kube-plex`, `longhorn`, `mariadb-galera`, `percona-xtradb`). Incomplete by definition. Do **NOT** promote to root `helm/` without a spec + green smoke.
 
