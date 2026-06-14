@@ -37,6 +37,21 @@ spec:
           volumeMounts:
             - name: ombi-config
               mountPath: /config
+          startupProbe:
+            tcpSocket:
+              port: 3579
+            periodSeconds: 30
+            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
+          livenessProbe:
+            tcpSocket:
+              port: 3579
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 3579
+            periodSeconds: 30
+            failureThreshold: 3
 
 ---
 

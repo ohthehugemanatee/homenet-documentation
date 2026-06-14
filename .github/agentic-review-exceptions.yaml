@@ -720,6 +720,14 @@ exceptions:
       A full allowlist would require reimplementing the repair loop.
       Accepted homelab tradeoff.
 
+  - pattern: "cloudflare-ddns missing liveness/readiness probe"
+    files:
+      - cluster/services/cloudflare-ddns.yaml
+    reason: >-
+      oznu/cloudflare-ddns runs a timed shell loop with no network listener,
+      no lockfile, and no persistent binary suitable for exec-check.
+      Absence is documented in the manifest with a comment. Approved in Issue #19.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-

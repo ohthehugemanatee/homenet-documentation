@@ -38,6 +38,21 @@ spec:
           - name: nfs-media
             mountPath: "/downloads"
             subPath: "Downloads"
+        startupProbe:
+          tcpSocket:
+            port: 6789
+          periodSeconds: 30
+          failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
+        livenessProbe:
+          tcpSocket:
+            port: 6789
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 6789
+          periodSeconds: 30
+          failureThreshold: 3
 
 ---
 
