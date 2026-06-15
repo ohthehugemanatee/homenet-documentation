@@ -1,0 +1,4 @@
+nfs:
+  server: shoebox.vert
+  path: /export/configs/kubernetes
+
