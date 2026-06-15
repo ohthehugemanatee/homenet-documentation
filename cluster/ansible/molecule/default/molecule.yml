@@ -34,7 +34,7 @@ provisioner:
   inventory:
     group_vars:
       all:
-        cluster_role: agent
+        cluster_role: multi-master
         ansible_user: root
         ntp_servers:
           - ntp.ubuntu.com

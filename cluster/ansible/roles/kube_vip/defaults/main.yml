@@ -1,0 +1,10 @@
+---
+# k3s auto-deploy manifests directory — k3s watches this and applies anything
+# dropped here at startup (and on change). Placing kube-vip here brings the
+# control-plane VIP up with k3s, below Argo.
+kube_vip_manifest_dir: /var/lib/rancher/k3s/server/manifests
+
+# Source manifest (repo single source of truth), resolved relative to this role
+# so the path holds no matter which playbook imports it (node-state.yaml or the
+# molecule converge harness). role_path = cluster/ansible/roles/kube_vip.
+kube_vip_manifest_src: "{{ role_path }}/../../../kube-vip/kube-vip.yaml"

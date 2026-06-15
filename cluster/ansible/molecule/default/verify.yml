@@ -144,3 +144,25 @@
       ansible.builtin.assert:
         that: not k3s_unit.stat.exists
         success_msg: "k3s-agent service absent — node-state gracefully skipped k3s tasks"
+
+    # ── kube_vip role (master path exercised by converge harness) ─────────────
+
+    - name: Stat kube-vip auto-deploy manifest
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+      register: kube_vip_manifest
+
+    - name: Assert kube-vip manifest placed in k3s auto-deploy dir
+      ansible.builtin.assert:
+        that: kube_vip_manifest.stat.exists
+        fail_msg: "kube_vip role did not place the manifest on a master"
+
+    - name: Read kube-vip manifest
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+      register: kube_vip_content
+
+    - name: Assert kube-vip manifest targets the control-plane VIP
+      ansible.builtin.assert:
+        that: "'10.10.10.9' in (kube_vip_content.content | b64decode)"
+        fail_msg: "placed manifest does not reference the VIP 10.10.10.9"

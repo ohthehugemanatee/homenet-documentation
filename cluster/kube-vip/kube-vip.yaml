@@ -1,0 +1,123 @@
+# kube-vip — leader-elected floating VIP for the k3s control plane.
+#
+# Deployed BELOW Argo: the kube_vip Ansible role copies this file verbatim to
+# /var/lib/rancher/k3s/server/manifests/ on the masters, so k3s auto-applies it
+# at startup. Argo cannot manage what provides its own API endpoint, so this is
+# the one in-cluster workload that does not go through the app-of-apps. This file
+# is the single source of truth and is CI-validated by the server-side dry-run.
+#
+# VIP 10.10.10.9 — node subnet 10.10.10.0/24 (required for L2 ARP), clear of the
+# MetalLB pool 10.10.11.0/24. ARP/L2 control-plane mode, leader-elected across all
+# three masters. svc_enable=false: MetalLB keeps owning Service LoadBalancers;
+# kube-vip only fronts the control plane. vip_interface is omitted so kube-vip
+# auto-detects the default-route interface (mixed RPi4/NUC master hardware).
+#
+# Regenerate with the pinned release: kube-vip manifest daemonset (image below).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-vip
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:kube-vip-role
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["services", "services/status", "nodes", "endpoints"]
+    verbs: ["list", "get", "watch", "update"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["list", "get", "watch", "update", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:kube-vip-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-vip-role
+subjects:
+  - kind: ServiceAccount
+    name: kube-vip
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-vip-ds
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: kube-vip-ds
+    app.kubernetes.io/version: v1.2.0
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-vip-ds
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-vip-ds
+        app.kubernetes.io/version: v1.2.0
+    spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+      containers:
+        - name: kube-vip
+          image: ghcr.io/kube-vip/kube-vip:v1.2.0
+          imagePullPolicy: IfNotPresent
+          args: ["manager"]
+          env:
+            - name: vip_arp
+              value: "true"
+            - name: port
+              value: "6443"
+            - name: vip_subnet
+              value: "32"
+            - name: cp_enable
+              value: "true"
+            - name: cp_namespace
+              value: kube-system
+            - name: svc_enable
+              value: "false"
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leaseduration
+              value: "5"
+            - name: vip_renewdeadline
+              value: "3"
+            - name: vip_retryperiod
+              value: "1"
+            - name: address
+              value: "10.10.10.9"
+            - name: prometheus_server
+              value: ":2112"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+      hostNetwork: true
+      serviceAccountName: kube-vip
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
