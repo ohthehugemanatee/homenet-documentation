@@ -78,6 +78,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: jackett
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: jackett.cluster.vert
@@ -90,3 +95,16 @@ spec:
             name: jackett
             port:
               number: 9117
+  - host: jackett.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jackett
+            port:
+              number: 9117
+  tls:
+  - hosts:
+    - jackett.berlin.vertesi.com

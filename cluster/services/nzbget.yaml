@@ -75,6 +75,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: nzbget
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: nzbget.cluster.vert
@@ -97,3 +102,16 @@ spec:
             name: nzbget
             port:
               number: 6789
+  - host: nzbget.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nzbget
+            port:
+              number: 6789
+  tls:
+  - hosts:
+    - nzbget.berlin.vertesi.com

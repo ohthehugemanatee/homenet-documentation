@@ -88,6 +88,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: sonarr
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: sonarr.cluster.vert
@@ -110,3 +115,16 @@ spec:
               name: sonarr
               port:
                 number: 8989
+  - host: sonarr.berlin.vertesi.com
+    http:
+      paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: sonarr
+              port:
+                number: 8989
+  tls:
+  - hosts:
+    - sonarr.berlin.vertesi.com

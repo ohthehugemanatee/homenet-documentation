@@ -153,6 +153,11 @@ kind: Ingress
 metadata:
   name: unifi
   namespace: unifi
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: unifi.cluster.vert
@@ -165,6 +170,19 @@ spec:
             name: unificontroller
             port:
               number: 8443
+  - host: unifi.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: unificontroller
+            port:
+              number: 8443
+  tls:
+  - hosts:
+    - unifi.berlin.vertesi.com
 
 ---
 apiVersion: traefik.io/v1alpha1
