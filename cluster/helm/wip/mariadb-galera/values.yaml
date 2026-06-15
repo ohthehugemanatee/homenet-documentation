@@ -1,3 +1,0 @@
-extraFlags: "--innodb-read-only-compressed=OFF"
-nodeSelector:
-  kubernetes.io/arch: amd64

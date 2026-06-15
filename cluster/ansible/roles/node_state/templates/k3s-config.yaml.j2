@@ -1,0 +1,5 @@
+---
+# k3s server configuration — managed by Ansible (node_state role).
+# Changes trigger a k3s restart via handler.
+node-taint:
+  - "node-role.kubernetes.io/control-plane=:NoSchedule"

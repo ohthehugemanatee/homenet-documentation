@@ -106,7 +106,6 @@ spec:
   tls:
   - hosts:
     - calibre.berlin.vertesi.com
-    secretName: berlin-vertesi-com-wildcard-tls
 
 # ── calibre-web ────────────────────────────────────────────────────────────
 ---
@@ -208,4 +207,3 @@ spec:
   tls:
   - hosts:
     - calibre-web.berlin.vertesi.com
-    secretName: berlin-vertesi-com-wildcard-tls

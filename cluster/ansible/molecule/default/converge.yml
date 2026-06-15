@@ -1,0 +1,5 @@
+---
+# Converge: run node-state.yaml against the Molecule Docker container.
+# Templates resolve relative to node-state.yaml's location (../../templates/).
+- name: Converge
+  import_playbook: ../../node-state.yaml

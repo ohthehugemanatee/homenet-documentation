@@ -1,2 +1,5 @@
 collections:
   - ansible.posix
+  - community.crypto
+  - kubernetes.core
+  - hpe.monkeyble

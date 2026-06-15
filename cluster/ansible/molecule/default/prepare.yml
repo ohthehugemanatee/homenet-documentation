@@ -1,0 +1,13 @@
+---
+# Wait for systemd to fully initialize in the container before converge runs.
+# geerlingguy/docker-ubuntu2204-ansible starts systemd as PID 1; in GitHub
+# Actions the container is "running" before systemd has finished mounting /tmp,
+# causing Ansible's temp-dir bootstrap to fail on converge.
+- name: Wait for container systemd initialization
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  tasks:
+    - name: Pause for systemd to finish mounting /tmp
+      ansible.builtin.pause:
+        seconds: 20

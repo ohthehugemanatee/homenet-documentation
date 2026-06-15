@@ -5,309 +5,253 @@
 # no packages were upgraded.
 #
 # Prerequisites:
-#   - kubectl configured on localhost pointing at the cluster
+#   - kubernetes.core collection installed; kubernetes Python library available
 #   - ansible-playbook run from a machine with kubectl access
 #
 # Usage:
-#   All nodes (rolling):  ansible-playbook -i inventory.yaml --ask-vault-pass rolling-upgrade.yaml
-#   Single node:          ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 rolling-upgrade.yaml
+#   All nodes (rolling):  ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                           -e vault_file=group_vars/vault.yaml rolling-upgrade.yaml
+#   Single node:          ansible-playbook -i inventory.yaml --vault-password-file /etc/ansible/vault-password \
+#                           -e vault_file=group_vars/vault.yaml --limit cluster1 rolling-upgrade.yaml
+#   Testing (no vault):   ansible-playbook -i tests/monkeyble/inventory.yml \
+#                           -e vault_file=tests/monkeyble/test_secrets.yml rolling-upgrade.yaml
 #
 # Node ordering: agents first, then multimasters, then masters (first-master last).
 # Override with --limit or -e target=<group>.
 #
+# strict_mode=true (strongly recommended for scheduled runs):
+#   - Stops on first node failure (any_errors_fatal)
+#   - Aborts subsequent plays if a prior play left nodes failed/drained
+#
 # WARNING: draining a k3s server node evicts non-system pods but leaves the
 # control plane processes running. HA clusters (3 servers) tolerate this fine.
 # Do NOT run this against all 3 servers simultaneously — serial: 1 prevents that.
+#
+# BEFORE RUNNING: scale down strict-local StatefulSets to avoid drain timeouts:
+#   kubectl scale statefulset plex --replicas=0
+#   kubectl scale statefulset nextcloud --replicas=0
+# Scale back up after each node is verified Ready.
 
 - name: Rolling OS upgrade — agents
   hosts: "{{ target | default('agents:!ubuntu') }}"
   become: true
   serial: 1
-  any_errors_fatal: false
+  any_errors_fatal: "{{ strict_mode | default(false) | bool }}"
+
+  vars_files:
+    - "{{ vault_file }}"
+
+  vars:
+    k3s_svc: k3s-agent
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
+
+  pre_tasks:
+    - name: Initialize upgrade state and verify node
+      ansible.builtin.import_role:
+        name: upgrade_pre_state
 
   tasks:
-    - name: Show current OS version
-      ansible.builtin.command: lsb_release -ds
-      register: os_version
-      changed_when: false
+    - name: Upgrade node
+      block:
+        - name: Show current OS version
+          ansible.builtin.command: lsb_release -ds
+          register: os_version
+          changed_when: false
 
-    - name: "Starting upgrade: {{ inventory_hostname }}"
-      ansible.builtin.debug:
-        msg: "Upgrading {{ inventory_hostname }} ({{ os_version.stdout }})"
+        - name: Starting upgrade of {{ inventory_hostname }}
+          ansible.builtin.debug:
+            msg: "Starting upgrade of {{ inventory_hostname }} ({{ os_version.stdout }})"
 
-    - name: Drain node
-      ansible.builtin.command: >
-        kubectl drain {{ ansible_hostname }}
-        --ignore-daemonsets
-        --delete-emptydir-data
-        --grace-period=30
-        --timeout=300s
-      delegate_to: localhost
-      become: false
-      changed_when: true
+        - name: Cordon and drain node
+          ansible.builtin.import_role:
+            name: cordon_drain
 
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: true
+        - name: Run apt dist-upgrade and reboot
+          ansible.builtin.import_role:
+            name: apt_upgrade
 
-    - name: Run dist-upgrade
-      ansible.builtin.apt:
-        upgrade: dist
-        autoremove: true
-        autoclean: true
-        lock_timeout: 300
-      register: apt_upgrade
+        - name: Apply node state configuration
+          ansible.builtin.import_role:
+            name: node_state
 
-    - name: Check if reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: reboot_required_file
+        - name: Verify k3s health and uncordon
+          ansible.builtin.import_role:
+            name: k3s_health
 
-    - name: Reboot
-      ansible.builtin.reboot:
-        reboot_timeout: 600
-        post_reboot_delay: 15
-      when: reboot_required_file.stat.exists or apt_upgrade.changed
+        - name: Show post-upgrade OS version
+          ansible.builtin.command: lsb_release -ds
+          register: os_version_after
+          changed_when: false
 
-    - name: Refresh facts to pick up new kernel version
-      ansible.builtin.gather_facts:
+        - name: Upgrade complete — {{ inventory_hostname }}
+          ansible.builtin.debug:
+            msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
 
-    - name: Install linux-modules-extra for running kernel (required for iSCSI)
-      ansible.builtin.apt:
-        name: "linux-modules-extra-{{ ansible_kernel }}"
-        state: present
+      rescue:
+        - name: Attempt agent rebuild on failure
+          ansible.builtin.import_role:
+            name: upgrade_rescue_agent
 
-    - name: Wait for k3s-agent to become active
-      ansible.builtin.command: systemctl is-active k3s-agent
-      register: k3s_status
-      until: k3s_status.rc == 0
-      retries: 30
-      delay: 10
-      changed_when: false
-
-    - name: Uncordon node
-      ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
-      delegate_to: localhost
-      become: false
-      changed_when: true
-
-    - name: Verify node is Ready
-      ansible.builtin.command: >
-        kubectl wait node/{{ ansible_hostname }}
-        --for=condition=Ready
-        --timeout=120s
-      delegate_to: localhost
-      become: false
-      changed_when: false
-
-    - name: Show post-upgrade OS version
-      ansible.builtin.command: lsb_release -ds
-      register: os_version_after
-      changed_when: false
-
-    - name: "Upgrade done: {{ inventory_hostname }}"
-      ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} upgraded to: {{ os_version_after.stdout }}"
 
 - name: Rolling OS upgrade — multi-master servers
   hosts: "{{ target | default('multimasters') }}"
   become: true
   serial: 1
-  any_errors_fatal: false
+  any_errors_fatal: "{{ strict_mode | default(false) | bool }}"
+
+  vars_files:
+    - "{{ vault_file }}"
+
+  vars:
+    k3s_svc: k3s
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
+    cordon_drain_grace_period: 60
+    apt_upgrade_post_reboot_delay: 20
+    k3s_health_wait_before_uncordon: true
+    k3s_health_node_ready_timeout: 180
+
+  pre_tasks:
+    - name: Check prior-play failures and CP quorum
+      ansible.builtin.import_role:
+        name: upgrade_checks_cp
 
   tasks:
-    - name: Show current OS version
-      ansible.builtin.command: lsb_release -ds
-      register: os_version
-      changed_when: false
+    - name: Upgrade node
+      block:
+        - name: Show current OS version
+          ansible.builtin.command: lsb_release -ds
+          register: os_version
+          changed_when: false
 
-    - name: "Starting upgrade: {{ inventory_hostname }}"
-      ansible.builtin.debug:
-        msg: "Upgrading multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
+        - name: Starting upgrade of {{ inventory_hostname }}
+          ansible.builtin.debug:
+            msg: "Starting upgrade of multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
 
-    - name: Drain node
-      ansible.builtin.command: >
-        kubectl drain {{ ansible_hostname }}
-        --ignore-daemonsets
-        --delete-emptydir-data
-        --grace-period=60
-        --timeout=300s
-      delegate_to: localhost
-      become: false
-      changed_when: true
+        - name: Cordon and drain node
+          ansible.builtin.import_role:
+            name: cordon_drain
 
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: true
+        - name: Run apt dist-upgrade and reboot
+          ansible.builtin.import_role:
+            name: apt_upgrade
 
-    - name: Run dist-upgrade
-      ansible.builtin.apt:
-        upgrade: dist
-        autoremove: true
-        autoclean: true
-        lock_timeout: 300
-      register: apt_upgrade
+        - name: Apply node state configuration
+          ansible.builtin.import_role:
+            name: node_state
 
-    - name: Check if reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: reboot_required_file
+        - name: Verify k3s health and uncordon
+          ansible.builtin.import_role:
+            name: k3s_health
 
-    - name: Reboot
-      ansible.builtin.reboot:
-        reboot_timeout: 600
-        post_reboot_delay: 20
-      when: reboot_required_file.stat.exists or apt_upgrade.changed
+        - name: Show post-upgrade OS version
+          ansible.builtin.command: lsb_release -ds
+          register: os_version_after
+          changed_when: false
 
-    - name: Refresh facts to pick up new kernel version
-      ansible.builtin.gather_facts:
+        - name: Upgrade complete — {{ inventory_hostname }}
+          ansible.builtin.debug:
+            msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
 
-    - name: Install linux-modules-extra for running kernel (required for iSCSI)
-      ansible.builtin.apt:
-        name: "linux-modules-extra-{{ ansible_kernel }}"
-        state: present
+      rescue:
+        - name: Alert and record CP upgrade failure
+          ansible.builtin.import_role:
+            name: upgrade_rescue_cp
 
-    - name: Wait for k3s server to become active
-      ansible.builtin.command: systemctl is-active k3s
-      register: k3s_status
-      until: k3s_status.rc == 0
-      retries: 30
-      delay: 10
-      changed_when: false
-
-    - name: Wait for node to rejoin cluster
-      ansible.builtin.command: >
-        kubectl wait node/{{ ansible_hostname }}
-        --for=condition=Ready
-        --timeout=180s
-      delegate_to: localhost
-      become: false
-      changed_when: false
-
-    - name: Uncordon node
-      ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
-      delegate_to: localhost
-      become: false
-      changed_when: true
-
-    - name: Verify node is Ready after uncordon
-      ansible.builtin.command: >
-        kubectl wait node/{{ ansible_hostname }}
-        --for=condition=Ready
-        --timeout=60s
-      delegate_to: localhost
-      become: false
-      changed_when: false
-
-    - name: Show post-upgrade OS version
-      ansible.builtin.command: lsb_release -ds
-      register: os_version_after
-      changed_when: false
-
-    - name: "Upgrade done: {{ inventory_hostname }}"
-      ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} upgraded to: {{ os_version_after.stdout }}"
 
 - name: Rolling OS upgrade — first master (last)
   hosts: "{{ target | default('masters') }}"
   become: true
   serial: 1
-  any_errors_fatal: false
+  any_errors_fatal: "{{ strict_mode | default(false) | bool }}"
+
+  vars_files:
+    - "{{ vault_file }}"
+
+  vars:
+    k3s_svc: k3s
+    k8s_kubeconfig: /etc/ansible/kubeconfig-cluster3
+    cordon_drain_grace_period: 60
+    apt_upgrade_post_reboot_delay: 30
+    k3s_health_wait_before_uncordon: true
+    k3s_health_wait_retries: 36
+    k3s_health_node_ready_timeout: 300
+
+  pre_tasks:
+    - name: Check prior-play failures and CP quorum
+      ansible.builtin.import_role:
+        name: upgrade_checks_cp
 
   tasks:
-    - name: Show current OS version
-      ansible.builtin.command: lsb_release -ds
-      register: os_version
-      changed_when: false
+    - name: Upgrade node
+      block:
+        - name: Show current OS version
+          ansible.builtin.command: lsb_release -ds
+          register: os_version
+          changed_when: false
 
-    - name: "Starting upgrade: {{ inventory_hostname }}"
-      ansible.builtin.debug:
-        msg: >
-          Upgrading first-master {{ inventory_hostname }} ({{ os_version.stdout }}).
-          Ensure kubectl is configured to reach the cluster via a VIP or
-          another server in case this node's API server is briefly unavailable.
+        - name: Starting upgrade of {{ inventory_hostname }}
+          ansible.builtin.debug:
+            msg: >
+              Starting upgrade of first-master {{ inventory_hostname }} ({{ os_version.stdout }}).
+              Ensure kubectl is configured to reach the cluster via a VIP or
+              another server in case this node's API server is briefly unavailable.
 
-    - name: Drain node
-      ansible.builtin.command: >
-        kubectl drain {{ ansible_hostname }}
-        --ignore-daemonsets
-        --delete-emptydir-data
-        --grace-period=60
-        --timeout=300s
-      delegate_to: localhost
-      become: false
-      changed_when: true
+        - name: Cordon and drain node
+          ansible.builtin.import_role:
+            name: cordon_drain
 
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: true
+        - name: Run apt dist-upgrade and reboot
+          ansible.builtin.import_role:
+            name: apt_upgrade
 
-    - name: Run dist-upgrade
-      ansible.builtin.apt:
-        upgrade: dist
-        autoremove: true
-        autoclean: true
-        lock_timeout: 300
-      register: apt_upgrade
+        - name: Apply node state configuration
+          ansible.builtin.import_role:
+            name: node_state
 
-    - name: Check if reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: reboot_required_file
+        - name: Verify k3s health and uncordon
+          ansible.builtin.import_role:
+            name: k3s_health
 
-    - name: Reboot
-      ansible.builtin.reboot:
-        reboot_timeout: 600
-        post_reboot_delay: 30
-      when: reboot_required_file.stat.exists or apt_upgrade.changed
+        - name: Get final cluster node status
+          kubernetes.core.k8s_info:
+            kind: Node
+            kubeconfig: /etc/ansible/kubeconfig-cluster3
+          delegate_to: localhost
+          become: false
+          changed_when: false
+          register: final_nodes
 
-    - name: Refresh facts to pick up new kernel version
-      ansible.builtin.gather_facts:
+        - name: Final cluster state
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.metadata.name }}: {{ item.status.conditions |
+              selectattr('type', 'equalto', 'Ready') |
+              map(attribute='status') | first | default('Unknown') }}
+          loop: "{{ final_nodes.resources }}"
+          loop_control:
+            label: "{{ item.metadata.name }}"
 
-    - name: Install linux-modules-extra for running kernel (required for iSCSI)
-      ansible.builtin.apt:
-        name: "linux-modules-extra-{{ ansible_kernel }}"
-        state: present
+        - name: Show post-upgrade OS version
+          ansible.builtin.command: lsb_release -ds
+          register: os_version_after
+          changed_when: false
 
-    - name: Wait for k3s server to become active
-      ansible.builtin.command: systemctl is-active k3s
-      register: k3s_status
-      until: k3s_status.rc == 0
-      retries: 36
-      delay: 10
-      changed_when: false
+        - name: Upgrade complete — {{ inventory_hostname }}
+          ansible.builtin.debug:
+            msg: "{{ inventory_hostname }} upgraded successfully: {{ os_version_after.stdout }}"
 
-    - name: Wait for node to rejoin cluster
-      ansible.builtin.command: >
-        kubectl wait node/{{ ansible_hostname }}
-        --for=condition=Ready
-        --timeout=300s
-      delegate_to: localhost
-      become: false
-      changed_when: false
+      rescue:
+        - name: Alert and record CP upgrade failure
+          ansible.builtin.import_role:
+            name: upgrade_rescue_cp
 
-    - name: Uncordon node
-      ansible.builtin.command: kubectl uncordon {{ ansible_hostname }}
-      delegate_to: localhost
-      become: false
-      changed_when: true
 
-    - name: Verify node is Ready after uncordon
-      ansible.builtin.command: >
-        kubectl wait node/{{ ansible_hostname }}
-        --for=condition=Ready
-        --timeout=60s
-      delegate_to: localhost
-      become: false
-      changed_when: false
-
-    - name: Show cluster node status
-      ansible.builtin.command: kubectl get nodes -o wide
-      delegate_to: localhost
-      become: false
-      changed_when: false
-      register: node_status
-
-    - name: Final cluster state
-      ansible.builtin.debug:
-        msg: "{{ node_status.stdout_lines }}"
+- name: Cleanup — clear maintenance flag
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Clear maintenance flag
+      ansible.builtin.file:
+        path: "{{ state_dir }}/maintenance-in-progress"
+        state: absent

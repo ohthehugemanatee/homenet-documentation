@@ -1,0 +1,58 @@
+# Semaphore Ansible UI — runs on shoebox, external to the k3s cluster.
+#
+# Semaphore process runs as uid 1001. All bind-mounted files must be readable
+# by gid 1001 on the host. See shoebox/shoebox-ansible-setup.yaml for setup.
+#
+# Access: http://semaphore.vert (via cluster ingress → cluster/ingress-only/semaphore.yaml)
+#
+# DNS NOTE: Docker replaces 127.0.0.53 (systemd-resolved stub) with 8.8.8.8, which
+# cannot resolve homelab hostnames. Set dns: to your actual LAN DNS server IP.
+# Find it with: resolvectl status | grep 'DNS Servers'
+
+services:
+  semaphore:
+    image: semaphoreui/semaphore:v2.10.22
+    ports:
+      - "3000:3000"
+    # Semaphore container runs as uid 1001 with primary gid 0 (root). Without
+    # group_add, files chowned to gid 1001 on the host are unreadable inside the
+    # container. group_add: 1001 makes the process a member of gid 1001 as a
+    # supplementary group so it can read .ssh and .kube on the host.
+    group_add:
+      - "1001"
+    dns:
+      - 10.10.10.40  # Pi-hole
+    volumes:
+      # Python packages required by ansible collections (kubernetes.core needs 'kubernetes')
+      - /opt/semaphore/requirements.txt:/etc/semaphore/requirements.txt:ro
+      # Semaphore database, task history. Container writes the bolt DB to
+      # /var/lib/semaphore — confirmed via runtime logs. The container's
+      # /home/semaphore directory is its uid 1001 home and remains
+      # container-local except for the .ssh and .kube nested mounts below.
+      - /opt/semaphore/data:/var/lib/semaphore
+      # SSH key for ansible user — hosts must trust this key
+      - /home/ansible/.ssh:/home/semaphore/.ssh:ro
+      # Primary kubeconfig — points to cluster1 (default for agents + multimasters)
+      - /home/ansible/.kube:/home/semaphore/.kube:ro
+      # Secondary kubeconfig — points to cluster3; used for masters play when cluster1 is down
+      - /etc/ansible/kubeconfig-cluster3:/etc/ansible/kubeconfig-cluster3:ro
+      # kubectl static binary
+      - /usr/local/bin/kubectl:/usr/local/bin/kubectl:ro
+      # vault-password file — used by task templates via --vault-password-file
+      - /etc/ansible/vault-password:/etc/ansible/vault-password:ro
+      # State files written by delegate_to: localhost tasks — must be host-visible
+      - /var/lib/ansible-upgrade:/var/lib/ansible-upgrade
+      # Log directory
+      - /var/log/ansible:/var/log/ansible
+      # Pushover credentials (sourced by rescue blocks)
+      - /etc/ansible/pushover.env:/etc/ansible/pushover.env:ro
+    environment:
+      # Default kubeconfig for agents + multimasters plays
+      KUBECONFIG: /home/semaphore/.kube/config
+      # Repo is pulled from GitHub (configured in Semaphore project settings).
+      # vault_file is passed as an extra-var in each task template, e.g.:
+      #   vault_file=group_vars/vault.yaml   (relative to playbook dir cluster/ansible/)
+      # The vault password is stored in Semaphore Key Store (type: LoginPassword).
+    env_file:
+      - /opt/semaphore/.env
+    restart: unless-stopped

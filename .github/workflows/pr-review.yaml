@@ -2,10 +2,16 @@ name: AI Infrastructure Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
 
 concurrency:
-  group: pr-review-${{ github.event.pull_request.number }}
+  group: pr-review-${{ inputs.pr_number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -18,16 +24,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get PR diff
+      - name: Check skip conditions
+        id: skip-check
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr.diff
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          # Skip if commit message contains [skip-review] or [no-review]
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MSG" | grep -qE '\[(skip-review|no-review)\]'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: [skip-review] marker in commit message"
+            exit 0
+          fi
+
+          # Skip if all changed files are documentation
+          CHANGED=$(gh pr view "$PR_NUMBER" \
+            --json files --jq '[.files[].path]')
+          TOTAL=$(echo "$CHANGED" | jq 'length')
+          DOCS=$(echo "$CHANGED" | \
+            jq '[.[] | select(test("\\.(md|txt|rst)$|^docs/|README") and (test("(^|/)CLAUDE\\.md$|(^|/)AGENTS\\.md$") | not))] | length')
+          if [ "$TOTAL" -gt 0 ] && [ "$TOTAL" -eq "$DOCS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: docs-only change ($TOTAL files)"
+            exit 0
+          fi
+
+          # Skip if the diff is too small (<20 changed lines)
+          DIFF_LINES=$(gh pr diff "$PR_NUMBER" | \
+            grep -cE '^[+-][^+-]' || true)
+          if [ "$DIFF_LINES" -lt 20 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: diff too small (${DIFF_LINES} changed lines)"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Get PR diff
+        if: steps.skip-check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: gh pr diff "$PR_NUMBER" > /tmp/pr.diff
 
       - name: Review with Claude
+        if: steps.skip-check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
           python3 << 'PYEOF'
@@ -52,29 +98,108 @@ jobs:
               diff = diff[:cut if cut > 0 else MAX_CHARS]
               truncated = True
 
+          # --- Load known exceptions ---
+          exceptions_context = ''
+          exceptions_path = '.github/agentic-review-exceptions.yaml'
+          if os.path.exists(exceptions_path):
+              with open(exceptions_path) as f:
+                  exceptions_text = f.read()
+              exceptions_context = (
+                  '\n\n## Known exceptions — do not re-raise\n\n'
+                  'The following findings have been reviewed and intentionally accepted '
+                  'by the maintainer. Do not raise them again:\n\n'
+                  '```yaml\n' + exceptions_text + '\n```'
+              )
+
+          # --- Fetch prior review comments on this PR ---
+          prior_comments_context = ''
+          pr_number = os.environ['PR_NUMBER']
+          repo = os.environ['REPO']
+          try:
+              result = subprocess.run(
+                  ['gh', 'api', f'/repos/{repo}/issues/{pr_number}/comments',
+                   '--jq',
+                   '[.[] | select(.body | startswith("## AI Infrastructure Review"))'
+                   ' | .body] | join("\n---\n")'],
+                  capture_output=True, text=True, timeout=30
+              )
+              if result.returncode == 0 and result.stdout.strip():
+                  prior = result.stdout.strip()[:8000]
+                  prior_comments_context = (
+                      '\n\n## Prior AI reviews on this PR\n\n'
+                      'These findings were already posted in previous review rounds. '
+                      'Do not duplicate anything substantively the same:\n\n'
+                      + prior
+                  )
+          except Exception as e:
+              print(f'Warning: could not fetch prior comments: {e}')
+
           fence = '```'
           trunc_note = '\n\n*(diff truncated due to size)*' if truncated else ''
           prompt = (
-              'Review this infrastructure pull request focusing on:\n\n'
-              '1. **Security vulnerabilities** - Exposed secrets or credentials, overly permissive RBAC/network policies,'
-              ' unencrypted sensitive data, unsafe default configurations, and similar\n'
-              '2. **Reliability and idempotency** - Non-idempotent tasks, missing error handling, race conditions,'
-              ' operations that could cause downtime or data loss, and similar\n'
-              '3. **Configuration quality** - Hardcoded IPs or hostnames that should be variables, missing resource'
-              ' limits/requests, deprecated API versions, inconsistent naming conventions, and similar\n'
-              '4. **Operational concerns** - Missing health checks, absent monitoring or alerting hooks, no rollback'
-              ' strategy for destructive changes, missing backup considerations, and similar\n'
-              '5. **Documentation** - Undocumented manual prerequisites, missing runbook entries for new failure modes,'
-              ' outdated topology references, and similar\n\n'
-              'Be concise. Only report actual issues, not style preferences.\n'
-              'Format: `[SEVERITY: HIGH/MEDIUM/LOW] Issue description`\n\n'
-              'Here is the pull request diff:\n\n'
+              'Review this infrastructure pull request using the following process.'
+              ' Steps 1, 2, and 4 are internal reasoning — do NOT include them in your response.'
+              ' Your visible output must contain only: the AI-Specific Validation (step 3),'
+              ' the Security & Privacy Review (step 3b), the Final Review (step 5), and the completed Verification Checklist.\n\n'
+              '**Review Process (steps 1, 2, 4 are internal only):**\n\n'
+              '1. **Initial Analysis** *(internal)* — Review for security vulnerabilities, reliability and idempotency,'
+              ' configuration quality, operational concerns, and documentation gaps.\n\n'
+              '2. **Gather Findings** *(internal)* — For each issue note:'
+              ' `[SEVERITY: HIGH/MEDIUM/LOW] Issue description`\n'
+              '   Only actual issues, not style preferences.\n\n'
+              '3. **AI-Specific Validation** *(emit this section)* — For each item below report a finding or explicitly'
+              ' state "no issue found" so the human reviewer can confirm the check ran:\n'
+              '   - *Omission Check*: What security controls are absent? (input validation, output encoding,'
+              ' authorization, rate limiting)\n'
+              '   - *Logic Check*: Is there a subtle logic error — inverted condition, `==` vs `in`, off-by-one,'
+              ' short-circuit evaluation trap?\n'
+              '   - *Dependency Check*: Are all new packages/modules real and verifiable? Flag anything that cannot'
+              ' be confirmed in the diff or known package registries.\n'
+              '   - *Context Check*: Did the change introduce a dangerous shortcut (`eval()`, disabled auth,'
+              ' `--no-verify`, `set +e`, `|| true` masking failures) that violates the security posture?\n'
+              '   - *Drift Check*: Did the change touch security-critical code (auth, crypto, RBAC, network policy,'
+              ' firewall rules) outside the PR\'s declared scope?\n\n'
+              '3b. **Security & Privacy Review** *(emit this section)* — For each item below, report a finding'
+              ' or explicitly state "no issue found":\n'
+              '   - *Secrets*: Any plaintext secrets, unresolved `CHANGEME_*` placeholders, or credentials'
+              ' visible in the diff? (Vault-encrypted vars and documented `ci-test-token` fixtures are OK.)\n'
+              '   - *RBAC & Access Control*: Do Kubernetes RBAC rules follow least-privilege? Any overly'
+              ' broad `ClusterRole` bindings or wildcard verbs?\n'
+              '   - *Network Exposure*: Do service types, ingress rules, or network policies expose more'
+              ' surface than the change requires?\n'
+              '   - *Container Security*: Any new privileged containers, host namespaces, or unnecessary'
+              ' capabilities added?\n'
+              '   - *Privacy*: Could this change log, expose, or persist personal data (home network topology,'
+              ' device names/schedules, user activity, household patterns) beyond its intended scope?\n\n'
+              '4. **Verify Your Findings** *(internal)* — Verify your gathered findings:\n'
+              '   - Are all security issues identified (secrets, RBAC, network policies, unencrypted data)?\n'
+              '   - Did I check for common vulnerabilities (injection, privilege escalation, unsafe defaults)?\n'
+              '   - Are reliability/idempotency concerns accurate?\n'
+              '   - Did I miss any edge cases?\n'
+              '   - Did I check privacy implications (logging scope, personal data exposure, home activity)?\n'
+              '   - Are my recommendations actually feasible in this K8s/Ansible homelab context?\n\n'
+              '5. **Final Review** *(emit this section)* — Present your verified findings with confidence levels:\n'
+              '   Format: `[SEVERITY: HIGH/MEDIUM/LOW] [Confidence: High/Medium/Low] Issue description`\n'
+              '   If no issues were found, state that explicitly.\n\n'
+              '**Verification Checklist** *(emit this section, mark each checked)*:\n'
+              '- [ ] Checked for security vulnerabilities (secrets, RBAC, network policies)\n'
+              '- [ ] Checked privacy implications (personal data, logging scope, home activity exposure)\n'
+              '- [ ] Reviewed reliability and idempotency\n'
+              '- [ ] Validated configuration quality\n'
+              '- [ ] Confirmed operational concerns addressed\n'
+              '- [ ] Reviewed documentation completeness\n'
+              '- [ ] Confirmed recommendations are implementable in this environment\n'
+              + exceptions_context
+              + prior_comments_context
+              + '\n\n## Pull request diff\n\n'
               + fence + 'diff\n' + diff + '\n' + fence + trunc_note
           )
 
+          print(f'Prompt length: {len(prompt)} chars')
+
           payload = json.dumps({
               'model': 'claude-opus-4-7',
-              'max_tokens': 2048,
+              'max_tokens': 4096,
               'messages': [{'role': 'user', 'content': prompt}]
           }).encode()
 

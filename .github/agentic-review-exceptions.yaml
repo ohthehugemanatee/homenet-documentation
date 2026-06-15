@@ -1,0 +1,733 @@
+# Known-dismissed findings for AI PR review.
+# Findings listed here have been explicitly reviewed and accepted by the maintainer.
+# The auto-reviewer reads this file and must not re-raise any of these findings.
+
+exceptions:
+  - pattern: "CHANGEME_PUSHOVER"
+    files:
+      - cluster/helm/loki/values.yaml
+    reason: >-
+      Architectural deferral. Full vault->Helm templating is out of scope.
+      The doc explicitly requires manual replacement before `helm upgrade`.
+
+  - pattern: "k3s_token plaintext"
+    files:
+      - tests/monkeyble/test_secrets.yml
+    reason: >-
+      Cannot rename. The playbook loads k3s_token from vault_file, so the
+      test file must use the same variable name. Values are obvious CI fakes
+      (ci-test-token).
+
+  - pattern: "KUBECONFIG hardcoded for cluster3"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      cluster3 is in the multimasters group, not masters. The described
+      deadlock cannot happen given current inventory grouping.
+
+  - pattern: "k3s_api_server_url hardcoded"
+    files:
+      - cluster/ansible/
+    reason: >-
+      https://10.10.10.10:6443 IS the cluster VIP. It is correct for this
+      homelab and will not change.
+
+  - pattern: "run_once clearing failure flag"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. Operator recovery procedure uses --limit multimasters to
+      skip re-running agents after a mid-playbook failure. A full re-run
+      legitimately means "redo everything."
+
+  - pattern: "curl | sh k3s install without checksum"
+    files:
+      - cluster/ansible/
+    reason: >-
+      k3s upstream does not publish stable checksums for the installer.
+      The recovery path values speed over supply-chain defense for a homelab.
+
+  - pattern: "ansible_virtualization_type != docker"
+    files:
+      - cluster/ansible/
+    reason: >-
+      Standard Ansible idiom for skipping runtime service management inside
+      test containers. A skip_runtime_services variable would add indirection
+      with no real benefit.
+
+  - pattern: "TODO: verify IP resolves from shoebox"
+    files:
+      - cluster/ansible/inventory.yaml
+    reason: >-
+      Operational reminders for the operator, not blockers for merging
+      documentation.
+
+  - pattern: "requirements.txt unbounded >= versions"
+    files:
+      - requirements.txt
+    reason: >-
+      Acceptable for a homelab. Will pin if CI starts breaking on major
+      version bumps.
+
+  - pattern: "hpe.monkeyble namespace unusual"
+    files:
+      - cluster/ansible/
+    reason: >-
+      hpe.monkeyble is the actual upstream Galaxy publisher (Hewlett Packard
+      Enterprise). The namespace is correct.
+
+  - pattern: "Molecule prepare.yml 20-second pause is flaky"
+    files:
+      - cluster/ansible/molecule/default/prepare.yml
+    reason: >-
+      Known limitation. Acceptable for a homelab CI matrix; will swap to
+      systemd-readiness polling only if it actually starts failing.
+
+  - pattern: "Molecule image :latest tag drift"
+    files:
+      - cluster/ansible/molecule/default/molecule.yml
+    reason: >-
+      geerlingguy/docker-ubuntu2204-ansible:latest is the maintained tag
+      upstream. Pinning to a digest would create maintenance burden for a
+      homelab test environment.
+
+  - pattern: "all.yaml plaintext but was previously vault-encrypted"
+    files:
+      - cluster/ansible/group_vars/all.yaml
+    reason: >-
+      Intentional split. all.yaml now contains only non-secret defaults
+      (k3s_api_server_url, state_dir). Secrets live in group_vars/vault.yaml.
+      Confirmed no secrets were lost in the conversion.
+
+  - pattern: "failed_when: false on Record play failure"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Required so the rescue block continues to the Pushover alert and
+      auto-rebuild tasks even if the touch itself fails. State_dir is
+      created by the bootstrap playbook with the correct gid 1001 perms.
+
+  - pattern: "Quorum check missing in agents play"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Agents do not participate in etcd quorum. kubectl drain failing is
+      the natural gate when the control plane is unreachable. Workers are
+      designed to lose pods to rescheduling.
+
+  - pattern: "Hardcoded kubeconfig-cluster3 path / variable-ize as failover_kubeconfig"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Single-cluster homelab. Variable indirection adds complexity without
+      operational benefit. The path is documented in the setup runbook.
+
+  - pattern: "StatefulSet pre-flight assertion (Plex/Nextcloud)"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Documented as a manual pre-flight step. Auto-scaling cluster services
+      from the upgrade playbook is scope creep and tightly couples
+      ansible to the helm releases.
+
+  - pattern: "Pre-upgrade package snapshot clobbed each run / add timestamp"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Forensic only. The file's mtime is the signal. History retention is
+      not needed since auto-rebuild discards the OS anyway.
+
+  - pattern: "failed_when: false on node-state systemctl tasks"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is intentionally not modified by this PR. Failure
+      alerting is delivered via Semaphore's task-failure notifications.
+
+  - pattern: "multipathd mask on non-existent unit creates dangling symlink"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      systemctl mask on a non-existent unit creates a harmless /dev/null
+      symlink. Defensive masking is intentional in case the package is
+      installed later. node-state.yaml is not modified by this PR.
+
+  - pattern: ".ansible-lint vault_file default could leak to production runs"
+    files:
+      - .ansible-lint
+    reason: >-
+      False premise. extra_vars in .ansible-lint apply only to ansible-lint
+      invocations, never to ansible-playbook. Production runs are unaffected.
+
+  - pattern: "mktemp empty guard / STATE_DIR could be unset"
+    files:
+      - cluster/ansible/tests/monkeyble/run-tests.sh
+    reason: >-
+      Script runs with set -euo pipefail. An empty STATE_DIR would trigger
+      an error on the rm itself. Extreme edge case not worth defensive code.
+
+  - pattern: "Test rescue path doc instructs manual edit of failed_when"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Explicit test-runbook instruction with a "revert the threshold change"
+      step. Adding a force_rescue_test variable bloats the playbook for a
+      test-only concern in a homelab.
+
+  - pattern: "Race condition in agent rescue with serial:1"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. serial:1 executes hosts sequentially — host A's entire
+      task list (including the inner block/rescue) completes before host B
+      starts. No race is possible.
+
+  - pattern: "Scenario 3 grep for abort message can pass on wrong failure"
+    files:
+      - cluster/ansible/tests/monkeyble/run-tests.sh
+    reason: >-
+      False premise. The grep for "previous play left nodes in a failed
+      state" is a SECOND gate; unexpected failures produce different output
+      and fail the grep check with an explicit error.
+
+  - pattern: "&& after command substitution doesn't capture exit code"
+    files:
+      - cluster/ansible/tests/monkeyble/run-tests.sh
+    reason: >-
+      False premise. Bash propagates the command substitution's exit code
+      to the assignment expression, so `var=$(cmd) && {...}` correctly
+      fires only when cmd succeeded.
+
+  - pattern: "No success notification on rolling-upgrade completion"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. The design focuses on failure alerting; success is
+      indicated by absence of alerts and by Semaphore run history.
+
+  - pattern: "No Pushover on pre_task quorum check failure"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Pre_task failures indicate broken cluster state that is already
+      covered by Alertmanager→Pushover (cluster/helm/loki/values.yaml).
+
+  - pattern: "Cleanup clears maintenance-in-progress while failure flag is set"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. maintenance-in-progress means "Ansible is currently
+      running"; rolling-upgrade-failed is the "needs attention" signal.
+      External monitors should key off the failure flag for that semantic.
+
+  - pattern: "cluster4 not documented as failover kubeconfig endpoint"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      cluster3 as the single failover endpoint is sufficient. If both
+      cluster3 and cluster4 are simultaneously down, the cluster needs
+      manual recovery regardless of playbook resilience.
+
+  - pattern: "No audit trail / node label for auto-rebuilt agents"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      The Pushover WARNING is the audit signal. Adding kubectl annotate
+      tasks adds complexity for marginal benefit in a homelab.
+
+  - pattern: "strict_mode default false lets multimasters proceed after agent failure"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. Scheduled/Semaphore runs use -e strict_mode=true.
+      Manual runs may legitimately want to continue past an isolated
+      failure (e.g., one already-broken agent).
+
+  - pattern: "PR comment from forks won't work with GITHUB_TOKEN"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Homelab single-user repo; no PRs from forks are expected.
+
+  - pattern: "Agent rescue could nuke a node that didn't need nuking on transient blip"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. Auto-rebuild is the documented recovery path: any failure
+      after drain leaves the node drained anyway, so wiping and rejoining is
+      the simplest reliable path back to service. Gating with a "drain
+      succeeded" marker adds complexity for marginal benefit in a homelab.
+
+  - pattern: "kubectl missing --request-timeout=10s"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      kubectl defaults are sufficient for a single-cluster homelab. Adding
+      timeouts to every kubectl call is noise.
+
+  - pattern: "Mixed DNS / ansible_host IP in inventory"
+    files:
+      - cluster/ansible/inventory.yaml
+    reason: >-
+      Intentional. cluster3/cluster4 hostnames don't resolve from shoebox;
+      ansible_host gives them explicit IPs. Other hosts resolve via DNS.
+
+  - pattern: "ansible_connection: local with become: true in test inventory"
+    files:
+      - cluster/ansible/tests/monkeyble/inventory.yml
+    reason: >-
+      CI runners have passwordless sudo. The Monkeyble tests need become
+      to exercise the playbook's task structure even though no real changes
+      are applied.
+
+  - pattern: "KUBECONFIG should be at play level not task level"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Task-level is intentional after prior review feedback. Play-level
+      affected pre_tasks too; per-task gives explicit control over which
+      kubectl calls use the failover endpoint.
+
+  - pattern: "pipefail in quorum check has no pipe"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. The quorum check has `echo "$output" | awk ...`, so
+      pipefail is correctly applied to that pipeline.
+
+  - pattern: "Molecule privileged: true + SYS_ADMIN is redundant/unsafe"
+    files:
+      - cluster/ansible/molecule/default/molecule.yml
+    reason: >-
+      Required to run systemd inside the test container. The
+      geerlingguy/docker-ubuntu2204-ansible upstream documentation prescribes
+      this combination. CI runners are ephemeral; the trade-off is accepted.
+
+  - pattern: "multimasters pre_task missing cluster3 KUBECONFIG"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. cluster1 is always up during the multimasters play
+      (cluster1 is the first-master, drained last in the masters play).
+      The default kubeconfig pointing to cluster1 is always reachable.
+
+  - pattern: "tail -150 truncation in PR comment"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Acceptable for a homelab CI. The full log remains in the workflow run
+      output; the tail is a convenience. Grepping for FAILED!/fatal: would
+      miss preceding context.
+
+  - pattern: "Add concurrency group to test-ansible.yaml"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Nice-to-have. Wasted CI minutes are not a concern on a homelab repo.
+
+  - pattern: "Pre-rescue kubectl get pv snapshot for audit"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Same family as the "no audit trail / node label" dismissal. The
+      Pushover WARNING is the audit signal; the recovery doc names the
+      data-loss surface explicitly.
+
+  - pattern: "k3s reinstall task should have retries"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      A transient network blip during recovery legitimately escalates to
+      CRITICAL — operator should investigate. Hiding failures behind
+      automatic retries defeats the alert.
+
+  - pattern: "Molecule only tests cluster_role: agent"
+    files:
+      - cluster/ansible/molecule/default/molecule.yml
+    reason: >-
+      Single platform is sufficient for verifying idempotence and
+      non-destructive task structure. Multi-platform matrices add CI time
+      for marginal coverage in a homelab.
+
+  - pattern: "unsafe_writes ansible_virtualization_type covers docker only"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is intentionally not modified by this PR. The docker
+      guard is sufficient for the actual test matrix.
+
+  - pattern: "Pre-flight checklist doesn't connect StatefulSet skip to data loss"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      The data-loss surface is documented in the recovery section. The
+      pre-flight is a checklist, not a teaching document — operators read
+      both.
+
+  - pattern: "group: \"1001\" as quoted string vs integer"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+      - shoebox/shoebox-ansible-setup.yaml
+    reason: >-
+      Both quoted and unquoted forms are accepted by the Ansible file
+      module. Quoted is used consistently across this repo to keep numeric
+      GIDs from being mistaken for group names by readers.
+
+  - pattern: "verify.yml asserts absence of k3s — tautological"
+    files:
+      - cluster/ansible/molecule/default/verify.yml
+    reason: >-
+      Intentional. The test verifies that node-state.yaml runs cleanly
+      against a host without k3s installed (the realistic CI environment).
+      Successful playbook completion before the assert is the real check.
+
+  - pattern: "Semaphore LoginPassword wrong key type for vault password"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      LoginPassword is the documented Semaphore pattern for vault
+      passwords — only the password field is used, username is blank.
+
+  - pattern: "No actions/cache or docker pull caching in workflow"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Acceptable for a homelab. CI minutes are not a budget concern.
+
+  - pattern: "--limit masters skips maintenance flag set by agents pre_task"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      --limit masters is an operator re-run after a partial failure;
+      the operator already knows maintenance is in progress. Moving the
+      maintenance signal to a separate localhost play adds complexity
+      for a manual-recovery scenario.
+
+  - pattern: "k3s_token (vault) + k3s_api_server_url (all.yaml) mix in environment"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Standard Ansible pattern. Both must be defined for the rescue path
+      to work; no_log on the task prevents value leakage in the failure
+      output. No additional comment needed.
+
+  - pattern: "kernel-modules-extra hard-fails without helpful message"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is intentionally not modified by this PR. The kernel
+      matches what apt just installed, so the matching package should
+      exist; if not, apt's own error is clear enough.
+
+  - pattern: "k3s-agent.yaml has vars_files but no vault consumption"
+    files:
+      - cluster/ansible/k3s-agent.yaml
+    reason: >-
+      False premise. k3s-agent.yaml consumes k3s_token from vault at three
+      separate task locations (initial install + retries) — see lines
+      referencing K3S_TOKEN.
+
+  - pattern: "ansible_kernel stale after k3s reinstall in rescue"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      k3s reinstall doesn't change the kernel; the rescue path doesn't
+      consume ansible_kernel after reinstall. The setup task ran post-reboot
+      before the rescue fired.
+
+  - pattern: "pre-upgrade.txt survives k3s-agent-uninstall.sh"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. The forensic snapshot is in /var/lib/ansible-upgrade/
+      which the k3s uninstall script does not touch — that's the point of
+      preserving it across auto-rebuild.
+
+  - pattern: "vars_files + -e override timing in older Ansible versions"
+    files:
+      - cluster/ansible/group_vars/all.yaml
+    reason: >-
+      Acknowledged in requirements.txt — minimum Ansible 9.0 handles this
+      pattern correctly.
+
+  - pattern: "NFS option casing Soft=True vs soft=True"
+    files:
+      - cluster/ansible/molecule/default/verify.yml
+    reason: >-
+      The Molecule test asserts what node-state.yaml writes; both are
+      controlled by us. Upstream NFS casing changes would not affect
+      Ansible-managed config.
+
+  - pattern: "Recovery doc should mention bind mount must be rw"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Docker bind mounts are read-write by default; the docker-compose
+      entry shows no :ro suffix. No explicit note needed.
+
+  - pattern: "chown commands in doc should be in bootstrap playbook"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      shoebox-ansible-setup.yaml does enforce these permissions via the
+      file module with group: "1001". The doc shows the equivalent shell
+      commands for operators verifying state by hand.
+
+  - pattern: "Lint extra_vars placeholders mask shoebox playbook errors"
+    files:
+      - .ansible-lint
+    reason: >-
+      Lint placeholder values exist to satisfy Jinja rendering during
+      syntax-check. Missing vault vars would still fail lint with a clear
+      error. CI passing confirms the shoebox playbook lints cleanly.
+
+  - pattern: "awk Ready check rejects cordoned-but-Ready masters"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. A manually cordoned master indicates the operator has
+      paused that node for a reason — better to abort the scheduled
+      upgrade and let them resolve it than proceed.
+
+  - pattern: "vault_file undefined gives cryptic Jinja error / add assert"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Homelab acceptable. The Jinja undefined error names the variable
+      clearly. Adding pre_tasks asserts for every required extra-var
+      bloats the playbook for a one-time setup gotcha.
+
+  - pattern: "Test workflow has no paths: filter"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Doc-only PRs trigger full Molecule runs. CI minutes are not a
+      budget concern on a homelab repo.
+
+  - pattern: "Manual rm of state flags doesn't preserve gid 1001"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      The flag is recreated by the next playbook run via file module
+      with explicit mode. Manual rm + recreate is not a documented path;
+      operators rm only, the playbook recreates with correct perms.
+
+  - pattern: "vault.yaml committed but .gitignore not shown for vault-password file"
+    files:
+      - cluster/ansible/group_vars/vault.yaml
+    reason: >-
+      False premise. /etc/ansible/vault-password lives on the shoebox
+      host filesystem, never in the repo. .gitignore is unnecessary for
+      a path outside the repository.
+
+  - pattern: "Quorum check fails after first multimaster drained"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. With serial: 1, host 2's pre_tasks run AFTER host 1
+      has fully completed (including uncordon → Ready). The quorum check
+      sees host 1 as Ready when it runs for host 2.
+
+  - pattern: "Maintenance flag won't set if first host is unreachable"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Edge case acceptable for homelab. If the first host is unreachable
+      the playbook has bigger problems; cleanup play still clears the
+      maintenance flag at the end regardless.
+
+  - pattern: "Pre/post ansible_kernel sanity check after reboot"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Edge case (GRUB pinned to old kernel) too rare to justify the
+      added complexity in a homelab playbook.
+
+  - pattern: "rename-node.yaml stale placeholders in .ansible-lint"
+    files:
+      - .ansible-lint
+    reason: >-
+      False premise. rename-node.yaml exists at
+      cluster/ansible/rename-node.yaml and the lint placeholders satisfy
+      its required extra-vars.
+
+  - pattern: "lint workflow doesn't install from requirements.txt"
+    files:
+      - .github/workflows/lint.yaml
+    reason: >-
+      Cosmetic. lint and test workflows install different sets (lint:
+      ansible+ansible-lint only; test: full Molecule + Monkeyble).
+      Unifying would pull unnecessary deps into lint.
+
+  - pattern: "Semaphore Key Store step doesn't connect to vault-password-file"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Acceptable doc layering. Step 4 (Key Store entry) is preparation;
+      task templates currently consume the bind-mounted file directly.
+      An operator wanting Semaphore-managed vault password switches the
+      task template to reference the Key Store key instead.
+
+  - pattern: "Rebuilt node missing node-state.yaml configuration"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      False premise. k3s-agent-uninstall.sh only removes k3s state
+      (/var/lib/rancher/k3s/, k3s binary, k3s services). OS-level configs
+      from node-state.yaml (sysctl, /etc/hosts, NFS, journald, multipath,
+      modules-load) live in /etc/ and persist through k3s reinstall.
+
+  - pattern: "Pushover CRITICAL should fire before uninstall not after"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Current order is intentional. WARNING on rebuild success and
+      CRITICAL on rebuild failure matches the actual outcome semantics.
+      Sending CRITICAL pre-uninstall would alert on every recovery
+      attempt regardless of outcome.
+
+  - pattern: "rm rolling-upgrade-failed permissions block Semaphore uid 1001"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      False premise. Delete permission depends on the containing
+      directory, not the file. state_dir is mode 0775 gid 1001, so uid
+      1001 (Semaphore) can delete files inside it regardless of file
+      ownership.
+
+  - pattern: "Molecule output upload-artifact backup needed"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      tee streams output as it arrives; partial output is captured even
+      on crash. The PR-comment tail is the existing diagnostic path —
+      adding artifact uploads is incremental for marginal benefit.
+
+  - pattern: "StatefulSet scale-up timing per-node vs end of run"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Plex (pinned to nuc1) and Nextcloud (pinned via longhorn) live on
+      single specific nodes; scaling back up after that node alone is
+      correct and not wasteful for other nodes being drained.
+
+  - pattern: "all.yaml header should explicitly forbid adding secrets"
+    files:
+      - cluster/ansible/group_vars/all.yaml
+    reason: >-
+      Current header already says "Non-secret cluster-wide defaults" and
+      points to vault.yaml. Adding "DO NOT ADD SECRETS HERE" is redundant
+      with the existing wording.
+
+  - pattern: "masters play strict_mode gate too permissive"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. strict_mode is the operator's explicit control surface
+      for fail-fast behavior. Scheduled runs use strict_mode=true;
+      manual debugging runs default to false because operators often
+      want to continue past a known prior failure during recovery.
+
+  - pattern: "kubectl wait could pass on stale Node object"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      After uninstall the Node's heartbeat stops; it goes NotReady before
+      the new k3s registers. The wait window is sufficient to require
+      the new k3s to bring the Node back to Ready.
+
+  - pattern: "k3s reinstall doesn't pin INSTALL_K3S_VERSION"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      k3s skew tolerance (1 minor version) covers the realistic gap
+      between cluster install time and rebuild time. Auto-detecting the
+      cluster version adds infrastructure complexity for marginal benefit
+      in a homelab; the rebuild is rare and any skew issues would be
+      caught by the post-reinstall kubectl wait.
+
+  - pattern: "vault_file test override path not in README"
+    files:
+      - cluster/ansible/README.md
+    reason: >-
+      The CI-relevant override is documented in rolling-upgrade.yaml's
+      header and Monkeyble run-tests.sh. The README targets operators,
+      not test contributors.
+
+  - pattern: "k3s_token rotation procedure not documented"
+    files:
+      - ansible-scheduler.md
+    reason: >-
+      Scope creep. Rotation procedure is a follow-up doc, not a
+      blocker for the scheduler design.
+
+  - pattern: "group: 1001 missing on state_dir in rolling-upgrade pre_task"
+    files:
+      - cluster/ansible/rolling-upgrade.yaml
+    reason: >-
+      Intentional. The delegate_to: localhost + become: false task runs as
+      the ansible user (or Semaphore uid 1001 inside the container), neither
+      of which can chgrp to an arbitrary gid they don't own. The bootstrap
+      playbook (shoebox-ansible-setup.yaml) creates the directory with the
+      correct gid 1001 as a documented prerequisite; the rolling-upgrade task
+      only ensures the directory exists (mode 0775) and does not override
+      group ownership.
+
+  - pattern: "package_facts stale on rerun / second pass through play"
+    files:
+      - cluster/ansible/node-state.yaml
+    reason: >-
+      node-state.yaml is a standalone play, not looped or dynamically
+      included. package_facts is gathered once per run; there is no
+      second pass through the multipath block within a single execution.
+
+  - pattern: "monkeyble job has no PR comment on failure"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      Homelab acceptable. Monkeyble failures are visible in the workflow
+      run log. Adding a duplicate github-script comment block for a second
+      job is noise for a single-maintainer repo.
+
+  - pattern: "shoebox test script not visible in diff / forward reference"
+    files:
+      - .github/workflows/test-ansible.yaml
+      - shoebox/tests/test-validate-semaphore-key.sh
+    reason: >-
+      shoebox/tests/test-validate-semaphore-key.sh exists in the branch.
+      The reviewer cannot see it because it was added in an earlier commit
+      outside the current diff window, not because it is missing.
+
+  - pattern: "exit PIPESTATUS[0] is redundant in molecule step with continue-on-error"
+    files:
+      - .github/workflows/test-ansible.yaml
+    reason: >-
+      False premise. Without exit "${PIPESTATUS[0]}", the step would always
+      exit 0 because tee (the last command in the pipe) always succeeds.
+      steps.molecule.outcome would then always be 'success', making the
+      downstream "Fail if molecule failed" gate inoperable. The exit is
+      necessary to propagate molecule's exit code through continue-on-error
+      so outcome reflects the actual molecule result.
+
+  - pattern: "autofix run_bash uses denylist / shell=True with LLM-controlled input"
+    files:
+      - .github/scripts/autofix.py
+    reason: >-
+      Intentional design. The bash denylist blocks the most common
+      exfiltration vectors (curl, wget, nc, ncat, netcat, /dev/tcp,
+      ANTHROPIC_*, GH_TOKEN, GITHUB_TOKEN, SECRET). The .github/ write-block
+      prevents CI config tampering. The runner sandbox bounds blast radius.
+      A full allowlist would require reimplementing the repair loop.
+      Accepted homelab tradeoff.
+
+factual_corrections:
+  - claim: "Cleanup play won't run if any_errors_fatal hits"
+    correction: >-
+      Incorrect. any_errors_fatal terminates the current play; subsequent
+      plays in the same playbook still execute, so the cleanup play always
+      runs.
+
+  - claim: "hpe namespace is unusual for a homelab tool"
+    correction: >-
+      hpe.monkeyble is published by Hewlett Packard Enterprise on Ansible
+      Galaxy. The namespace is correct and expected.

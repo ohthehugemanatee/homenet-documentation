@@ -1,0 +1,22 @@
+# Managed by Ansible — do not edit manually.
+# Required kernel parameters for k3s.
+# Ref: https://docs.k3s.io/installation/requirements
+
+# IP forwarding (required for pod-to-pod routing)
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
+
+# Bridge netfilter (required for NetworkPolicy and kube-proxy)
+# Requires br_netfilter module — loaded via /etc/modules-load.d/k3s.conf
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+
+# Inotify limits — many pods consume many watches
+fs.inotify.max_user_instances = 8192
+fs.inotify.max_user_watches = 524288
+
+# File descriptor limits
+fs.file-max = 2097152
+
+# Disable swap pressure (belt-and-suspenders alongside swapoff)
+vm.swappiness = 0

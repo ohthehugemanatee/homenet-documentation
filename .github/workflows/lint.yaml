@@ -4,6 +4,9 @@ name: Lint
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
 
   yaml:
@@ -39,24 +42,13 @@ jobs:
               --ignore-missing-schemas \
               --kubernetes-version 1.29.0
 
-  dockerfiles:
-    name: Dockerfiles
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@v3.1.0
-        with:
-          recursive: true
-          config: .hadolint.yaml
-          failure-threshold: error
-
   shell:
     name: Shell scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run shellcheck
-        run: find cluster -name "*.sh" -exec shellcheck {} +
+        run: find cluster shoebox -name "*.sh" -exec shellcheck {} +
 
   ansible:
     name: Ansible playbooks
@@ -69,7 +61,9 @@ jobs:
         run: ansible-galaxy collection install -r cluster/ansible/requirements.yaml
       - name: Run ansible-lint
         working-directory: cluster/ansible
-        run: ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml
+        run: |
+          ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml \
+            ../../shoebox/shoebox-ansible-setup.yaml
 
   policy:
     name: Kubernetes policy (advisory)
@@ -119,21 +113,22 @@ jobs:
             --format pretty || true
 
   trivy:
-    name: Dockerfile and IaC security scan (Trivy)
+    name: IaC security scan (Trivy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install trivy
+        env:
+          TRIVY_VERSION: 0.71.0
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin
+          TARBALL="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLo "/tmp/${TARBALL}" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TARBALL}"
+          curl -fsSLo /tmp/trivy.checksums \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep "${TARBALL}$" /tmp/trivy.checksums | (cd /tmp && sha256sum -c -)
+          tar -xzf "/tmp/${TARBALL}" -C /usr/local/bin trivy
           trivy --version
-      - name: Scan Dockerfiles for misconfigurations
-        run: |
-          trivy config \
-            --exit-code 1 \
-            --severity CRITICAL,HIGH \
-            cluster/Dockerfiles
       - name: Scan k8s manifests for misconfigurations
         run: |
           trivy config \

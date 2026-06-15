@@ -1,0 +1,100 @@
+name: Ansible tests
+
+'on':
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+
+  shoebox-validators:
+    name: Shoebox config validators
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semaphore encryption-key validator tests
+        run: bash shoebox/tests/test-validate-semaphore-key.sh
+
+  monkeyble:
+    name: Monkeyble rescue-logic tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: cluster/ansible
+        run: pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        working-directory: cluster/ansible
+        run: ansible-galaxy collection install -r requirements.yaml
+
+      - name: Run Monkeyble scenarios
+        working-directory: cluster/ansible
+        run: bash tests/monkeyble/run-tests.sh
+
+  molecule:
+    name: Molecule node-state integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: cluster/ansible
+        run: pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        working-directory: cluster/ansible
+        run: ansible-galaxy collection install -r requirements.yaml
+
+      - name: Run Molecule tests
+        id: molecule
+        working-directory: cluster/ansible
+        continue-on-error: true
+        run: molecule test 2>&1 | tee /tmp/molecule-output.txt; exit "${PIPESTATUS[0]}"
+        env:
+          PY_COLORS: '0'
+          ANSIBLE_FORCE_COLOR: '0'
+
+      - name: Post molecule output as PR comment on failure
+        if: steps.molecule.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '/tmp/molecule-output.txt';
+            const output = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : '(no output — molecule may have crashed before writing output)';
+            const lines = output.split('\n');
+            const tail = lines.slice(-150).join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Molecule test failure\n\`\`\`\n${tail}\n\`\`\``
+            });
+
+      - name: Fail if molecule failed
+        if: steps.molecule.outcome == 'failure'
+        run: exit 1

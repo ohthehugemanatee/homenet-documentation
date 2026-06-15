@@ -42,7 +42,7 @@ jobs:
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
-          for ns in collabora unifi octoprint loki longhorn-system dns-bg-check; do
+          for ns in argocd collabora unifi octoprint monitoring longhorn-system dns-bg-check; do
             kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
           done
           kubectl apply -f cluster/priorityClasses/
@@ -57,10 +57,12 @@ jobs:
             ! -path "*/ansible/*" \
             ! -path "*/helm/*" \
             ! -path "*/localdev/*" \
+            ! -path "*/argocd/*" \
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
             ! -name "cert-manager.yaml" \
             ! -name "l2-config.yaml" \
+            ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
             | sort)
           exit "$FAILED"
@@ -83,24 +85,31 @@ jobs:
 
       - name: Add helm repos
         run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
           helm repo add grafana https://grafana.github.io/helm-charts
-          helm repo add netdata https://netdata.github.io/helmchart/
           helm repo add nfs-subdir-external-provisioner \
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo update
 
-      - name: Dry-run loki-stack
+      - name: Dry-run argocd
         run: |
-          helm upgrade --install loki grafana/loki-stack \
-            --namespace loki --create-namespace \
-            --dry-run \
-            -f cluster/helm/loki/values.yaml
+          helm template argocd argo/argo-cd \
+            --namespace argocd \
+            -f cluster/helm/argocd/values.yaml > /dev/null
 
-      - name: Dry-run netdata
+      - name: Dry-run kube-prometheus-stack
         run: |
-          helm upgrade --install netdata netdata/netdata \
+          helm template kube-prometheus-stack \
+            oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+            --namespace monitoring \
+            -f cluster/helm/kube-prometheus-stack/values.yaml > /dev/null
+
+      - name: Dry-run alloy
+        run: |
+          helm upgrade --install alloy grafana/alloy \
+            --namespace monitoring --create-namespace \
             --dry-run \
-            -f cluster/helm/netdata/override.yaml
+            -f cluster/helm/alloy/values.yaml
 
       - name: Dry-run nfs-subdir-external-provisioner
         run: |

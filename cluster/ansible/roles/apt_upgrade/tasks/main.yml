@@ -1,0 +1,38 @@
+---
+- name: Ensure upgrade state dir exists on node
+  ansible.builtin.file:
+    path: "{{ state_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Record pre-upgrade package versions
+  ansible.builtin.shell:
+    cmd: dpkg-query -W -f='${Package}=${Version}\n' > {{ state_dir }}/pre-upgrade.txt
+    executable: /bin/bash
+  changed_when: false
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Run dist-upgrade
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true
+    autoclean: true
+    lock_timeout: 300
+  register: apt_upgrade_result
+
+- name: Check if reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: apt_upgrade_reboot_required
+
+- name: Reboot
+  ansible.builtin.reboot:
+    reboot_timeout: 600
+    post_reboot_delay: "{{ apt_upgrade_post_reboot_delay }}"
+  when: apt_upgrade_reboot_required.stat.exists or apt_upgrade_result.changed
+
+- name: Refresh facts after reboot
+  ansible.builtin.setup:

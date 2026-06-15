@@ -1,0 +1,57 @@
+name: PR Size Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  size-check:
+    name: PR size check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const loc = pr.additions + pr.deletions;
+            const hasOverride = pr.labels.some(l => l.name === 'size/override');
+
+            let conclusion, title, summary;
+
+            if (loc >= 400) {
+              conclusion = 'failure';
+              title = `PR exceeds hard limit: ${loc} LOC (max 400)`;
+              summary = `This PR changes ${loc} lines (${pr.additions}+ / ${pr.deletions}−). `
+                + `PRs ≥400 LOC must be split before merge. See CLAUDE.md for decomposition guidelines.`;
+            } else if (loc >= 200 && !hasOverride) {
+              conclusion = 'action_required';
+              title = `PR exceeds soft limit: ${loc} LOC (warn ≥200)`;
+              summary = `This PR changes ${loc} lines (${pr.additions}+ / ${pr.deletions}−). `
+                + `PRs ≥200 LOC require manual acknowledgment before merge. `
+                + `A maintainer must add the \`size/override\` label to unblock.`;
+            } else {
+              const note = loc >= 200 ? ' (size/override acknowledged)' : '';
+              conclusion = 'success';
+              title = `PR size: ${loc} LOC — OK${note}`;
+              summary = `${loc} lines changed (${pr.additions}+ / ${pr.deletions}−).`;
+            }
+
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'PR size check',
+              head_sha: pr.head.sha,
+              status: 'completed',
+              conclusion,
+              output: { title, summary }
+            });
+
+            if (conclusion !== 'success') {
+              core.setFailed(title);
+            }
