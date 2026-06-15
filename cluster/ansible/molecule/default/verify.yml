@@ -144,3 +144,13 @@
       ansible.builtin.assert:
         that: not k3s_unit.stat.exists
         success_msg: "k3s-agent service absent — node-state gracefully skipped k3s tasks"
+
+    - name: Stat k3s server config
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config
+
+    - name: Assert k3s server config absent for agent role
+      ansible.builtin.assert:
+        that: not k3s_config.stat.exists
+        success_msg: "k3s config.yaml correctly absent — agent nodes do not get control-plane taint"
