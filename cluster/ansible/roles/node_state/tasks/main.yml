@@ -211,7 +211,7 @@
     owner: root
     group: root
     mode: '0755'
-  when: cluster_role != 'agent'
+  when: cluster_role in ['first-master', 'multi-master']
 
 - name: Template k3s server config with control-plane taint
   ansible.builtin.template:
@@ -220,7 +220,7 @@
     owner: root
     group: root
     mode: '0600'
-  when: cluster_role != 'agent'
+  when: cluster_role in ['first-master', 'multi-master']
   notify: Restart k3s
 
 # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
