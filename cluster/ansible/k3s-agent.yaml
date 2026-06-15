@@ -122,7 +122,7 @@
         owner: root
         group: root
         mode: '0755'
-      when: cluster_role != 'agent'
+      when: cluster_role in ['first-master', 'multi-master']
     - name: Template k3s server config with control-plane taint
       ansible.builtin.template:
         src: roles/node_state/templates/k3s-config.yaml.j2
@@ -130,7 +130,7 @@
         owner: root
         group: root
         mode: '0600'
-      when: cluster_role != 'agent'
+      when: cluster_role in ['first-master', 'multi-master']
     - name: Download k3s agent installer
       tags:
         - k3s
