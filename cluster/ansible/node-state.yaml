@@ -22,6 +22,15 @@
       ansible.builtin.import_role:
         name: node_state
 
+    # ── kube-vip control-plane VIP (masters only) ─────────────────────────────
+    # Drops the kube-vip manifest into k3s's auto-deploy dir so the floating API
+    # VIP comes up with k3s, below Argo. No-op on agents.
+
+    - name: Place kube-vip control-plane manifest on masters
+      ansible.builtin.import_role:
+        name: kube_vip
+      when: cluster_role | default('agent') in ['first-master', 'multi-master']
+
     # ── k3s service ──────────────────────────────────────────────────────────
     # Flush config handlers first — sysctl, modules, etc. must be current
     # before we assess or restart k3s.
