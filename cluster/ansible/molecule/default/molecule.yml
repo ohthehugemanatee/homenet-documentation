@@ -8,7 +8,21 @@ driver:
   name: docker
 
 platforms:
+  # Agent node — must NOT get the control-plane taint config or the kube-vip
+  # manifest (verifies the master-gated tasks are correctly no-ops on agents).
   - name: node-state-test
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    command: /lib/systemd/systemd
+    capabilities:
+      - SYS_ADMIN
+  # Control-plane node — exercises the multi-master path: k3s server config
+  # (control-plane taint) and the kube_vip auto-deploy manifest placement.
+  - name: node-state-master-test
     image: geerlingguy/docker-ubuntu2204-ansible:latest
     pre_build_image: true
     privileged: true
@@ -34,12 +48,16 @@ provisioner:
   inventory:
     group_vars:
       all:
-        cluster_role: multi-master
         ansible_user: root
         ntp_servers:
           - ntp.ubuntu.com
           - 0.pool.ntp.org
           - 1.pool.ntp.org
+    host_vars:
+      node-state-test:
+        cluster_role: agent
+      node-state-master-test:
+        cluster_role: multi-master
 
 verifier:
   name: ansible

@@ -145,27 +145,11 @@
         that: not k3s_unit.stat.exists
         success_msg: "k3s-agent service absent — node-state gracefully skipped k3s tasks"
 
-    # ── kube_vip role (master path exercised by converge harness) ─────────────
+    # ── k3s server config (control-plane taint) — role-dependent ──────────────
+    # agent host gets no config.yaml; multi-master host does. Both hosts run the
+    # same converge; assertions below scope by cluster_role (set per-host in
+    # molecule.yml host_vars).
 
-    - name: Stat kube-vip auto-deploy manifest
-      ansible.builtin.stat:
-        path: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
-      register: kube_vip_manifest
-
-    - name: Assert kube-vip manifest placed in k3s auto-deploy dir
-      ansible.builtin.assert:
-        that: kube_vip_manifest.stat.exists
-        fail_msg: "kube_vip role did not place the manifest on a master"
-
-    - name: Read kube-vip manifest
-      ansible.builtin.slurp:
-        src: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
-      register: kube_vip_content
-
-    - name: Assert kube-vip manifest targets the control-plane VIP
-      ansible.builtin.assert:
-        that: "'10.10.10.9' in (kube_vip_content.content | b64decode)"
-        fail_msg: "placed manifest does not reference the VIP 10.10.10.9"
     - name: Stat k3s server config
       ansible.builtin.stat:
         path: /etc/rancher/k3s/config.yaml
@@ -175,3 +159,41 @@
       ansible.builtin.assert:
         that: not k3s_config.stat.exists
         success_msg: "k3s config.yaml correctly absent — agent nodes do not get control-plane taint"
+      when: cluster_role == 'agent'
+
+    - name: Assert k3s server config present for control-plane role
+      ansible.builtin.assert:
+        that: k3s_config.stat.exists
+        fail_msg: "k3s config.yaml missing — control-plane nodes must get the taint config"
+      when: cluster_role in ['first-master', 'multi-master']
+
+    # ── kube_vip role (master path; no-op on agents) ──────────────────────────
+
+    - name: Stat kube-vip auto-deploy manifest
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+      register: kube_vip_manifest
+
+    - name: Assert kube-vip manifest absent for agent role
+      ansible.builtin.assert:
+        that: not kube_vip_manifest.stat.exists
+        success_msg: "kube-vip manifest correctly absent on agent nodes"
+      when: cluster_role == 'agent'
+
+    - name: Assert kube-vip manifest placed in k3s auto-deploy dir
+      ansible.builtin.assert:
+        that: kube_vip_manifest.stat.exists
+        fail_msg: "kube_vip role did not place the manifest on a master"
+      when: cluster_role in ['first-master', 'multi-master']
+
+    - name: Read kube-vip manifest
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+      register: kube_vip_content
+      when: cluster_role in ['first-master', 'multi-master']
+
+    - name: Assert kube-vip manifest targets the control-plane VIP
+      ansible.builtin.assert:
+        that: "'10.10.10.9' in (kube_vip_content.content | b64decode)"
+        fail_msg: "placed manifest does not reference the VIP 10.10.10.9"
+      when: cluster_role in ['first-master', 'multi-master']
