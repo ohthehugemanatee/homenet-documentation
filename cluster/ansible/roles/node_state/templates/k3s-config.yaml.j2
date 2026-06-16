@@ -1,5 +1,13 @@
 ---
 # k3s server configuration — managed by Ansible (node_state role).
 # Changes trigger a k3s restart via handler.
+#
+# tls-san is additive to k3s's auto-generated SANs (each server's own node IP and
+# hostname, 127.0.0.1, the in-cluster names). Listing the kube-vip control-plane
+# VIP here keeps it in the apiserver serving cert so kubectl/agents can reach the
+# API through the VIP without a cert-name mismatch. This file owns config.yaml, so
+# the SAN must live here or a node_state run will drop it.
+tls-san:
+  - "{{ node_state_k3s_api_server_vip }}"
 node-taint:
   - "node-role.kubernetes.io/control-plane=:NoSchedule"
