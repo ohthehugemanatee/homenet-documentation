@@ -200,6 +200,29 @@
     line: 'Storage=volatile'
   notify: Restart journald
 
+# ── k3s server config (control-plane taint) ───────────────────────────────
+# Prevent regular workloads from scheduling on control-plane nodes.
+# Only applied to server nodes (first-master / multi-master).
+
+- name: Ensure k3s config directory exists
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: cluster_role in ['first-master', 'multi-master']
+
+- name: Template k3s server config with control-plane taint
+  ansible.builtin.template:
+    src: k3s-config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  when: cluster_role in ['first-master', 'multi-master']
+  notify: Restart k3s
+
 # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────
 
 - name: Gather package facts for multipath check

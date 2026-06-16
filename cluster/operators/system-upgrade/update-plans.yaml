@@ -9,13 +9,14 @@ spec:
   cordon: true
   nodeSelector:
     matchExpressions:
-    - key: node-role.kubernetes.io/master
-      operator: In
-      values:
-      - "true"
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
   serviceAccountName: system-upgrade
   tolerations:
     - key: "node-role.kubernetes.io/master"
+      effect: "NoSchedule"
+      operator: "Exists"
+    - key: "node-role.kubernetes.io/control-plane"
       effect: "NoSchedule"
       operator: "Exists"
   upgrade:
@@ -33,7 +34,7 @@ spec:
   cordon: true
   nodeSelector:
     matchExpressions:
-    - key: node-role.kubernetes.io/master
+    - key: node-role.kubernetes.io/control-plane
       operator: DoesNotExist
   prepare:
     args:
@@ -41,6 +42,13 @@ spec:
     - server-plan
     image: rancher/k3s-upgrade:v1.17.4-k3s1
   serviceAccountName: system-upgrade
+  tolerations:
+    - key: "node-role.kubernetes.io/master"
+      effect: "NoSchedule"
+      operator: "Exists"
+    - key: "node-role.kubernetes.io/control-plane"
+      effect: "NoSchedule"
+      operator: "Exists"
   upgrade:
     image: rancher/k3s-upgrade
   channel: https://update.k3s.io/v1-release/channels/stable
