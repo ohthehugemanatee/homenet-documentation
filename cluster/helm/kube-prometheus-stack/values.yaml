@@ -28,6 +28,12 @@ grafana:
       url: http://loki.loki.svc.cluster.local:3100
       access: proxy
       isDefault: false
+    - name: Alertmanager
+      type: alertmanager
+      url: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
+      access: proxy
+      jsonData:
+        implementation: prometheus
 
 alertmanager:
   enabled: true
@@ -66,6 +72,17 @@ alertmanager:
             title: 'k8s alert: {{ .GroupLabels.alertname }}'
             message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             priority: "0"
+
+# k3s embeds controller-manager, scheduler, proxy, and etcd inside
+# the k3s server process — no separate pods or scrape endpoints exist.
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
 
 prometheus:
   prometheusSpec:

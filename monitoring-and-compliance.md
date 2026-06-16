@@ -13,7 +13,10 @@ shoebox (external, always-on NFS server)
 ├── /var/log/ansible/           ← playbook logs, logrotated weekly (12 weeks)
 └── /var/lib/ansible-upgrade/  ← run state files (failure flag, maintenance flag)
 
-In-cluster (observability)
+In-cluster (observability + GitOps)
+├── ArgoCD            ← GitOps: reconciles cluster state against git repo
+│                        drift alerts → Pushover (independent of Alertmanager)
+│                        UI at argocd.vert (mobile-friendly)
 ├── Prometheus        ← scrapes metrics from nodes + pods (15d retention)
 ├── Alertmanager      ← fires on PrometheusRules → Pushover
 ├── Grafana           ← dashboards for metrics (Prometheus) + logs (Loki)
