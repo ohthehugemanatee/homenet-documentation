@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: node-feature-discovery
+  namespace: argocd
+  annotations:
+    notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      ref: values
+    - chart: node-feature-discovery
+      repoURL: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+      targetRevision: 0.18.3
+      helm:
+        valueFiles:
+          - $values/cluster/helm/node-feature-discovery/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: node-feature-discovery
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

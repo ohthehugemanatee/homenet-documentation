@@ -167,6 +167,20 @@
         fail_msg: "k3s config.yaml missing — control-plane nodes must get the taint config"
       when: cluster_role in ['first-master', 'multi-master']
 
+    - name: Read k3s server config
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/config.yaml
+      register: k3s_config_content
+      when: cluster_role in ['first-master', 'multi-master']
+
+    - name: Assert k3s server config lists the control-plane VIP as a tls-san
+      ansible.builtin.assert:
+        that:
+          - "'tls-san' in (k3s_config_content.content | b64decode)"
+          - "'10.10.10.9' in (k3s_config_content.content | b64decode)"
+        fail_msg: "config.yaml missing tls-san for the VIP — apiserver cert will not be valid for 10.10.10.9"
+      when: cluster_role in ['first-master', 'multi-master']
+
     # ── kube_vip role (master path; no-op on agents) ──────────────────────────
 
     - name: Stat kube-vip auto-deploy manifest

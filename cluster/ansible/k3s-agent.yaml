@@ -144,7 +144,7 @@
         - k3s
       ansible.builtin.command: /tmp/k3s-setup.sh
       environment:
-        K3S_URL: https://10.10.10.10:6443
+        K3S_URL: "{{ k3s_api_server_url }}"
         K3S_TOKEN: "{{ k3s_token }}"
     - name: Run k3s multi-master installer
       when: cluster_role == "multi-master"
@@ -152,9 +152,13 @@
         - k3s
       ansible.builtin.command: /tmp/k3s-setup.sh
       environment:
-        K3S_URL: https://10.10.10.10:6443
+        K3S_URL: "{{ k3s_api_server_url }}"
         K3S_TOKEN: "{{ k3s_token }}"
-        INSTALL_K3S_EXEC: "server --server https://10.10.10.10:6443 --disable=servicelb"
+        INSTALL_K3S_EXEC: "server --server {{ k3s_api_server_url }} --disable=servicelb"
+    # first-master is cluster genesis only (--cluster-init, no --server): it founds
+    # etcd, so it has no VIP to join. To REBUILD cluster1 against a live cluster,
+    # run it with cluster_role=multi-master so it rejoins via the VIP — never re-run
+    # this first-master path against an existing cluster (it would re-init etcd).
     - name: Run k3s first master installer
       when: cluster_role == "first-master"
       tags:
