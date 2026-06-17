@@ -116,13 +116,6 @@ exceptions:
       the natural gate when the control plane is unreachable. Workers are
       designed to lose pods to rescheduling.
 
-  - pattern: "Hardcoded kubeconfig-cluster3 path / variable-ize as failover_kubeconfig"
-    files:
-      - cluster/ansible/rolling-upgrade.yaml
-    reason: >-
-      Single-cluster homelab. Variable indirection adds complexity without
-      operational benefit. The path is documented in the setup runbook.
-
   - pattern: "StatefulSet pre-flight assertion (Plex/Nextcloud)"
     files:
       - cluster/ansible/rolling-upgrade.yaml
