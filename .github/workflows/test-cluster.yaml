@@ -89,6 +89,8 @@ jobs:
           helm repo add grafana https://grafana.github.io/helm-charts
           helm repo add nfs-subdir-external-provisioner \
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
+          helm repo add node-feature-discovery \
+            https://kubernetes-sigs.github.io/node-feature-discovery/charts
           helm repo update
 
       - name: Dry-run argocd
@@ -119,3 +121,11 @@ jobs:
             --dry-run \
             --set nfs.server=shoebox.vert \
             --set nfs.path=/export/storage/configs/kubernetes
+
+      - name: Dry-run node-feature-discovery
+        run: |
+          helm upgrade --install node-feature-discovery \
+            node-feature-discovery/node-feature-discovery \
+            --namespace node-feature-discovery --create-namespace \
+            --dry-run \
+            -f cluster/helm/node-feature-discovery/values.yaml
