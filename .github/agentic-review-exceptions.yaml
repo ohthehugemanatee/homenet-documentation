@@ -29,8 +29,9 @@ exceptions:
     files:
       - cluster/ansible/
     reason: >-
-      https://10.10.10.10:6443 IS the cluster VIP. It is correct for this
-      homelab and will not change.
+      https://10.10.10.9:6443 is the kube-vip control-plane floating VIP. The
+      hardcoded endpoint is intentional for this homelab; sourced once from
+      k3s_api_server_url (group_vars/all.yaml).
 
   - pattern: "run_once clearing failure flag"
     files:
