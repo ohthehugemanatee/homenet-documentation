@@ -43,6 +43,21 @@ spec:
             - name: nfs-media
               mountPath: /books
               subPath: "books"
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay + KasmVNC init
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
 
 ---
 
@@ -150,6 +165,21 @@ spec:
             - name: nfs-config
               mountPath: /calibre-library
               subPath: "calibre"
+          startupProbe:
+            tcpSocket:
+              port: 8083
+            periodSeconds: 30
+            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
+          livenessProbe:
+            tcpSocket:
+              port: 8083
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8083
+            periodSeconds: 30
+            failureThreshold: 3
 
 ---
 

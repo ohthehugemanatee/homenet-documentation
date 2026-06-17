@@ -49,6 +49,30 @@ spec:
         - mountPath: /docker-entrypoint-initdb.d
           name: nfs-config
           subPath: "mongodb-initdb.d"
+        startupProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping').ok"
+          periodSeconds: 10
+          failureThreshold: 30  # 5 min grace; MongoDB init scripts on first boot
+        livenessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping').ok"
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping').ok"
+          periodSeconds: 30
+          failureThreshold: 3
 
 ---
 
