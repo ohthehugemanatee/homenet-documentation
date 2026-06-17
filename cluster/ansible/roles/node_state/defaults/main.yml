@@ -3,3 +3,9 @@ node_state_ntp_servers:
   - ntp.ubuntu.com
   - 0.pool.ntp.org
   - 1.pool.ntp.org
+
+# kube-vip control-plane VIP, added to the apiserver serving cert (tls-san) so
+# the API is reachable through the floating VIP without a cert-name mismatch.
+# Single source of truth for the VIP IP; override via inventory/group_vars if it
+# ever changes.
+node_state_k3s_api_server_vip: "10.10.10.9"
