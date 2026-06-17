@@ -53,11 +53,26 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+          ports:
+            - containerPort: 3101
+              name: http-metrics
           volumeMounts:
             - name: sidecar-promtail-logs
               mountPath: /sidecar-logs
             - mountPath: /etc/promtail
               name: promtail-config
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3101
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3101
+            periodSeconds: 30
+            failureThreshold: 3
         - name: duplicacy
           resources:
             requests:
@@ -100,6 +115,16 @@ spec:
               subPath: ".duplicacy-cache"
             - name: nfs-storage
               mountPath: "/storage"
+          livenessProbe:
+            tcpSocket:
+              port: 3875
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 3875
+            periodSeconds: 30
+            failureThreshold: 3
 ---
 
 apiVersion: v1

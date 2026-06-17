@@ -70,5 +70,17 @@ spec:
         - --provider=pihole
         # Change this to the actual address of your Pi-hole web server
         - --pihole-server=http://10.10.10.40
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 7979
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 7979
+          periodSeconds: 30
+          failureThreshold: 3
       securityContext:
         fsGroup: 65534 # For ExternalDNS to be able to read Kubernetes token files

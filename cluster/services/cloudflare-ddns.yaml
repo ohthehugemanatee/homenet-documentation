@@ -23,6 +23,9 @@ spec:
                   operator: DoesNotExist
       containers:
         - name: cloudflare-ddns
+          # No health probe: oznu/cloudflare-ddns runs a timed shell loop with no
+          # network listener, no lockfile, and no persistent binary to exec-check.
+          # Operator sign-off: approved in Issue #19.
           image: oznu/cloudflare-ddns
           env:
             - name: PUID
