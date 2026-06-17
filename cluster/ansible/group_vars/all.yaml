@@ -3,9 +3,10 @@
 # by each playbook via vars_files). Override in tests with:
 #   -e "vault_file=/path/to/test_secrets.yml"
 
-# k3s API server URL used for agent re-joins (rolling-upgrade rescue path).
-# Points to the cluster VIP or the primary master.
-k3s_api_server_url: "https://10.10.10.10:6443"
+# k3s API server URL used for agent re-joins (rolling-upgrade rescue path) and
+# for node bootstrap joins (k3s-agent.yaml). Points to the kube-vip control-plane
+# floating VIP (10.10.10.9), so joins survive any single master being down.
+k3s_api_server_url: "https://10.10.10.9:6443"
 
 # Controller-side state directory for rolling-upgrade run flags.
 # Override with -e state_dir=/tmp/... for local test runs.
