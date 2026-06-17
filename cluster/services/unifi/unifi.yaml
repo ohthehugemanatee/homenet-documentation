@@ -82,6 +82,21 @@ spec:
         - mountPath: /config
           name: nfs-config
           subPath: "unifi"
+        startupProbe:
+          tcpSocket:
+            port: 8443
+          periodSeconds: 30
+          failureThreshold: 30  # 15 min grace; known slow startup (linuxserver + MongoDB dependency)
+        livenessProbe:
+          tcpSocket:
+            port: 8443
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8443
+          periodSeconds: 30
+          failureThreshold: 3
 
 ---
 apiVersion: v1

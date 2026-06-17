@@ -50,6 +50,24 @@ spec:
               subPath: "radarr"
             - name: nfs-media
               mountPath: "/data"
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            periodSeconds: 30
+            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 7878
+            periodSeconds: 30
+            failureThreshold: 3
 
 ---
 
