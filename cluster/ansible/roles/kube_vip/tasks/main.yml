@@ -1,0 +1,21 @@
+---
+# Place the kube-vip control-plane manifest in k3s's auto-deploy directory.
+# Masters only — gated by the caller (node-state.yaml) on cluster_role. k3s
+# watches the directory and applies/reconciles the manifest itself, so no
+# restart handler is needed.
+
+- name: Ensure k3s auto-deploy manifests directory exists
+  ansible.builtin.file:
+    path: "{{ kube_vip_manifest_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Place kube-vip control-plane manifest
+  ansible.builtin.copy:
+    src: "{{ kube_vip_manifest_src }}"
+    dest: "{{ kube_vip_manifest_dir }}/kube-vip.yaml"
+    owner: root
+    group: root
+    mode: '0644'

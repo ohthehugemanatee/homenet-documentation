@@ -1,5 +1,9 @@
 ---
-# Converge: run node-state.yaml against the Molecule Docker container.
+# Converge: run node-state.yaml against the Molecule Docker containers.
 # Templates resolve relative to node-state.yaml's location (../../templates/).
+# Two platforms (see molecule.yml host_vars): node-state-test runs as
+# cluster_role=agent (no control-plane taint, no kube-vip), node-state-master-test
+# as multi-master — exercising both the agent path and the kube_vip role's master
+# path. verify.yml scopes its assertions per cluster_role.
 - name: Converge
   import_playbook: ../../node-state.yaml
