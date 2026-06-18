@@ -105,8 +105,7 @@ spec:
               protocol: TCP
           volumeMounts:
             - mountPath: "/logs"
-              name: duplicacy-db
-              subPath: "logs"
+              name: sidecar-promtail-logs
             - mountPath: "/config"
               name: duplicacy-db
               subPath: "config"
