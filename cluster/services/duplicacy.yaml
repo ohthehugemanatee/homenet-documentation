@@ -105,8 +105,7 @@ spec:
               protocol: TCP
           volumeMounts:
             - mountPath: "/logs"
-              name: duplicacy-db
-              subPath: "logs"
+              name: sidecar-promtail-logs
             - mountPath: "/config"
               name: duplicacy-db
               subPath: "config"
@@ -119,12 +118,12 @@ spec:
             tcpSocket:
               port: 3875
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 6
           readinessProbe:
             tcpSocket:
               port: 3875
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 6
 ---
 
 apiVersion: v1
