@@ -1,0 +1,153 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-homelab-health
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"  # picked up by kube-prometheus-stack grafana-sc-dashboard sidecar
+data:
+  homelab-health.json: |
+    {
+      "title": "Homelab App Health",
+      "uid": "homelab-app-health",
+      "schemaVersion": 36,
+      "version": 1,
+      "refresh": "1m",
+      "time": { "from": "now-3h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Pods Not Ready",
+          "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "red", "value": 1 }
+              ]
+            }
+          },
+          "targets": [
+            {
+              "expr": "count(kube_pod_status_ready{condition=\"false\", namespace!~\"kube-system|cert-manager|longhorn-system|monitoring|loki\"} == 1) or vector(0)",
+              "legendFormat": "Not Ready"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "OOMKilled Containers (last 1h)",
+          "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "orange", "value": 1 }
+              ]
+            }
+          },
+          "targets": [
+            {
+              "expr": "count(kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\", namespace!~\"kube-system|cert-manager|longhorn-system|monitoring|loki\"} == 1) or vector(0)",
+              "legendFormat": "OOMKilled"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "table",
+          "title": "Pod Readiness — App Namespaces",
+          "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+          "options": {
+            "sortBy": [{ "displayName": "Ready", "desc": false }]
+          },
+          "transformations": [
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": { "names": ["namespace", "pod", "condition", "Value"] }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Value" },
+                "properties": [
+                  { "id": "displayName", "value": "Ready" },
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        { "color": "red", "value": null },
+                        { "color": "green", "value": 1 }
+                      ]
+                    }
+                  },
+                  { "id": "mappings", "value": [
+                    { "type": "value", "options": { "0": { "text": "Not Ready" }, "1": { "text": "Ready" } } }
+                  ]}
+                ]
+              }
+            ]
+          },
+          "targets": [
+            {
+              "expr": "kube_pod_status_ready{condition=\"true\", namespace!~\"kube-system|cert-manager|longhorn-system|monitoring|loki\"}",
+              "instant": true,
+              "legendFormat": "{{namespace}}/{{pod}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Container Restarts (app namespaces)",
+          "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 3 },
+                  { "color": "red", "value": 10 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "expr": "increase(kube_container_status_restarts_total{namespace!~\"kube-system|cert-manager|longhorn-system|monitoring|loki\"}[1h]) > 0",
+              "legendFormat": "{{namespace}}/{{container}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "table",
+          "title": "Last Termination Reason",
+          "gridPos": { "x": 0, "y": 22, "w": 24, "h": 8 },
+          "targets": [
+            {
+              "expr": "kube_pod_container_status_last_terminated_reason{namespace!~\"kube-system|cert-manager|longhorn-system|monitoring|loki\"} == 1",
+              "instant": true,
+              "legendFormat": "{{namespace}}/{{pod}}/{{container}} — {{reason}}"
+            }
+          ]
+        }
+      ]
+    }

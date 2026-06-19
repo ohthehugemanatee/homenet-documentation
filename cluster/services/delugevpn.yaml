@@ -40,7 +40,7 @@ spec:
           - name: LAN_NETWORK
             value: "192.168.1.0/24"
           - name: NAME_SERVERS
-            value: "8.8.8.8"
+            value: "1.1.1.1"
           - name: VPN_ENABLED
             value: "yes"
           - name: VPN_PASS
