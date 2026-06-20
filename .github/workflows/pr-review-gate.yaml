@@ -41,6 +41,9 @@ jobs:
                 pull_number: prNumber,
               });
               headSha = pr.head.sha;
+            } else if (wf.event === 'workflow_dispatch') {
+              core.info('Workflow dispatch run has no pr_number input; skipping check post.');
+              return;
             } else {
               core.info('No PR associated with this workflow run, skipping.');
               return;
