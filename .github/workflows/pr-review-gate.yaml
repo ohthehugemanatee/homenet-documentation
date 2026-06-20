@@ -74,7 +74,7 @@ jobs:
             --jq "[.workflow_runs[] | select(
               (
                 ((.pull_requests | length > 0) and (.pull_requests[].number == ($PR_NUMBER | tonumber))) or
-                (.event == \"workflow_dispatch\" and .inputs.pr_number == $PR_NUMBER)
+                (.event == \"workflow_dispatch\" and (.inputs.pr_number | tonumber) == ($PR_NUMBER | tonumber))
               ) and
               .conclusion == \"success\"
             )] | length")
