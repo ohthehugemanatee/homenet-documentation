@@ -86,6 +86,9 @@ metadata:
   name: calibre
   annotations:
     traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: calibre.cluster.vert
@@ -202,6 +205,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: calibre-web
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: calibre-web.cluster.vert

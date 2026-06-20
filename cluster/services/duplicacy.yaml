@@ -145,6 +145,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: duplicacy
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: duplicacy.cluster.vert
@@ -167,3 +172,16 @@ spec:
             name: duplicacy
             port:
               number: 3875
+  - host: duplicacy.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: duplicacy
+            port:
+              number: 3875
+  tls:
+  - hosts:
+    - duplicacy.berlin.vertesi.com

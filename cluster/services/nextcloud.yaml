@@ -234,7 +234,29 @@ spec:
             name: nextcloud
             port:
               number: 80
+  - host: nextcloud.berlin.vertesi.com
+    http:
+      paths:
+      - path: '/push/'
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud
+            port:
+              number: 7867
+  - host: nextcloud.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud
+            port:
+              number: 80
   tls:
   - hosts:
     - germany.vertesi.com
     secretName: germany-vertesi-com-tls
+  - hosts:
+    - nextcloud.berlin.vertesi.com

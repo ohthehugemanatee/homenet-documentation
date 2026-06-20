@@ -27,6 +27,11 @@ kind: Ingress
 metadata:
   name: semaphore
   namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: semaphore.berlin.vertesi.com
