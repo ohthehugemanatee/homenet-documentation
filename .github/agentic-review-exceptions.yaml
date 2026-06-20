@@ -805,6 +805,17 @@ exceptions:
       after a prior visit. The operator accepts the berlin.vertesi.com zone-wide
       HTTPS-only commitment implied by includeSubdomains + preload.
 
+  - pattern: "unifi ingress backend missing serversscheme: https annotation"
+    files:
+      - cluster/services/unifi/unifi.yaml
+    reason: >-
+      False positive. traefik.ingress.kubernetes.io/service.serversscheme: https
+      is set on the unificontroller Service resource (not the Ingress), which is
+      the correct and intended location for Traefik to read the backend protocol.
+      It applies to all ingress routes through that Service, including the new
+      unifi.berlin.vertesi.com rule. The unifi.cluster.vert route has been
+      working via this same mechanism.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
