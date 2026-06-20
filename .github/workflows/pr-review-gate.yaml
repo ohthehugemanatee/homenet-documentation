@@ -16,7 +16,7 @@ on:
         required: true
 
 permissions:
-  pull-requests: read
+  pull-requests: write
   actions: read
   checks: write
 
@@ -75,6 +75,7 @@ jobs:
 
       # Emergency unblock: manually post a passing check for a specific PR+SHA after a
       # confirmed passing review. Only use when the automated gate is stuck due to a bug.
+      # Posts a PR comment for audit visibility.
       - name: Post passing check (emergency unblock)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/github-script@v7
@@ -82,7 +83,8 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const sha = '${{ inputs.sha }}';
-            const prNumber = '${{ inputs.pr_number }}';
+            const prNumber = parseInt('${{ inputs.pr_number }}', 10);
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -92,30 +94,35 @@ jobs:
               conclusion: 'success',
               output: {
                 title: 'AI review passed (manually confirmed)',
-                summary: `AI Infrastructure Review manually confirmed as passed for PR #${prNumber}.`
+                summary: `AI Infrastructure Review result manually confirmed as passed for PR #${prNumber}.`
               }
             });
-            core.info(`Posted passing check for PR #${prNumber} at SHA ${sha}.`);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `**Manual gate override**: operator confirmed AI review passed and posted a synthetic \`AI review required\` check for \`${sha}\`. [Workflow run](${runUrl}) has the authorization context.`
+            });
+            core.info(`Posted passing check and PR comment for PR #${prNumber} at SHA ${sha}.`);
 
-      # On subsequent pushes, verify a passing "AI review required" check exists on any
-      # commit in this PR. The workflow_run path above posts this check when a review
-      # completes; this step enforces that at least one such check exists before merge.
+      # Verify a passing "AI review required" check exists for the PR's current HEAD SHA.
+      # The workflow_run path above posts this check when a review completes. Scoped to
+      # HEAD SHA so a stale review on an earlier commit does not satisfy a new push.
       - name: Check if AI review has passed
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
         run: |
-          COMMITS=$(gh api "/repos/$REPO/pulls/$PR_NUMBER/commits" --paginate --jq ".[].sha")
-          for SHA in $COMMITS; do
-            COUNT=$(gh api "/repos/$REPO/commits/$SHA/check-runs" \
-              --jq "[.check_runs[] | select(.name == \"AI review required\" and .conclusion == \"success\")] | length")
-            if [ "${COUNT:-0}" -gt 0 ]; then
-              echo "AI Infrastructure Review has passed for PR #$PR_NUMBER (check on $SHA)."
-              exit 0
-            fi
-          done
-          echo "No passing AI Infrastructure Review found for PR #$PR_NUMBER."
-          echo "Trigger it via: Actions → AI Infrastructure Review → Run workflow (pr_number: $PR_NUMBER)"
+          COUNT=$(gh api "/repos/$REPO/commits/$HEAD_SHA/check-runs" \
+            --jq "[.check_runs[] | select(.name == \"AI review required\" and .conclusion == \"success\")] | length")
+          if [ "${COUNT:-0}" -gt 0 ]; then
+            echo "AI Infrastructure Review has passed for PR #$PR_NUMBER at $HEAD_SHA."
+            exit 0
+          fi
+          echo "No passing AI Infrastructure Review found for $HEAD_SHA (PR #$PR_NUMBER)."
+          echo "A review is likely running now. Wait for it, or trigger manually via:"
+          echo "  Actions → AI Infrastructure Review → Run workflow (pr_number: $PR_NUMBER)"
           exit 1

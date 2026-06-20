@@ -827,6 +827,19 @@ exceptions:
       unifi.berlin.vertesi.com rule. The unifi.cluster.vert route has been
       working via this same mechanism.
 
+  - pattern: "pr-review-gate.yaml / pr-review.yaml changes are scope expansion beyond ingress hardening"
+    files:
+      - .github/workflows/pr-review-gate.yaml
+      - .github/workflows/pr-review.yaml
+    reason: >-
+      Acknowledged scope expansion, intentional. The gate was broken for
+      dispatch-triggered reviews (list API does not return inputs or
+      pull_requests fields; master gate code pre-dates dispatch support).
+      The fix was necessary to merge this PR and is documented in commit
+      history. The workflow changes land in the same PR by necessity, not
+      as scope creep: the gate blocked merge and fixing it in a separate
+      PR would create a circular dependency.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
