@@ -169,7 +169,7 @@
 
   vars:
     k3s_svc: k3s
-    k8s_kubeconfig: /etc/ansible/kubeconfig-cluster3
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
     cordon_drain_grace_period: 60
     apt_upgrade_post_reboot_delay: 30
     k3s_health_wait_before_uncordon: true
@@ -215,7 +215,7 @@
         - name: Get final cluster node status
           kubernetes.core.k8s_info:
             kind: Node
-            kubeconfig: /etc/ansible/kubeconfig-cluster3
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
           changed_when: false

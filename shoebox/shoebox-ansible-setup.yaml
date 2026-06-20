@@ -30,11 +30,8 @@
 #     -i /home/user/homenet-documentation/cluster/ansible/inventory.yaml \
 #     --private-key ~/.ssh/id_ed25519
 #
-#   # kubectl works with the primary kubeconfig:
+#   # kubectl works with the kubeconfig (kube-vip VIP):
 #   kubectl get nodes
-#
-#   # kubectl works with the cluster3 kubeconfig:
-#   kubectl get nodes --kubeconfig /etc/ansible/kubeconfig-cluster3
 
 - name: Bootstrap shoebox as Ansible runner
   hosts: shoebox
@@ -193,13 +190,12 @@
         owner: root
         group: root
 
-    # ── kubeconfigs ───────────────────────────────────────────────────────────
-    # Place kubeconfig files manually after running this playbook.
-    # Primary:   /home/ansible/.kube/config  → https://10.10.10.9:6443  (kube-vip VIP)
-    # Secondary: /etc/ansible/kubeconfig-cluster3  → https://<cluster3-IP>:6443
+    # ── kubeconfig ────────────────────────────────────────────────────────────
+    # Place the kubeconfig manually after running this playbook.
+    #   /home/ansible/.kube/config  → https://10.10.10.9:6443  (kube-vip VIP)
     # Then set permissions:
-    #   chown ansible:1001 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
-    #   chmod 640 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
+    #   chown ansible:1001 /home/ansible/.kube/config
+    #   chmod 640 /home/ansible/.kube/config
 
     - name: Ensure /etc/ansible dir exists
       ansible.builtin.file:
