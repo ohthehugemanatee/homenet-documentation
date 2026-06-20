@@ -805,6 +805,17 @@ exceptions:
       after a prior visit. The operator accepts the berlin.vertesi.com zone-wide
       HTTPS-only commitment implied by includeSubdomains + preload.
 
+  - pattern: "longhorn PathPrefixStrip on / applies to both hosts including berlin"
+    files:
+      - cluster/ingress-only/longhorn.yaml
+    reason: >-
+      Pre-existing annotation, not introduced by the berlin ingress PR.
+      traefik.ingress.kubernetes.io/rule-type: PathPrefixStrip was already on
+      the longhorn Ingress and longhorn.cluster.vert is working with it.
+      PathPrefixStrip on / is effectively a no-op (stripping an empty prefix).
+      The new longhorn.berlin.vertesi.com rule uses the same path, so behaviour
+      is identical to the already-functional cluster.vert route.
+
   - pattern: "unifi ingress backend missing serversscheme: https annotation"
     files:
       - cluster/services/unifi/unifi.yaml
