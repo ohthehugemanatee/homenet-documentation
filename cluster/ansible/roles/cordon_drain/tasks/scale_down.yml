@@ -90,38 +90,7 @@
       | select('in', cordon_drain_sr_pvcs) | list | length > 0
 
 - name: Record pre-drain replica count and scale StatefulSet to zero
-  vars:
-    cordon_drain_ss: >-
-      {{ cordon_drain_statefulsets.resources
-         | selectattr('metadata.namespace', 'equalto', item.namespace)
-         | selectattr('metadata.name', 'equalto', item.name) | first }}
+  ansible.builtin.include_tasks: scale_down_one.yml
   loop: "{{ cordon_drain_scale_targets | default([]) | unique }}"
   loop_control:
     label: "{{ item.namespace }}/{{ item.name }}"
-  block:
-    - name: Record pre-drain replica count on StatefulSet
-      kubernetes.core.k8s:
-        state: patched
-        kind: StatefulSet
-        namespace: "{{ item.namespace }}"
-        name: "{{ item.name }}"
-        definition:
-          metadata:
-            annotations:
-              "{{ cordon_drain_replicas_annotation }}": "{{ cordon_drain_ss.spec.replicas | string }}"
-              "{{ cordon_drain_node_annotation }}": "{{ cordon_drain_node_name }}"
-        kubeconfig: "{{ k8s_kubeconfig }}"
-      delegate_to: localhost
-      become: false
-
-    - name: Scale StatefulSet to zero
-      kubernetes.core.k8s_scale:
-        kind: StatefulSet
-        namespace: "{{ item.namespace }}"
-        name: "{{ item.name }}"
-        replicas: 0
-        wait: true
-        wait_timeout: "{{ cordon_drain_scale_wait }}"
-        kubeconfig: "{{ k8s_kubeconfig }}"
-      delegate_to: localhost
-      become: false
