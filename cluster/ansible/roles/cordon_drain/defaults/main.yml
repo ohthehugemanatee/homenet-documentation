@@ -15,4 +15,4 @@ cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
 cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
 
 # How long to wait for pods to terminate (scale down) / become ready (restore).
-cordon_drain_scale_wait: 120
+cordon_drain_scale_wait: 300
