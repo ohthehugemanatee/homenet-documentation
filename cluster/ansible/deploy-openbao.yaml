@@ -62,6 +62,7 @@
         owner: root
         group: root
         mode: '0644'
+      notify: Recreate openbao
 
     - name: Start OpenBao
       ansible.builtin.command:
@@ -77,5 +78,11 @@
     - name: Restart openbao
       ansible.builtin.command:
         cmd: docker compose restart openbao
+        chdir: "{{ openbao_dir }}"
+      changed_when: true
+
+    - name: Recreate openbao
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
         chdir: "{{ openbao_dir }}"
       changed_when: true

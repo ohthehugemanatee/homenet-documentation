@@ -7,7 +7,7 @@ services:
       - IPC_LOCK
     ports:
       - "8200:8200"
-      - "8201:8201"
+      # 8201 (Raft peer) intentionally not published — single-node deployment
     volumes:
       - ./config.hcl:/openbao/config/config.hcl:ro
       - openbao-data:/openbao/data

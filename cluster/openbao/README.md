@@ -49,6 +49,9 @@ bao kv put secret/cluster/ansible       vault_password=migrated-to-openbao
 bao policy write ansible-read cluster/openbao/policies/ansible-read.hcl
 bao token create -policy=ansible-read -display-name=semaphore
 # → store the resulting token as VAULT_TOKEN in Semaphore project environment
+
+# Revoke the root token — only use unseal-key-derived root for break-glass operations
+bao token revoke <root-token>
 ```
 
 ## Unseal after reboot
@@ -88,9 +91,12 @@ three-step rotation procedure (add new key → re-encrypt all Secrets → remove
 
 ## Security notes
 
-- TLS is disabled; tokens transit the private LAN in cleartext. The LAN is
-  trusted; all callers (Semaphore) run on the same host as OpenBao. Remote
-  operator access should go via SSH tunnel (`ssh -L 8200:localhost:8200 shoebox`).
-- Port 8201 is the Raft cluster port; not externally needed for a single-node
-  deployment but published for forward compatibility.
-- Future hardening: bind to `127.0.0.1`, enable TLS with self-signed cert, token TTLs.
+- **Port binding**: OpenBao listens on `0.0.0.0:8200` because Semaphore runs as a Docker
+  container and needs to reach OpenBao via the host's LAN IP (`shoebox.vert:8200`).
+  Binding to `127.0.0.1` would break Semaphore connectivity. Port 8201 (Raft peer) is
+  NOT published — single-node deployment only.
+- **TLS**: Disabled; tokens transit the private LAN in cleartext. The LAN is private and
+  Semaphore's network is local. Remote operator access should use SSH tunnel
+  (`ssh -L 8200:localhost:8200 shoebox`).
+- Future hardening: co-locate Semaphore and OpenBao on the same Docker network so
+  `127.0.0.1` binding becomes viable; enable TLS with self-signed cert.
