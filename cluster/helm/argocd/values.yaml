@@ -25,6 +25,15 @@ controller:
       memory: 256Mi
     limits:
       memory: 512Mi
+  # Expose argocd_app_info (sync/health per app) to Prometheus for the
+  # workload-debug dashboard. additionalLabels.release lets the operator's
+  # serviceMonitorSelector discover this ServiceMonitor.
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
 
 repoServer:
   nodeSelector:
