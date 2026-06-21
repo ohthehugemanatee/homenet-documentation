@@ -1,0 +1,127 @@
+---
+# Scale down StatefulSets whose pod on this node mounts a single-replica Longhorn
+# PVC. Such volumes have no second replica to fall back to, so Longhorn keeps the
+# node's instance-manager PodDisruptionBudget unsatisfiable while the volume is
+# attached — blocking `kubectl drain`. Detaching the volume (scaling the workload
+# to 0) lets Longhorn stop the replica and release the PDB. The original replica
+# count is recorded as an annotation so the restore step can scale it back.
+
+- name: Find single-replica Longhorn StorageClasses
+  kubernetes.core.k8s_info:
+    kind: StorageClass
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_storageclasses
+
+- name: Find PersistentVolumeClaims on single-replica Longhorn StorageClasses
+  kubernetes.core.k8s_info:
+    kind: PersistentVolumeClaim
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_pvcs
+
+- name: List pods scheduled on this node
+  kubernetes.core.k8s_info:
+    kind: Pod
+    field_selectors:
+      - "spec.nodeName={{ cordon_drain_node_name }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_node_pods
+
+- name: Get StatefulSets
+  kubernetes.core.k8s_info:
+    kind: StatefulSet
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_statefulsets
+
+- name: Compute single-replica PVC keys (namespace/name)
+  ansible.builtin.set_fact:
+    cordon_drain_sr_scs: >-
+      {{ cordon_drain_storageclasses.resources
+         | selectattr('provisioner', 'equalto', 'driver.longhorn.io')
+         | selectattr('parameters.numberOfReplicas', 'defined')
+         | selectattr('parameters.numberOfReplicas', 'equalto', '1')
+         | map(attribute='metadata.name') | list }}
+    cordon_drain_sr_pvcs: []
+
+- name: Build single-replica PVC key set
+  ansible.builtin.set_fact:
+    cordon_drain_sr_pvcs: >-
+      {{ cordon_drain_sr_pvcs
+         + [item.metadata.namespace ~ '/' ~ item.metadata.name] }}
+  loop: >-
+    {{ cordon_drain_pvcs.resources
+       | selectattr('spec.storageClassName', 'defined')
+       | selectattr('spec.storageClassName', 'in', cordon_drain_sr_scs) | list }}
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+
+# A pod on this node is a scale-down target if it is owned by a StatefulSet and
+# mounts one of the single-replica PVCs. claimName is namespace-local, so prefix
+# the pod's namespace to compare against the namespaced PVC key set.
+- name: Identify StatefulSets to scale down
+  ansible.builtin.set_fact:
+    cordon_drain_scale_targets: >-
+      {{ (cordon_drain_scale_targets | default([]))
+         + [{'namespace': item.metadata.namespace,
+             'name': (item.metadata.ownerReferences
+                      | selectattr('kind', 'equalto', 'StatefulSet')
+                      | map(attribute='name') | first)}] }}
+  loop: "{{ cordon_drain_node_pods.resources }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+  when:
+    - item.metadata.ownerReferences | default([])
+      | selectattr('kind', 'equalto', 'StatefulSet') | list | length > 0
+    - item.spec.volumes | default([])
+      | selectattr('persistentVolumeClaim', 'defined')
+      | map(attribute='persistentVolumeClaim.claimName')
+      | map('regex_replace', '^', item.metadata.namespace ~ '/')
+      | select('in', cordon_drain_sr_pvcs) | list | length > 0
+
+- name: Record pre-drain replica count and scale StatefulSet to zero
+  vars:
+    cordon_drain_ss: >-
+      {{ cordon_drain_statefulsets.resources
+         | selectattr('metadata.namespace', 'equalto', item.namespace)
+         | selectattr('metadata.name', 'equalto', item.name) | first }}
+  loop: "{{ cordon_drain_scale_targets | default([]) | unique }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  block:
+    - name: Record pre-drain replica count on StatefulSet
+      kubernetes.core.k8s:
+        state: patched
+        kind: StatefulSet
+        namespace: "{{ item.namespace }}"
+        name: "{{ item.name }}"
+        definition:
+          metadata:
+            annotations:
+              "{{ cordon_drain_replicas_annotation }}": "{{ cordon_drain_ss.spec.replicas | string }}"
+              "{{ cordon_drain_node_annotation }}": "{{ cordon_drain_node_name }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      delegate_to: localhost
+      become: false
+
+    - name: Scale StatefulSet to zero
+      kubernetes.core.k8s_scale:
+        kind: StatefulSet
+        namespace: "{{ item.namespace }}"
+        name: "{{ item.name }}"
+        replicas: 0
+        wait: true
+        wait_timeout: "{{ cordon_drain_scale_wait }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      delegate_to: localhost
+      become: false
