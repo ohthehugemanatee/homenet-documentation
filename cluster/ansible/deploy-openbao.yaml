@@ -70,9 +70,15 @@
         chdir: "{{ openbao_dir }}"
       register: compose_up
       changed_when: >
-        'Started' in compose_up.stdout or
-        'Created' in compose_up.stdout or
-        'Recreated' in compose_up.stdout
+        'Started' in compose_up.stderr or
+        'Created' in compose_up.stderr or
+        'Recreated' in compose_up.stderr
+
+    - name: Wait for OpenBao to be reachable
+      ansible.builtin.wait_for:
+        host: localhost
+        port: 8200
+        timeout: 30
 
   handlers:
     - name: Restart openbao

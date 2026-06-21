@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     cap_add:
       - IPC_LOCK
+    security_opt:
+      - "no-new-privileges:true"
     ports:
       - "8200:8200"
       # 8201 (Raft peer) intentionally not published — single-node deployment
