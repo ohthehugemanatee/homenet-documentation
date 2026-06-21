@@ -93,7 +93,7 @@ prometheus:
           storageClassName: "longhorn-ephemeral"
           resources:
             requests:
-              storage: 10Gi
+              storage: 30Gi
     nodeSelector:
       kubernetes.io/arch: amd64
     resources:
