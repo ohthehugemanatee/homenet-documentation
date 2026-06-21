@@ -28,10 +28,10 @@
 # control plane processes running. HA clusters (3 servers) tolerate this fine.
 # Do NOT run this against all 3 servers simultaneously — serial: 1 prevents that.
 #
-# BEFORE RUNNING: scale down strict-local StatefulSets to avoid drain timeouts:
-#   kubectl scale statefulset plex --replicas=0
-#   kubectl scale statefulset nextcloud --replicas=0
-# Scale back up after each node is verified Ready.
+# Single-replica (strict-local) Longhorn StatefulSets that would block the drain
+# on Longhorn's instance-manager PodDisruptionBudget are scaled down before the
+# drain and restored after the node is healthy — handled by the cordon_drain /
+# k3s_health roles. No manual scaling needed.
 
 - name: "Rolling OS release upgrade: agents"
   hosts: "{{ target | default('agents:!ubuntu') }}"
