@@ -24,6 +24,86 @@ monkeyble_scenarios:
               result_dict:
                 rc: 0
 
+      # ── cordon_drain scale_down: single-replica Longhorn workload guard ──────
+      # Crafted cluster state: StatefulSet default/nextcloud has a pod on this
+      # node mounting PVC nextcloud-previews, backed by a numberOfReplicas=1
+      # Longhorn StorageClass. The discovery Jinja must select it for scale-down.
+      - task: "Find single-replica Longhorn StorageClasses"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: longhorn-ephemeral-fast
+                    provisioner: driver.longhorn.io
+                    parameters:
+                      numberOfReplicas: "1"
+
+      - task: "Find PersistentVolumeClaims on single-replica Longhorn StorageClasses"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud-previews
+                    spec:
+                      storageClassName: longhorn-ephemeral-fast
+
+      - task: "List pods scheduled on this node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud-0
+                      ownerReferences:
+                        - kind: StatefulSet
+                          name: nextcloud
+                    spec:
+                      nodeName: testnode
+                      volumes:
+                        - persistentVolumeClaim:
+                            claimName: nextcloud-previews
+
+      - task: "Get StatefulSets"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud
+                    spec:
+                      replicas: 1
+
+      - task: "Record pre-drain replica count on StatefulSet"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # Assert discovery actually selected the workload (loop not empty).
+      - task: "Scale StatefulSet to zero"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
       - task: "Drain node"
         mock:
           config:
@@ -278,6 +358,43 @@ monkeyble_scenarios:
                 rc: 0
 
       - task: "Uncordon node after successful rebuild"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # ── cordon_drain restore: scale the guarded workload back up ─────────────
+      # StatefulSet default/nextcloud still carries the pre-drain annotations for
+      # this node, so restore must scale it back and clear the annotations.
+      - task: "Get StatefulSets for restore"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud
+                      annotations:
+                        homenet.vertesi.com/pre-drain-node: testnode
+                        homenet.vertesi.com/pre-drain-replicas: "1"
+                    spec:
+                      replicas: 0
+
+      # Assert restore matched this node's annotated workload (loop not empty).
+      - task: "Scale StatefulSet back to pre-drain replica count"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Clear pre-drain annotations after restore"
         mock:
           config:
             hpe.monkeyble.monkeyble_module:
