@@ -899,6 +899,16 @@ exceptions:
       from the upstream image manifest; adding user: openbao and chowning
       /opt/openbao/data can be done in one atomic follow-up commit.
 
+  - pattern: "changed_when docker compose stderr fragile across versions"
+    files:
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      Handler-driven restart is the primary change signal; changed_when is
+      advisory for idempotency reporting only. The stderr heuristic is correct
+      for docker-compose-plugin on Ubuntu 22.04/24.04 and acceptable for a
+      homelab. community.docker.docker_compose_v2 deferred (would require
+      adding the collection to requirements.yaml, out of PR A scope).
+
   - pattern: "No firewall / iptables task scoping port 8200"
     files:
       - cluster/ansible/deploy-openbao.yaml

@@ -74,11 +74,14 @@
         'Created' in compose_up.stderr or
         'Recreated' in compose_up.stderr
 
-    - name: Wait for OpenBao to be reachable
-      ansible.builtin.wait_for:
-        host: localhost
-        port: 8200
-        timeout: 30
+    - name: Wait for OpenBao API to be reachable
+      ansible.builtin.uri:
+        url: http://localhost:8200/v1/sys/health
+        status_code: [200, 429, 472, 473, 501, 503]
+      register: openbao_health
+      retries: 15
+      delay: 2
+      until: openbao_health is not failed
 
   handlers:
     - name: Restart openbao
