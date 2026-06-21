@@ -59,6 +59,12 @@
       delegate_to: localhost
       become: false
 
+    - name: Restore single-replica Longhorn workloads scaled down before drain
+      ansible.builtin.include_role:
+        name: cordon_drain
+        tasks_from: restore
+      when: cordon_drain_scale_down_single_replica | default(true) | bool
+
     - name: Clear failure flag — rebuild succeeded, safe to continue
       ansible.builtin.file:
         path: "{{ state_dir }}/rolling-upgrade-failed"

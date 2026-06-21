@@ -24,6 +24,52 @@ monkeyble_scenarios:
               result_dict:
                 rc: 0
 
+      # ── cordon_drain scale_down: no single-replica workloads on this node ────
+      # Empty cluster state → no scale-down targets; discovery must run, but
+      # annotate/scale tasks must be skipped (empty loop).
+      - task: "Find single-replica Longhorn StorageClasses"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Find PersistentVolumeClaims on single-replica Longhorn StorageClasses"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "List pods scheduled on this node"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Get StatefulSets"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      # Assert scale-down was skipped (no targets discovered).
+      - task: "Record pre-drain replica count on StatefulSet"
+        should_be_skipped: true
+
+      - task: "Scale StatefulSet to zero"
+        should_be_skipped: true
+
       - task: "Drain node"
         mock:
           config:
