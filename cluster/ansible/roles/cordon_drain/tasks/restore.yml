@@ -1,0 +1,53 @@
+---
+# Scale StatefulSets that were scaled down for this node (see scale_down.yml)
+# back to their recorded replica count, then clear the bookkeeping annotations.
+# Idempotent: only StatefulSets annotated for this node are touched, so re-runs
+# (e.g. happy path then rescue path) are no-ops after the first restore.
+
+- name: Get StatefulSets for restore
+  kubernetes.core.k8s_info:
+    kind: StatefulSet
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_restore_ss
+
+- name: Scale StatefulSet back to pre-drain replica count
+  kubernetes.core.k8s_scale:
+    kind: StatefulSet
+    namespace: "{{ item.metadata.namespace }}"
+    name: "{{ item.metadata.name }}"
+    replicas: "{{ (item.metadata.annotations | default({}))[cordon_drain_replicas_annotation] | int }}"
+    wait: true
+    wait_timeout: "{{ cordon_drain_scale_wait }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  loop: "{{ cordon_drain_restore_ss.resources }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+  when:
+    - (item.metadata.annotations | default({}))[cordon_drain_node_annotation] | default('') == cordon_drain_node_name
+    - (item.metadata.annotations | default({}))[cordon_drain_replicas_annotation] is defined
+
+- name: Clear pre-drain annotations after restore
+  kubernetes.core.k8s:
+    state: patched
+    kind: StatefulSet
+    namespace: "{{ item.metadata.namespace }}"
+    name: "{{ item.metadata.name }}"
+    definition:
+      metadata:
+        annotations:
+          "{{ cordon_drain_replicas_annotation }}": null
+          "{{ cordon_drain_node_annotation }}": null
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  loop: "{{ cordon_drain_restore_ss.resources }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+  when:
+    - (item.metadata.annotations | default({}))[cordon_drain_node_annotation] | default('') == cordon_drain_node_name
+    - (item.metadata.annotations | default({}))[cordon_drain_replicas_annotation] is defined
