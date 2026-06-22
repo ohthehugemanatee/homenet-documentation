@@ -198,6 +198,7 @@
       # Cluster-level check: verifies Secrets are decryptable after the new
       # EncryptionConfig is applied. Runs against the cluster kubeconfig (VIP on
       # kube-vip clusters); per-master API readiness is confirmed by readyz above.
+      # no_log: true — response contains full Secret payloads (tokens, ca.crt).
       kubernetes.core.k8s_info:
         kind: Secret
         namespace: kube-system
@@ -209,6 +210,15 @@
       delegate_to: localhost
       become: false
       changed_when: false
+      no_log: true
+
+    - name: Assert Secrets are decryptable
+      ansible.builtin.assert:
+        that: secret_probe.resources | length > 0
+        fail_msg: >-
+          kube-system Secrets list returned empty — possible RBAC misconfiguration
+          or EncryptionConfiguration rejecting decryption on {{ ansible_host }}.
+          Check k3s logs: journalctl -u k3s --since "5 minutes ago"
 
   handlers:
     - name: Reload systemd
