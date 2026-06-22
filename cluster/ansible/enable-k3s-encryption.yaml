@@ -8,7 +8,7 @@
 #   3. Writes /etc/rancher/k3s/encryption-config.yaml (mode 0600) with the
 #      secretbox provider + identity fallback.
 #   4. Adds --secrets-encryption to k3s's ExecStart if absent.
-#   5. Restarts k3s.
+#   5. Restarts k3s and waits for the API port to be ready before the next master.
 #
 # Prerequisites:
 #   - export VAULT_ADDR=http://shoebox.vert:8200
@@ -22,12 +22,19 @@
 #   kubectl get secrets -A -o json | kubectl replace -f -
 #
 # Key rotation procedure (three steps, must be done in order):
-#   Step 1 — Add new key as FIRST entry in the secretbox keys list, keep old key as
-#             second. Update OpenBao: bao kv put secret/k3s/encryption-key value=<new>
-#             Then re-run this playbook.
-#   Step 2 — Re-encrypt all Secrets:
-#             kubectl get secrets -A -o json | kubectl replace -f -
-#   Step 3 — Remove the old key entry from OpenBao and re-run this playbook.
+#   Step 1 — Generate a new key, store it as the primary, and move the current key
+#             to the rotation slot:
+#               bao kv put secret/k3s/encryption-key value=<new-key>
+#               bao kv put secret/k3s/encryption-key-old value=<old-key>
+#             Then re-run this playbook. It will write a two-key EncryptionConfiguration
+#             (new key first, old key as fallback) so k3s can decrypt both old and new Secrets.
+#   Step 2 — Re-encrypt all Secrets so they use the new key:
+#               kubectl get secrets -A -o json | kubectl replace -f -
+#   Step 3 — Remove the rotation slot and re-run this playbook:
+#               bao kv delete secret/k3s/encryption-key-old
+#             k3s will now use only the new key.
+#
+# Structure reference: cluster/k3s/encryption-config.example.yaml
 #
 # Usage:
 #   ansible-playbook -i inventory.yaml enable-k3s-encryption.yaml
@@ -45,6 +52,7 @@
           X-Vault-Token: "{{ lookup('env', 'VAULT_TOKEN') }}"
         status_code: [200, 404]
       register: key_check
+      no_log: true
 
     - name: Generate 32-byte encryption key
       ansible.builtin.command:
@@ -88,7 +96,18 @@
       delegate_to: localhost
       no_log: true
 
-    - name: Write EncryptionConfiguration
+    - name: Check for rotation key in OpenBao
+      ansible.builtin.uri:
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/secret/k3s/encryption-key-old"
+        method: GET
+        headers:
+          X-Vault-Token: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        status_code: [200, 404]
+      register: openbao_key_old
+      delegate_to: localhost
+      no_log: true
+
+    - name: Write EncryptionConfiguration (single key)
       ansible.builtin.copy:
         dest: "{{ encryption_config_path }}"
         owner: root
@@ -108,6 +127,31 @@
                 - identity: {}
       no_log: true
       notify: Restart k3s
+      when: openbao_key_old.status == 404
+
+    - name: Write EncryptionConfiguration (two keys — rotation in progress)
+      ansible.builtin.copy:
+        dest: "{{ encryption_config_path }}"
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          apiVersion: apiserver.config.k8s.io/v1
+          kind: EncryptionConfiguration
+          resources:
+            - resources:
+                - secrets
+              providers:
+                - secretbox:
+                    keys:
+                      - name: key1
+                        secret: {{ openbao_key.json.data.value }}
+                      - name: key0
+                        secret: {{ openbao_key_old.json.data.value }}
+                - identity: {}
+      no_log: true
+      notify: Restart k3s
+      when: openbao_key_old.status == 200
 
     - name: Ensure --secrets-encryption flag in k3s ExecStart
       ansible.builtin.replace:
@@ -133,6 +177,16 @@
           the replace task. The ExecStart format may differ from the expected
           pattern. Inspect the file and update the regexp in this playbook.
 
+    - name: Flush handlers to apply k3s restart before health check
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for k3s API to be ready
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 6443
+        timeout: 120
+      delegate_to: localhost
+
   handlers:
     - name: Reload systemd
       ansible.builtin.systemd:
@@ -142,3 +196,4 @@
       ansible.builtin.systemd:
         name: k3s
         state: restarted
+      listen: Restart k3s
