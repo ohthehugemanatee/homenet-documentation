@@ -4,18 +4,21 @@
 
 | Playbook | Purpose | Re-runnable? |
 |---|---|---|
+| `deploy-openbao.yaml` | Deploy OpenBao keystore on shoebox | Yes |
+| `enable-k3s-encryption.yaml` | Enable etcd encryption-at-rest on k3s masters | Yes |
 | `k3s-agent.yaml` | Initial node provisioning — hostname, k3s install | No (imperative) |
 | `node-state.yaml` | Idempotent state enforcement — packages, config, services | Yes |
 | `rolling-upgrade.yaml` | Rolling OS dist-upgrade with drain/uncordon | Yes |
 
-Note that to keep CI happy, the encrypted vault file is not loaded by default.
-`k3s-agent.yaml` and `rolling-upgrade.yaml` load it via
+Secrets are fetched from OpenBao at playbook runtime. Set `VAULT_ADDR` and
+`VAULT_TOKEN` before running any playbook that uses secrets (`k3s-agent.yaml`,
+`rolling-upgrade.yaml`). See `cluster/openbao/README.md` for token setup.
+`node-state.yaml` consumes no secrets and needs no env vars.
+
+`k3s-agent.yaml` and `rolling-upgrade.yaml` load secrets via
 `vars_files: ["{{ vault_file }}"]`, so real-world runs need
-`-e vault_file=group_vars/vault.yaml` (path passed as a variable, not
-appended with `@`). The path is resolved relative to the **playbook's directory**
-(`cluster/ansible/`), not the working directory — so `group_vars/vault.yaml`
-works regardless of where you invoke `ansible-playbook` from.
-`node-state.yaml` consumes no vault variables and doesn't need this flag.
+`-e vault_file=group_vars/vault.yaml` (path relative to the **playbook directory**).
+CI uses `-e vault_file=tests/monkeyble/test_secrets.yml` to bypass OpenBao.
 
 ---
 
@@ -25,14 +28,18 @@ Sets hostname, installs dependencies, runs the k3s installer. Run once per new n
 
 ```sh
 # New ubuntu node → agent called cluster2, USB disk attached
-ansible-playbook -i inventory.yaml -e usb_disk='/dev/sda1' --ask-vault-pass --ask-become-pass k3s-agent.yaml --limit cluster2,ubuntu
+export VAULT_ADDR=http://shoebox.vert:8200
+export VAULT_TOKEN=<ansible-read token>
+ansible-playbook -i inventory.yaml -e vault_file=group_vars/vault.yaml \
+  -e usb_disk='/dev/sda1' --ask-become-pass k3s-agent.yaml --limit cluster2,ubuntu
 
 # Specify all vars explicitly
 ansible-playbook -i inventory.yaml \
   -e new_hostname=cluster2 -e ansible_user=ubuntu \
-  -e k3s_token="${K3S_TOKEN}" -e usb_disk='/dev/sda1' \
+  -e usb_disk='/dev/sda1' \
   -e cluster_role="agent" \
-  --ask-become-pass --ask-vault-pass k3s-agent.yaml
+  -e vault_file=group_vars/vault.yaml \
+  --ask-become-pass k3s-agent.yaml
 ```
 
 **Notes:**
@@ -47,16 +54,16 @@ Converges each node to declared state: packages, `/etc/hosts`, sysctl, NTP, unat
 
 ```sh
 # Validate/repair cluster1 (first use case)
-ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 node-state.yaml
+ansible-playbook -i inventory.yaml --limit cluster1 node-state.yaml
 
 # Dry-run with diff — see what would change
-ansible-playbook -i inventory.yaml --ask-vault-pass --check --diff node-state.yaml
+ansible-playbook -i inventory.yaml --check --diff node-state.yaml
 
 # All nodes
-ansible-playbook -i inventory.yaml --ask-vault-pass node-state.yaml
+ansible-playbook -i inventory.yaml node-state.yaml
 
 # Override NTP servers
-ansible-playbook -i inventory.yaml --ask-vault-pass \
+ansible-playbook -i inventory.yaml \
   -e '{"ntp_servers": ["192.168.1.1", "ntp.ubuntu.com"]}' node-state.yaml
 ```
 
@@ -90,13 +97,17 @@ Play order: **agents → multimasters → masters** (first-master last, when clu
 
 ```sh
 # Upgrade all nodes (rolling, safe order)
-ansible-playbook -i inventory.yaml --ask-vault-pass rolling-upgrade.yaml
+export VAULT_ADDR=http://shoebox.vert:8200
+export VAULT_TOKEN=<ansible-read token>
+ansible-playbook -i inventory.yaml -e vault_file=group_vars/vault.yaml rolling-upgrade.yaml
 
 # Upgrade cluster1 only
-ansible-playbook -i inventory.yaml --ask-vault-pass --limit cluster1 rolling-upgrade.yaml
+ansible-playbook -i inventory.yaml -e vault_file=group_vars/vault.yaml \
+  --limit cluster1 rolling-upgrade.yaml
 
 # Agents only
-ansible-playbook -i inventory.yaml --ask-vault-pass --limit agents rolling-upgrade.yaml
+ansible-playbook -i inventory.yaml -e vault_file=group_vars/vault.yaml \
+  --limit agents rolling-upgrade.yaml
 ```
 
 **Notes:**
@@ -112,7 +123,7 @@ ansible-playbook -i inventory.yaml --ask-vault-pass --limit agents rolling-upgra
 |---|---|---|
 | `new_hostname` | Hostname to set | _(inventory key)_ |
 | `ansible_user` | SSH username | `ubuntu` |
-| `k3s_token` | k3s join token | _(vault)_ |
+| `k3s_token` | k3s join token | _(OpenBao KV: `secret/k3s/cluster`)_ |
 | `usb_disk` | USB block device path for storage | _(unset)_ |
 | `cluster_role` | `agent`, `multi-master`, or `first-master` | _(inventory group var)_ |
 | `ntp_servers` | List of NTP servers | `[ntp.ubuntu.com, 0.pool.ntp.org, 1.pool.ntp.org]` |

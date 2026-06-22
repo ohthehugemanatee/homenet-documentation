@@ -7,7 +7,7 @@ Playbooks here provision the k3s nodes' OS (apt, sysctl, k3s service, NTP, iSCSI
 - **`node-state.yaml`** — fully idempotent; converges packages, kernel modules, sysctl, NTP, iSCSI, swap, journald. Safe to re-run.
 - **`rolling-upgrade.yaml`** — `apt dist-upgrade` + reboot + health check + uncordon; `serial: 1`; agents → multimasters → masters (first-master last); rescue path on health failure.
 - **`rolling-release-upgrade.yaml`** — Ubuntu major-version `do-release-upgrade`; same serial/rescue pattern as `rolling-upgrade.yaml`.
-- **`k3s-agent.yaml`** — legacy one-time bootstrap for a fresh node; **NOT idempotent**. Requires `--ask-become-pass --ask-vault-pass` and `new_hostname` / `k3s_token` / `usb_disk` / `cluster_role` vars.
+- **`k3s-agent.yaml`** — legacy one-time bootstrap for a fresh node; **NOT idempotent**. Requires `--ask-become-pass` and `VAULT_ADDR`/`VAULT_TOKEN` env vars; use `-e vault_file=group_vars/vault.yaml`. Needs `new_hostname` / `k3s_token` / `usb_disk` / `cluster_role` vars.
 - **`rename-node.yaml`**, **`showfacts.yaml`** — utility, obvious from name.
 
 ## Roles (`roles/`)

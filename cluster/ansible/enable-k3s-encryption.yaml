@@ -1,0 +1,144 @@
+---
+# Enable k3s etcd encryption-at-rest on all master nodes.
+#
+# What this does:
+#   1. Generates a 32-byte AES key (once, on localhost) and stores it in OpenBao
+#      at secret/k3s/encryption-key if not already present.
+#   2. Fetches the key from OpenBao on each master.
+#   3. Writes /etc/rancher/k3s/encryption-config.yaml (mode 0600) with the
+#      secretbox provider + identity fallback.
+#   4. Adds --secrets-encryption to k3s's ExecStart if absent.
+#   5. Restarts k3s.
+#
+# Prerequisites:
+#   - export VAULT_ADDR=http://shoebox.vert:8200
+#   - export VAULT_TOKEN=<ansible-read token>
+#   - OpenBao initialized, unsealed, and secret/k3s/cluster populated
+#   - A running k3s cluster (this playbook restarts k3s, one master at a time)
+#
+# Re-runnable: yes. All tasks are idempotent.
+#
+# After first run, re-encrypt all existing Secrets so they are written under the new key:
+#   kubectl get secrets -A -o json | kubectl replace -f -
+#
+# Key rotation procedure (three steps, must be done in order):
+#   Step 1 — Add new key as FIRST entry in the secretbox keys list, keep old key as
+#             second. Update OpenBao: bao kv put secret/k3s/encryption-key value=<new>
+#             Then re-run this playbook.
+#   Step 2 — Re-encrypt all Secrets:
+#             kubectl get secrets -A -o json | kubectl replace -f -
+#   Step 3 — Remove the old key entry from OpenBao and re-run this playbook.
+#
+# Usage:
+#   ansible-playbook -i inventory.yaml enable-k3s-encryption.yaml
+
+- name: Generate and store encryption key in OpenBao
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Check if encryption key already exists in OpenBao
+      ansible.builtin.uri:
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/secret/k3s/encryption-key"
+        method: GET
+        headers:
+          X-Vault-Token: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        status_code: [200, 404]
+      register: key_check
+
+    - name: Generate 32-byte encryption key
+      ansible.builtin.command:
+        cmd: openssl rand -base64 32
+      register: new_key
+      changed_when: true
+      when: key_check.status == 404
+
+    - name: Store encryption key in OpenBao
+      ansible.builtin.uri:
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/secret/k3s/encryption-key"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        body_format: json
+        body:
+          value: "{{ new_key.stdout }}"
+        status_code: [200, 204]
+      when: key_check.status == 404
+      no_log: true
+
+- name: Enable k3s encryption on master nodes
+  hosts: masters:multimasters
+  become: true
+  serial: 1
+  any_errors_fatal: true
+
+  vars:
+    encryption_config_path: /etc/rancher/k3s/encryption-config.yaml
+    k3s_service_file: /etc/systemd/system/k3s.service
+
+  tasks:
+    - name: Fetch encryption key from OpenBao
+      ansible.builtin.uri:
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/secret/k3s/encryption-key"
+        method: GET
+        headers:
+          X-Vault-Token: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        status_code: [200]
+      register: openbao_key
+      delegate_to: localhost
+      no_log: true
+
+    - name: Write EncryptionConfiguration
+      ansible.builtin.copy:
+        dest: "{{ encryption_config_path }}"
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          apiVersion: apiserver.config.k8s.io/v1
+          kind: EncryptionConfiguration
+          resources:
+            - resources:
+                - secrets
+              providers:
+                - secretbox:
+                    keys:
+                      - name: key1
+                        secret: {{ openbao_key.json.data.value }}
+                - identity: {}
+      no_log: true
+      notify: Restart k3s
+
+    - name: Ensure --secrets-encryption flag in k3s ExecStart
+      ansible.builtin.replace:
+        path: "{{ k3s_service_file }}"
+        regexp: '(ExecStart=.*k3s server)(?!.*--secrets-encryption)(.*)'
+        replace: '\1 --secrets-encryption\2'
+      notify:
+        - Reload systemd
+        - Restart k3s
+
+    - name: Verify --secrets-encryption flag is present
+      ansible.builtin.command:
+        cmd: grep -q -- '--secrets-encryption' {{ k3s_service_file }}
+      changed_when: false
+      failed_when: false
+      register: flag_check
+
+    - name: Assert --secrets-encryption is in k3s service file
+      ansible.builtin.assert:
+        that: flag_check.rc == 0
+        fail_msg: >-
+          --secrets-encryption was not found in {{ k3s_service_file }} after
+          the replace task. The ExecStart format may differ from the expected
+          pattern. Inspect the file and update the regexp in this playbook.
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart k3s
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
