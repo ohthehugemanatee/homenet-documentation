@@ -183,14 +183,21 @@
     - name: Flush handlers to apply k3s restart before health check
       ansible.builtin.meta: flush_handlers
 
-    - name: Wait for k3s API to be ready
-      ansible.builtin.wait_for:
-        host: "{{ ansible_host }}"
-        port: 6443
-        timeout: 120
+    - name: Wait for k3s API readyz on this master
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}:6443/readyz"
+        validate_certs: false
+        status_code: 200
+      register: readyz_check
+      until: readyz_check.status == 200
+      retries: 24
+      delay: 5
       delegate_to: localhost
 
-    - name: Smoke-test Secret decryption via API
+    - name: Smoke-test Secret decryption via cluster API
+      # Cluster-level check: verifies Secrets are decryptable after the new
+      # EncryptionConfig is applied. Runs against the cluster kubeconfig (VIP on
+      # kube-vip clusters); per-master API readiness is confirmed by readyz above.
       kubernetes.core.k8s_info:
         kind: Secret
         namespace: kube-system
