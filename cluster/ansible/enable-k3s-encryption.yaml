@@ -23,9 +23,11 @@
 #
 # Key rotation procedure (three steps, must be done in order):
 #   Step 1 — Generate a new key, store it as the primary, and move the current key
-#             to the rotation slot:
+#             to the rotation slot. Both commands must complete before re-running the
+#             playbook — running the playbook after only the first command overwrites
+#             the sole key copy with no fallback, making existing Secrets undecryptable:
+#               bao kv put secret/k3s/encryption-key-old value=<current-key>
 #               bao kv put secret/k3s/encryption-key value=<new-key>
-#               bao kv put secret/k3s/encryption-key-old value=<old-key>
 #             Then re-run this playbook. It will write a two-key EncryptionConfiguration
 #             (new key first, old key as fallback) so k3s can decrypt both old and new Secrets.
 #   Step 2 — Re-encrypt all Secrets so they use the new key:
@@ -59,6 +61,7 @@
         cmd: openssl rand -base64 32
       register: new_key
       changed_when: true
+      no_log: true
       when: key_check.status == 404
 
     - name: Store encryption key in OpenBao
@@ -186,6 +189,15 @@
         port: 6443
         timeout: 120
       delegate_to: localhost
+
+    - name: Smoke-test Secret decryption via API
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: kube-system
+        kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(omit) }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
 
   handlers:
     - name: Reload systemd
