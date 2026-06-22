@@ -202,7 +202,7 @@
       kubernetes.core.k8s_info:
         kind: Secret
         namespace: kube-system
-        kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(omit) }}"
+        kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(omit, true) }}"
       register: secret_probe
       until: secret_probe is not failed
       retries: 12
