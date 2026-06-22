@@ -1,2 +1,18 @@
 ---
 cordon_drain_grace_period: 30
+
+# Before draining, scale to 0 any StatefulSet whose pod on this node mounts a
+# single-replica Longhorn PVC, so the drain's eviction API does not block on
+# Longhorn's instance-manager PodDisruptionBudget. Restored after the node is
+# healthy again. Set false to skip (e.g. clusters without single-replica volumes).
+cordon_drain_scale_down_single_replica: true
+
+# Node name to match against (k8s node name == ansible_hostname in this cluster).
+cordon_drain_node_name: "{{ ansible_hostname }}"
+
+# Annotations used to remember pre-drain replica counts across the reboot.
+cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
+cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
+
+# How long to wait for pods to terminate (scale down) / become ready (restore).
+cordon_drain_scale_wait: 300

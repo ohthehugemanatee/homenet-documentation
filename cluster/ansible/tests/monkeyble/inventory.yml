@@ -10,6 +10,7 @@ all:
           ansible_connection: local
           ansible_host: localhost
           ansible_python_interpreter: "{{ ansible_playbook_python }}"
+          ansible_hostname: testnode
           cluster_role: agent
     multimasters:
       hosts:

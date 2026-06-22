@@ -51,3 +51,9 @@
   register: k3s_health_restarts
   failed_when: k3s_health_restarts.stdout | int > 3
   changed_when: false
+
+- name: Restore single-replica Longhorn workloads scaled down before drain
+  ansible.builtin.include_role:
+    name: cordon_drain
+    tasks_from: restore
+  when: cordon_drain_scale_down_single_replica | default(true) | bool

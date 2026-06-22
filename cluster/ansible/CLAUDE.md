@@ -14,6 +14,12 @@ Playbooks here provision the k3s nodes' OS (apt, sysctl, k3s service, NTP, iSCSI
 
 `apt_upgrade`, `cordon_drain`, `k3s_health`, `node_state`, `release_upgrade`, `upgrade_checks_cp`, `upgrade_pre_state`, `upgrade_rescue_agent`, `upgrade_rescue_cp`. Roles compose into the rolling playbooks — **do not duplicate role logic inline** in a playbook.
 
+### Longhorn single-replica drain guard
+
+Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` / `longhorn-ephemeral-fast` StorageClasses set `numberOfReplicas: "1"` (`strict-local`), so a node holding such an *attached* volume can never satisfy Longhorn's per-node `instance-manager` PodDisruptionBudget (cluster `node-drain-policy: allow-if-replica-is-stopped`) — the drain retries evictions until it times out.
+
+`cordon_drain` handles this automatically: after cordon it scales to 0 any StatefulSet whose pod **on the target node** mounts a single-replica Longhorn PVC, recording the original replica count in `homenet.vertesi.com/pre-drain-{replicas,node}` annotations. `k3s_health` (happy path) and `upgrade_rescue_agent` (after a successful rebuild) call `cordon_drain`'s `restore` task to scale them back and clear the annotations. Discovery is dynamic (no hardcoded workload names) but **StatefulSet-only** — Deployments backed by single-replica volumes are out of scope. Toggle with `cordon_drain_scale_down_single_replica`. The cleaner long-term fix is moving pure-scratch volumes (e.g. plex transcode) off Longhorn to `emptyDir`.
+
 ## State, failure flag, alerts
 
 - All upgrade plays read/write state under `/var/lib/ansible-upgrade/` on the shoebox host (not in repo).

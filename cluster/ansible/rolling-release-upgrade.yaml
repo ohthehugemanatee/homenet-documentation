@@ -28,10 +28,10 @@
 # control plane processes running. HA clusters (3 servers) tolerate this fine.
 # Do NOT run this against all 3 servers simultaneously — serial: 1 prevents that.
 #
-# BEFORE RUNNING: scale down strict-local StatefulSets to avoid drain timeouts:
-#   kubectl scale statefulset plex --replicas=0
-#   kubectl scale statefulset nextcloud --replicas=0
-# Scale back up after each node is verified Ready.
+# Single-replica (strict-local) Longhorn StatefulSets that would block the drain
+# on Longhorn's instance-manager PodDisruptionBudget are scaled down before the
+# drain and restored after the node is healthy — handled by the cordon_drain /
+# k3s_health roles. No manual scaling needed.
 
 - name: "Rolling OS release upgrade: agents"
   hosts: "{{ target | default('agents:!ubuntu') }}"
@@ -178,7 +178,7 @@
 
   vars:
     k3s_svc: k3s
-    k8s_kubeconfig: /etc/ansible/kubeconfig-cluster3
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
     cordon_drain_grace_period: 60
     apt_upgrade_post_reboot_delay: 30
     k3s_health_wait_before_uncordon: true
@@ -228,7 +228,7 @@
         - name: Get final cluster node status
           kubernetes.core.k8s_info:
             kind: Node
-            kubeconfig: /etc/ansible/kubeconfig-cluster3
+            kubeconfig: "{{ k8s_kubeconfig }}"
           delegate_to: localhost
           become: false
           changed_when: false

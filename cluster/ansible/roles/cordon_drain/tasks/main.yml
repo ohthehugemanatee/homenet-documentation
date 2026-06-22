@@ -7,6 +7,10 @@
   delegate_to: localhost
   become: false
 
+- name: Scale down single-replica Longhorn workloads on this node
+  ansible.builtin.include_tasks: scale_down.yml
+  when: cordon_drain_scale_down_single_replica | bool
+
 - name: Drain node  # noqa: command-instead-of-module
   ansible.builtin.command: >-
     kubectl drain {{ ansible_hostname }}

@@ -32,10 +32,8 @@ services:
       - /opt/semaphore/data:/var/lib/semaphore
       # SSH key for ansible user — hosts must trust this key
       - /home/ansible/.ssh:/home/semaphore/.ssh:ro
-      # Primary kubeconfig — points to cluster1 (default for agents + multimasters)
+      # kubeconfig — points to the kube-vip control-plane VIP (used by all plays)
       - /home/ansible/.kube:/home/semaphore/.kube:ro
-      # Secondary kubeconfig — points to cluster3; used for masters play when cluster1 is down
-      - /etc/ansible/kubeconfig-cluster3:/etc/ansible/kubeconfig-cluster3:ro
       # kubectl static binary
       - /usr/local/bin/kubectl:/usr/local/bin/kubectl:ro
       # vault-password file — used by task templates via --vault-password-file

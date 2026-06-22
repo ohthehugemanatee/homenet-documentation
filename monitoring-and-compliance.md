@@ -101,28 +101,27 @@ kubectl get pods -A | grep -v Running | grep -v Completed   # no stuck pods
 
 ## kubeconfig setup
 
-Two kubeconfigs are required on shoebox:
+One kubeconfig is required on shoebox:
 
 | Path | Endpoint | Used by |
 |---|---|---|
-| `/home/ansible/.kube/config` | `https://10.10.10.9:6443` (kube-vip VIP) | agents + multimasters plays |
-| `/etc/ansible/kubeconfig-cluster3` | `https://10.10.10.111:6443` | masters play |
+| `/home/ansible/.kube/config` | `https://10.10.10.9:6443` (kube-vip VIP) | all plays |
 
-The masters play sets `environment: KUBECONFIG: /etc/ansible/kubeconfig-cluster3`
-on each kubectl task (pre_tasks + post-reboot). When cluster1 is drained and
-rebooting, kubectl reaches the cluster via cluster3's API server instead.
-The primary kubeconfig is never mutated.
+All plays reach the cluster through the kube-vip control-plane VIP, which floats
+across the masters — so kubectl stays reachable even while the master being
+upgraded (cluster1 included) is drained and rebooting. The kubeconfig is never
+mutated.
 
-Both files must be group-readable by gid 1001 (Semaphore container):
+The file must be group-readable by gid 1001 (Semaphore container):
 
 ```bash
-chown ansible:1001 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
-chmod 640 /home/ansible/.kube/config /etc/ansible/kubeconfig-cluster3
+chown ansible:1001 /home/ansible/.kube/config
+chmod 640 /home/ansible/.kube/config
 ```
 
 The Semaphore container runs as `uid=1001 gid=0` by default. Docker-compose adds
 gid 1001 as a supplementary group via `group_add: ["1001"]` so the process can
-read these files. gid 1001 has no name on shoebox — that's fine, the numeric gid
+read this file. gid 1001 has no name on shoebox — that's fine, the numeric gid
 is what matters.
 
 ---
@@ -249,7 +248,7 @@ kubectl scale statefulset nextcloud --replicas=1
 | `target` | No | play-specific | Overrides the hosts pattern for all three plays simultaneously |
 | `state_dir` | No | `/var/lib/ansible-upgrade` | Controller-side directory for run-state files; override to a temp dir for local test runs |
 
-Vault secrets consumed from `vault_file`: `k3s_token`, `k3s_api_server_url`, `pushover_app_token`, `pushover_user_key`.
+Vault secrets consumed from `vault_file`: `k3s_token`, `pushover_app_token`, `pushover_user_key`. (`k3s_api_server_url` is a non-secret default in `group_vars/all.yaml`, not a vault secret.)
 
 ### shoebox/shoebox-ansible-setup.yaml
 

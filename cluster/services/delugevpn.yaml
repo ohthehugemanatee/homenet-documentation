@@ -110,6 +110,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: delugevpn
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: deluge.cluster.vert
@@ -132,3 +137,16 @@ spec:
             name: delugevpn
             port:
               number: 8112
+  - host: deluge.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: delugevpn
+            port:
+              number: 8112
+  tls:
+  - hosts:
+    - deluge.berlin.vertesi.com

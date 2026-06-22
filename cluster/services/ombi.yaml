@@ -76,6 +76,10 @@ metadata:
   name: ombi
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
   - host: ombi.cluster.vert
@@ -108,7 +112,19 @@ spec:
               name: ombi
               port:
                 number: 3579
+  - host: ombi.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ombi
+            port:
+              number: 3579
   tls:
   - hosts:
     - requests.germany.vertesi.com
     secretName: requests-germany-vertesi-com-tls
+  - hosts:
+    - ombi.berlin.vertesi.com
