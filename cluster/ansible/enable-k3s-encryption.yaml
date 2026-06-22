@@ -195,6 +195,10 @@
         kind: Secret
         namespace: kube-system
         kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(omit) }}"
+      register: secret_probe
+      until: secret_probe is not failed
+      retries: 12
+      delay: 10
       delegate_to: localhost
       become: false
       changed_when: false
