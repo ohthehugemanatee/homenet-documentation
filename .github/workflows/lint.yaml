@@ -32,13 +32,14 @@ jobs:
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
       - name: Validate manifests
-        # Excludes ansible playbooks, helm values, and openbao compose files (not K8s manifests).
-        # --ignore-missing-schemas skips custom CRDs (cert-manager, MetalLB, Longhorn).
+        # Excludes ansible playbooks, helm values, openbao compose files, and k3s ref files
+        # (not K8s manifests). --ignore-missing-schemas skips custom CRDs.
         run: |
           find cluster -name "*.yaml" \
             ! -path "*/ansible/*" \
             ! -path "*/helm/*" \
             ! -path "*/openbao/*" \
+            ! -path "*/k3s/*" \
             | xargs kubeconform \
               --ignore-missing-schemas \
               --kubernetes-version 1.29.0
@@ -64,6 +65,7 @@ jobs:
         working-directory: cluster/ansible
         run: |
           ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml \
+            deploy-openbao.yaml enable-k3s-encryption.yaml \
             ../../shoebox/shoebox-ansible-setup.yaml
 
   policy:

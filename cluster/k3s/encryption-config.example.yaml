@@ -1,0 +1,23 @@
+---
+# EncryptionConfiguration for k3s etcd-at-rest encryption.
+#
+# THIS FILE IS A STRUCTURE REFERENCE ONLY — it is NOT applied to the cluster directly.
+# The real file on each master node is written by:
+#   ansible-playbook -i inventory.yaml enable-k3s-encryption.yaml
+# That playbook fetches the AES key from OpenBao (secret/k3s/encryption-key) and
+# writes /etc/rancher/k3s/encryption-config.yaml with mode 0600.
+#
+# During key rotation the playbook also checks secret/k3s/encryption-key-old and
+# writes a two-key configuration (new key first, old key as fallback) when present.
+# See enable-k3s-encryption.yaml header for the full rotation procedure.
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+      - secrets
+    providers:
+      - secretbox:
+          keys:
+            - name: key1
+              secret: PLACEHOLDER_32_BYTE_BASE64_KEY_HERE
+      - identity: {}

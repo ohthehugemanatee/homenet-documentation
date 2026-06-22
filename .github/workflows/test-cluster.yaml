@@ -61,6 +61,7 @@ jobs:
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
             ! -path "*/openbao/*" \
+            ! -path "*/k3s/*" \
             ! -name "cert-manager.yaml" \
             ! -name "l2-config.yaml" \
             ! -name "traefik-default-tls.yaml" \
