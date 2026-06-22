@@ -11,9 +11,9 @@ spec:
     - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
       targetRevision: HEAD
       ref: values
-    - chart: kubernetes-event-exporter
-      repoURL: https://resmoio.github.io/kubernetes-event-exporter
-      targetRevision: 0.4.2
+    - chart: kubernetes-events-exporter
+      repoURL: ghcr.io/ownkube/charts
+      targetRevision: 0.1.2
       helm:
         valueFiles:
           - $values/cluster/helm/kubernetes-event-exporter/values.yaml

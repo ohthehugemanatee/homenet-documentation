@@ -107,7 +107,6 @@ jobs:
         run: |
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo add grafana https://grafana.github.io/helm-charts
-          helm repo add resmoio https://resmoio.github.io/kubernetes-event-exporter
           helm repo add nfs-subdir-external-provisioner \
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo add node-feature-discovery \
@@ -151,11 +150,10 @@ jobs:
 
       - name: Dry-run kubernetes-event-exporter
         run: |
-          helm upgrade --install kubernetes-event-exporter \
-            resmoio/kubernetes-event-exporter --version 0.4.2 \
-            --namespace monitoring --create-namespace \
-            --dry-run \
-            -f cluster/helm/kubernetes-event-exporter/values.yaml
+          helm template kubernetes-event-exporter \
+            oci://ghcr.io/ownkube/charts/kubernetes-events-exporter --version 0.1.2 \
+            --namespace monitoring \
+            -f cluster/helm/kubernetes-event-exporter/values.yaml > /dev/null
 
       - name: Dry-run nfs-subdir-external-provisioner
         run: |

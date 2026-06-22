@@ -372,10 +372,8 @@ helm upgrade --install alloy grafana/alloy \
   -f cluster/helm/alloy/values.yaml
 
 # Deploy event-exporter (Kubernetes Events → Loki):
-helm repo add resmoio https://resmoio.github.io/kubernetes-event-exporter
-helm repo update resmoio
 helm upgrade --install kubernetes-event-exporter \
-  resmoio/kubernetes-event-exporter --version 0.4.2 \
+  oci://ghcr.io/ownkube/charts/kubernetes-events-exporter --version 0.1.2 \
   -n monitoring --create-namespace \
   -f cluster/helm/kubernetes-event-exporter/values.yaml
 ```

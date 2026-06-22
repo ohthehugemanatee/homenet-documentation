@@ -1,10 +1,10 @@
-# resmoio/kubernetes-event-exporter — ships cluster Events into Loki so the
+# ownkube/kubernetes-events-exporter — ships cluster Events into Loki so the
 # workload-debug Grafana dashboard can show recent events per namespace.
-# Chart: kubernetes-event-exporter 0.4.2 (appVersion v1.7),
-# repo https://resmoio.github.io/kubernetes-event-exporter
+# Chart: kubernetes-events-exporter 0.1.2 (OCI: oci://ghcr.io/ownkube/charts),
+# image ghcr.io/ownkube/kubernetes-events-exporter.
 # The chart renders RBAC (events read) + ServiceAccount; we only override config.
-
-config: |
+# config is a structured YAML map (not a string block).
+config:
   logLevel: error
   logFormat: json
   route:
