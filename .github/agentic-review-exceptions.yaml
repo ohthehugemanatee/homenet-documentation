@@ -836,6 +836,22 @@ exceptions:
       was necessary to unblock this PR. A separate PR would create a circular
       dependency (gate blocked merge; fix required merge to take effect).
 
+  - pattern: "event-exporter sourced from third-party ownkube OCI registry (ghcr.io/ownkube/charts)"
+    files:
+      - cluster/argocd/apps/kubernetes-event-exporter.yaml
+      - cluster/helm/kubernetes-event-exporter/values.yaml
+      - .github/workflows/test-cluster.yaml
+      - monitoring-and-compliance.md
+    reason: >-
+      Accepted supply-chain tradeoff. The canonical resmoio chart was never
+      published (repo serves no index.yaml, 404) and upstream defers to the
+      deprecated Bitnami chart. ownkube is the actively maintained fork; its OCI
+      chart is pinned to exact version 0.1.2, mirroring the existing
+      kube-prometheus-stack OCI app. The chart only renders RBAC (events read) +
+      ServiceAccount + our config override — no privileged/hostNetwork surface.
+      Same homelab accepted-tradeoff class as the linuxserver / nodelocaldns
+      entries in .trivyignore.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
