@@ -4,9 +4,18 @@
 # image ghcr.io/ownkube/kubernetes-events-exporter.
 # The chart renders RBAC (events read) + ServiceAccount; we only override config.
 # config is a structured YAML map (not a string block).
+# Hardened after #115: a full-backlog replay + high-cardinality Loki streams on
+# top of the existing event WATCH helped tip the Pi etcd control plane over.
+# maxEventAgeSeconds caps replay; streamLabels are kept to job+namespace only.
 config:
   logLevel: error
   logFormat: json
+  # On (re)start the informer lists the API server's full event backlog (~1h of
+  # retained Events) and would otherwise replay all of it into Loki at once — a
+  # load spike onto the same Longhorn-backed Loki + the apiserver the Pi control
+  # plane is sensitive to. Cap replay to the last 60s so a controller/pod
+  # restart ships only genuinely new events.
+  maxEventAgeSeconds: 60
   route:
     routes:
       - match:
@@ -15,13 +24,15 @@ config:
     - name: loki
       loki:
         url: http://loki.loki.svc.cluster.local:3100/loki/api/v1/push
-        # Loki stream labels. Static `job` is the dashboard's selector key;
-        # namespace/kind/reason are templated from the event for filtering.
+        # Loki stream labels — keep cardinality MINIMAL. Only `job` (the
+        # dashboard's selector) and `namespace` (the dashboard's filter) are
+        # stream labels. kind/reason are deliberately NOT stream labels: they
+        # remain in the JSON event body and stay searchable via LogQL json
+        # filters, without multiplying Loki streams (every distinct label combo
+        # is a separate stream -> index + write amplification onto Longhorn).
         streamLabels:
           job: kubernetes-event-exporter
           namespace: "{{ .InvolvedObject.Namespace }}"
-          kind: "{{ .InvolvedObject.Kind }}"
-          reason: "{{ .Reason }}"
 
 # Match the rest of the monitoring stack: amd64 nodes, explicit requests.
 nodeSelector:
