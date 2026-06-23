@@ -10,11 +10,7 @@
 config:
   logLevel: error
   logFormat: json
-  # On (re)start the informer lists the API server's full event backlog (~1h of
-  # retained Events) and would otherwise replay all of it into Loki at once — a
-  # load spike onto the same Longhorn-backed Loki + the apiserver the Pi control
-  # plane is sensitive to. Cap replay to the last 60s so a controller/pod
-  # restart ships only genuinely new events.
+  # Cap replay to the last 60s so a restart ships only new events.
   maxEventAgeSeconds: 60
   route:
     routes:
@@ -25,11 +21,7 @@ config:
       loki:
         url: http://loki.loki.svc.cluster.local:3100/loki/api/v1/push
         # Loki stream labels — keep cardinality MINIMAL. Only `job` (the
-        # dashboard's selector) and `namespace` (the dashboard's filter) are
-        # stream labels. kind/reason are deliberately NOT stream labels: they
-        # remain in the JSON event body and stay searchable via LogQL json
-        # filters, without multiplying Loki streams (every distinct label combo
-        # is a separate stream -> index + write amplification onto Longhorn).
+        # dashboard's selector) and `namespace` (the dashboard's filter).
         streamLabels:
           job: kubernetes-event-exporter
           namespace: "{{ .InvolvedObject.Namespace }}"
