@@ -75,9 +75,7 @@ alertmanager:
             title: 'k8s alert: {{ .GroupLabels.alertname }}'
             message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             priority: "0"
-            # Deep link into the workload-debug dashboard, pre-scoped to the
-            # firing namespace/pod. uid-only path (/d/<uid>) — Grafana redirects
-            # to the slug. var-pod is empty when a group spans pods (shows all).
+            # Deep link to workload-debug dashboard, pre-scoped to firing namespace/pod. 
             url: 'https://grafana.berlin.vertesi.com/d/workload-debug?var-namespace={{ .CommonLabels.namespace }}&var-pod={{ .CommonLabels.pod }}'
             url_title: 'Debug in Grafana'
 

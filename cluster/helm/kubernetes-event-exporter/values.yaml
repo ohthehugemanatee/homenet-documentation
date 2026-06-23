@@ -2,11 +2,6 @@
 # workload-debug Grafana dashboard can show recent events per namespace.
 # Chart: kubernetes-events-exporter 0.1.2 (OCI: oci://ghcr.io/ownkube/charts),
 # image ghcr.io/ownkube/kubernetes-events-exporter.
-# The chart renders RBAC (events read) + ServiceAccount; we only override config.
-# config is a structured YAML map (not a string block).
-# Hardened after #115: a full-backlog replay + high-cardinality Loki streams on
-# top of the existing event WATCH helped tip the Pi etcd control plane over.
-# maxEventAgeSeconds caps replay; streamLabels are kept to job+namespace only.
 config:
   logLevel: error
   logFormat: json
