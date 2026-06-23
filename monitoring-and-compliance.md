@@ -22,8 +22,7 @@ In-cluster (observability + GitOps)
 ├── Grafana           ← dashboards for metrics (Prometheus) + logs (Loki)
 ├── Loki              ← log aggregation (monolithic, 7d retention)
 ├── Alloy (DaemonSet) ← collects pod stdout/stderr → Loki
-├── Promtail sidecars ← collects file-based logs from specific pods → Loki
-└── event-exporter   ← ships k8s Events → Loki (powers workload-debug dashboard)
+└── Promtail sidecars ← collects file-based logs from specific pods → Loki
 ```
 
 ### Why shoebox, not in-cluster
@@ -331,7 +330,7 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 ## Monitoring and Alertmanager/Pushover
 
-Grafana/Prometheus configured together in `cluster/helm/kube-prometheus-stack/values.yaml` with alertmanager under `alertmanager.config`. Loki is added from `cluster/helm/loki/values.yaml`. Alloy (log collector DaemonSet) is configured in `cluster/helm/alloy/values.yaml`. Kubernetes Events are shipped to Loki by event-exporter (`cluster/helm/kubernetes-event-exporter/values.yaml`). Each chart directory has an install script.
+Grafana/Prometheus configured together in `cluster/helm/kube-prometheus-stack/values.yaml` with alertmanager under `alertmanager.config`. Loki is added from `cluster/helm/loki/values.yaml`. Alloy (log collector DaemonSet) is configured in `cluster/helm/alloy/values.yaml`. Each chart directory has an install script.
 
 Pushover credentials are stored in a pre-created K8s Secret (not in the values file).
 
@@ -370,53 +369,12 @@ helm repo update grafana
 helm upgrade --install alloy grafana/alloy \
   -n monitoring --create-namespace \
   -f cluster/helm/alloy/values.yaml
-
-# Deploy event-exporter (Kubernetes Events → Loki):
-helm upgrade --install kubernetes-event-exporter \
-  oci://ghcr.io/ownkube/charts/kubernetes-events-exporter --version 0.1.2 \
-  -n monitoring --create-namespace \
-  -f cluster/helm/kubernetes-event-exporter/values.yaml
 ```
 
 Covers: NodeNotReady, pod OOMKill, CrashLoopBackOff, PVC near full, and any future
 PrometheusRule alerts.
 
 Note: Alertmanager lives in-cluster and cannot alert if the entire cluster is down.
-
----
-
-## Alert deep links → workload-debug dashboard
-
-Pushover notifications carry a **Debug in Grafana** button. Alertmanager builds the
-URL from the alert's labels in the `pushover_configs` receiver
-(`cluster/helm/kube-prometheus-stack/values.yaml`):
-
-```
-https://grafana.berlin.vertesi.com/d/workload-debug?var-namespace={{ .CommonLabels.namespace }}&var-pod={{ .CommonLabels.pod }}
-```
-
-Because the link is built in the receiver (not per-rule), it covers every alert that
-carries `namespace`/`pod` labels — both the `homelab.pod_health` rules
-(`cluster/services/probe-alerts.yaml`) and upstream kube-prometheus-stack alerts.
-`route.group_by` includes `namespace` so `.CommonLabels.namespace` resolves per group;
-`.CommonLabels.pod` is empty when a group spans multiple pods, in which case the
-dashboard's `pod` variable defaults to all pods in the namespace.
-
-The **workload-debug** dashboard (`cluster/services/grafana-workload-debug.yaml`, uid
-`workload-debug` — the alert URL depends on this uid) is a single parameterized view
-scoped by the `namespace`/`pod` template variables:
-
-| Panel | Source | Shows |
-|---|---|---|
-| Firing Alerts | Prometheus `ALERTS` | what's firing in the namespace |
-| Kubernetes Events | Loki (event-exporter) | recent cluster events |
-| Pod Logs | Loki (Alloy) | pod stdout/stderr |
-| CPU / Memory / Disk / Network | Prometheus (cAdvisor) | resource load |
-| ArgoCD App Status | Prometheus `argocd_app_info` | sync/health + link to ArgoCD UI |
-
-The Events panel needs **event-exporter** (`cluster/helm/kubernetes-event-exporter/`)
-and the ArgoCD panel needs the chart's ServiceMonitor
-(`controller.metrics.serviceMonitor.enabled` in `cluster/helm/argocd/values.yaml`).
 
 ---
 
