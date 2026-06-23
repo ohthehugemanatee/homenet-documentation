@@ -2,9 +2,24 @@ global:
   domain: argocd.berlin.vertesi.com
 
 configs:
+  cm:
+    # Periodic full app refresh: the controller re-LISTs every managed resource
+    # on this interval. Was 120s (tighter than the 180s default), which makes
+    # full-LIST bursts more frequent against the Raspberry-Pi etcd control
+    # plane. Lengthen to 300s; watch events still drive immediate syncs, so the
+    # only cost is slower detection of out-of-band drift.
+    timeout.reconciliation: 300s
   params:
     # Traefik terminates TLS; tell argocd-server to serve plain HTTP.
     server.insecure: true
+    # Cap the controller's parallel kubectl fan-out (the LIST/get calls issued
+    # during reconcile and sync) so a resync cannot burst hundreds of
+    # concurrent API requests at the constrained control plane. Default 20.
+    controller.kubectl.parallelism.limit: "10"
+    # Flatten reconcile/sync spikes by lowering the concurrent app-reconcile
+    # workers (default 20) and sync-operation workers (default 10).
+    controller.status.processors: "10"
+    controller.operation.processors: "5"
 
 server:
   nodeSelector:
