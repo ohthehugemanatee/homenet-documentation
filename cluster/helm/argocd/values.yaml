@@ -22,9 +22,9 @@ controller:
   resources:
     requests:
       cpu: 250m
-      memory: 256Mi
-    limits:
       memory: 512Mi
+    limits:
+      memory: 1Gi
   # Expose argocd_app_info (sync/health per app) to Prometheus for the
   # workload-debug dashboard. additionalLabels.release lets the operator's
   # serviceMonitorSelector discover this ServiceMonitor.
