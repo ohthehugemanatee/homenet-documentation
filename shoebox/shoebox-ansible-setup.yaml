@@ -60,7 +60,7 @@
       - host: fuji
         ansible_user: ohthehugemanatee
       - host: celery
-        ansible_user: ubuntu
+        ansible_user: ohthehugemanatee
 
   tasks:
     # ── Ansible installation ──────────────────────────────────────────────────
