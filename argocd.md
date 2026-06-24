@@ -13,7 +13,7 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Media | auto | yes | yes | plex, radarr, sonarr, ombi, jackett, nzbget, delugevpn, calibre |
 | Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs |
 | Stateful | manual | no | no | nextcloud, collabora |
-| Infrastructure | manual | no | no | metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps |
+| Infrastructure | manual | no | no | metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, system-upgrade-controller, system-upgrade-plans |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 
 Auto-sync apps self-heal when someone `kubectl edit`s a managed resource. Manual-sync apps alert on drift but wait for operator approval in the ArgoCD UI.
