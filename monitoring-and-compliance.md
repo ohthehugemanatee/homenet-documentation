@@ -374,6 +374,12 @@ helm upgrade --install alloy grafana/alloy \
 Covers: NodeNotReady, pod OOMKill, CrashLoopBackOff, PVC near full, and any future
 PrometheusRule alerts.
 
+The chart's `KubeControllerManagerDown`, `KubeProxyDown`, and `KubeSchedulerDown`
+default alerts are suppressed via `defaultRules.disabled` in
+`cluster/helm/kube-prometheus-stack/values.yaml`: k3s embeds those components in
+the server process, so they have no scrape targets and the alerts are false
+positives.
+
 Note: Alertmanager lives in-cluster and cannot alert if the entire cluster is down.
 
 ---
