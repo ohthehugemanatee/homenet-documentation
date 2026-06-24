@@ -69,8 +69,8 @@ notifications:
           path: /1/messages.json
           body: |
             {
-              "token": "{{call .secret.get \"pushoverToken\"}}",
-              "user": "{{call .secret.get \"pushoverUserKey\"}}",
+              "token": "{{call .secret.get "pushoverToken"}}",
+              "user": "{{call .secret.get "pushoverUserKey"}}",
               "title": "ArgoCD: {{.app.metadata.name}} OutOfSync",
               "message": "{{.app.metadata.name}} has drifted from git. Health: {{.app.status.health.status}}",
               "priority": "0",
@@ -83,8 +83,8 @@ notifications:
           path: /1/messages.json
           body: |
             {
-              "token": "{{call .secret.get \"pushoverToken\"}}",
-              "user": "{{call .secret.get \"pushoverUserKey\"}}",
+              "token": "{{call .secret.get "pushoverToken"}}",
+              "user": "{{call .secret.get "pushoverUserKey"}}",
               "title": "ArgoCD FAILED: {{.app.metadata.name}}",
               "message": "Sync failed: {{.app.status.operationState.message}}",
               "priority": "1",
@@ -97,8 +97,8 @@ notifications:
           path: /1/messages.json
           body: |
             {
-              "token": "{{call .secret.get \"pushoverToken\"}}",
-              "user": "{{call .secret.get \"pushoverUserKey\"}}",
+              "token": "{{call .secret.get "pushoverToken"}}",
+              "user": "{{call .secret.get "pushoverUserKey"}}",
               "title": "ArgoCD DEGRADED: {{.app.metadata.name}}",
               "message": "{{.app.metadata.name}} health is {{.app.status.health.status}}",
               "priority": "1",
