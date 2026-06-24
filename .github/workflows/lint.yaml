@@ -32,12 +32,13 @@ jobs:
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
       - name: Validate manifests
-        # Excludes ansible playbooks and helm values files (not K8s manifests).
+        # Excludes ansible playbooks, helm values, and openbao compose files (not K8s manifests).
         # --ignore-missing-schemas skips custom CRDs (cert-manager, MetalLB, Longhorn).
         run: |
           find cluster -name "*.yaml" \
             ! -path "*/ansible/*" \
             ! -path "*/helm/*" \
+            ! -path "*/openbao/*" \
             | xargs kubeconform \
               --ignore-missing-schemas \
               --kubernetes-version 1.29.0

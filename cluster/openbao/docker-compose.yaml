@@ -1,0 +1,24 @@
+services:
+  openbao:
+    image: ghcr.io/openbao/openbao:2
+    container_name: openbao
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    security_opt:
+      - "no-new-privileges:true"
+    ports:
+      - "8200:8200"
+      # 8201 (Raft peer) intentionally not published — single-node deployment
+    volumes:
+      - ./config.hcl:/openbao/config/config.hcl:ro
+      - openbao-data:/openbao/data
+    command: server
+
+volumes:
+  openbao-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/openbao/data

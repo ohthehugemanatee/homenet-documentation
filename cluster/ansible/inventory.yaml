@@ -28,3 +28,8 @@ all:
         ubuntu:
       vars:
         cluster_role: "agent"
+    shoebox:
+      hosts:
+        shoebox:
+          ansible_host: 192.168.1.10  # update to actual shoebox IP
+          ansible_user: ubuntu

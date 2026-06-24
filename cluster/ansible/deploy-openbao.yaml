@@ -1,0 +1,106 @@
+---
+# Deploy OpenBao to shoebox via Docker Compose.
+#
+# What this does:
+#   1. Installs docker.io and docker-compose-plugin via apt.
+#   2. Creates /opt/openbao/ and /opt/openbao/data on shoebox.
+#   3. Copies cluster/openbao/config.hcl and cluster/openbao/docker-compose.yaml.
+#   4. Starts OpenBao with docker compose up -d.
+#
+# After first run, init and unseal manually — see cluster/openbao/README.md.
+#
+# Prerequisites:
+#   - SSH access to the shoebox inventory group (see inventory.yaml)
+#   - VAULT_ADDR / VAULT_TOKEN not required (this playbook bootstraps OpenBao itself)
+#
+# Usage:
+#   ansible-playbook -i inventory.yaml deploy-openbao.yaml
+#
+# Re-runnable: yes. Config changes trigger a handler restart.
+
+- name: Deploy OpenBao on shoebox
+  hosts: shoebox
+  become: true
+
+  vars:
+    openbao_dir: /opt/openbao
+    openbao_data_dir: /opt/openbao/data
+
+  tasks:
+    - name: Install Docker and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Create OpenBao directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: "{{ openbao_dir }}", mode: '0755'}
+        - {path: "{{ openbao_data_dir }}", mode: '0700'}
+
+    - name: Copy OpenBao config
+      ansible.builtin.copy:
+        src: ../openbao/config.hcl
+        dest: "{{ openbao_dir }}/config.hcl"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart openbao
+
+    - name: Copy docker-compose.yaml
+      ansible.builtin.copy:
+        src: ../openbao/docker-compose.yaml
+        dest: "{{ openbao_dir }}/docker-compose.yaml"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Recreate openbao
+
+    - name: Start OpenBao
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ openbao_dir }}"
+      register: compose_up
+      changed_when: >
+        'Started' in compose_up.stderr or
+        'Created' in compose_up.stderr or
+        'Recreated' in compose_up.stderr
+
+    - name: Wait for OpenBao API to be reachable
+      ansible.builtin.uri:
+        url: http://localhost:8200/v1/sys/health
+        status_code: [200, 429, 472, 473, 501, 503]
+      register: openbao_health
+      retries: 15
+      delay: 2
+      until: openbao_health is not failed
+
+    - name: Remind operator to unseal if OpenBao is sealed
+      ansible.builtin.debug:
+        msg: >-
+          OpenBao is sealed (HTTP 503). Run:
+            docker exec openbao bao operator unseal <key-1>
+            docker exec openbao bao operator unseal <key-2>
+          See cluster/openbao/README.md for details.
+      when: openbao_health.status == 503
+
+  handlers:
+    - name: Restart openbao
+      ansible.builtin.command:
+        cmd: docker compose restart openbao
+        chdir: "{{ openbao_dir }}"
+      changed_when: true
+
+    - name: Recreate openbao
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ openbao_dir }}"
+      changed_when: true

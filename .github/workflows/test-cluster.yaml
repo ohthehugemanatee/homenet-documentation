@@ -60,6 +60,7 @@ jobs:
             ! -path "*/argocd/*" \
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
+            ! -path "*/openbao/*" \
             ! -name "cert-manager.yaml" \
             ! -name "l2-config.yaml" \
             ! -name "traefik-default-tls.yaml" \
