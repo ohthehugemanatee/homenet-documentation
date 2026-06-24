@@ -2,9 +2,17 @@ global:
   domain: argocd.berlin.vertesi.com
 
 configs:
+  cm:
+    # slow down detection of drifts, for load.
+    timeout.reconciliation: 300s
   params:
     # Traefik terminates TLS; tell argocd-server to serve plain HTTP.
     server.insecure: true
+    # Cap the controller's parallel kubectl fan-out, for load.
+    controller.kubectl.parallelism.limit: "10"
+    # Flatten reconcile/sync spikes with lower concurrency/worker count
+    controller.status.processors: "10"
+    controller.operation.processors: "5"
 
 server:
   nodeSelector:
@@ -22,9 +30,17 @@ controller:
   resources:
     requests:
       cpu: 250m
-      memory: 256Mi
-    limits:
       memory: 512Mi
+    limits:
+      memory: 1Gi
+  # Expose argocd_app_info (sync/health per app) for the workload-debug dashboard.
+  #
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
 
 repoServer:
   nodeSelector:

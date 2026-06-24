@@ -60,6 +60,9 @@ alertmanager:
       resolve_timeout: 5m
     route:
       receiver: pushover
+      # Group by namespace so .CommonLabels.namespace is set per group and the
+      # Grafana deep link below resolves to the firing workload's namespace.
+      group_by: ['alertname', 'namespace']
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 4h
@@ -72,6 +75,9 @@ alertmanager:
             title: 'k8s alert: {{ .GroupLabels.alertname }}'
             message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             priority: "0"
+            # Deep link to workload-debug dashboard, pre-scoped to firing namespace/pod.
+            url: 'https://grafana.berlin.vertesi.com/d/workload-debug?var-namespace={{ .CommonLabels.namespace }}&var-pod={{ .CommonLabels.pod }}'
+            url_title: 'Debug in Grafana'
 
 # k3s embeds controller-manager, scheduler, proxy, and etcd inside
 # the k3s server process — no separate pods or scrape endpoints exist.
