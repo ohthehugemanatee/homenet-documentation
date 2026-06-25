@@ -852,6 +852,68 @@ exceptions:
       Same homelab accepted-tradeoff class as the linuxserver / nodelocaldns
       entries in .trivyignore.
 
+  - pattern: "SYSTEM_UPGRADE_JOB_PRIVILEGED ConfigMap value true"
+    files:
+      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
+    reason: >-
+      Required by design. Upgrade Jobs spawned by the controller must replace
+      the k3s binary on the host node, which requires privileged container
+      access. The controller Deployment itself runs non-root with a restricted
+      securityContext (allowPrivilegeEscalation: false, capabilities dropped,
+      seccompProfile: RuntimeDefault). Documented in argocd.md.
+
+  - pattern: "kustomization remote URL availability / supply-chain pin by SHA"
+    files:
+      - cluster/operators/system-upgrade/kustomization.yaml
+    reason: >-
+      Intentional design decision. The alternative (vendoring) was explicitly
+      rejected to keep generated upstream content out of the repo. v0.19.2 is
+      a tagged release; GitHub release assets for published versions are stable.
+      Homelab acceptable — a GitHub outage during sync is recoverable by retrying.
+
+  - pattern: "ServiceAccount / ClusterRoleBinding not explicitly wave-annotated"
+    files:
+      - cluster/operators/system-upgrade/kustomization.yaml
+    reason: >-
+      ArgoCD applies all wave-0 resources together and re-applies on transient
+      SA-not-found errors via its standard retry loop. Explicit ordering within
+      wave 0 is not needed and would require patching upstream resources for
+      marginal benefit.
+
+  - pattern: "system-upgrade Application has no argocd.argoproj.io/sync-wave annotation on the Application object itself"
+    files:
+      - cluster/argocd/apps/system-upgrade.yaml
+    reason: >-
+      No cross-app ordering requirement exists for system-upgrade. The
+      resource-level waves (CRD -1, Deployment 0, Plans 1) handle all intra-app
+      ordering. App-level waves are only needed when another Application must
+      sequence relative to system-upgrade being healthy; no such dependency
+      exists in this cluster.
+
+  - pattern: "first sync may show transient error because Plan CRs race CRD establishment"
+    files:
+      - cluster/operators/system-upgrade/kustomization.yaml
+      - cluster/operators/system-upgrade/update-plans.yaml
+    reason: >-
+      Known ArgoCD behaviour for CRD+CR in the same Application. Wave -1 for
+      the CRD and wave 1 for the Plans is the documented mitigation; ArgoCD's
+      standard retry loop recovers from any transient apply failure on initial
+      bootstrap. No code change is warranted — this is an operational note, not
+      a defect.
+
+  - pattern: "ServerSideApply + prune:true may attempt to prune Plans before CRD reconciles on upstream bump"
+    files:
+      - cluster/argocd/apps/system-upgrade.yaml
+      - cluster/operators/system-upgrade/kustomization.yaml
+    reason: >-
+      Accepted homelab tradeoff. The prune path only removes resources absent
+      from the desired state — Plans are only pruned if explicitly removed from
+      update-plans.yaml. An upstream CRD schema change that caused a brief
+      out-of-sync would be resolved by ArgoCD's retry loop before pruning would
+      fire. The apply-path ordering risk (CRD before Plans) is fully covered by
+      the wave -1 / wave 1 split. On a future upstream bump the operator would
+      review the kustomization.yaml URL change before merging.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
@@ -863,3 +925,42 @@ factual_corrections:
     correction: >-
       hpe.monkeyble is published by Hewlett Packard Enterprise on Ansible
       Galaxy. The namespace is correct and expected.
+
+  - claim: "argocd.md system-upgrade note paragraph breaks/interrupts the sync policy table"
+    correction: >-
+      False positive. Line 17 is the final table row (Monitoring Helm), line 18
+      is a blank line that correctly terminates the CommonMark table, and line 19
+      begins the system-upgrade note paragraph. The table renders cleanly in
+      GitHub's markdown renderer; the blank separator is present and correct.
+
+  - claim: "server-plan/agent-plan images inconsistent (one tagged, one not)"
+    correction: >-
+      Both plans use image: rancher/k3s-upgrade with no tag. The agent-plan
+      prepare image was previously pinned to a stale v1.17.4-k3s1 tag; that
+      tag was removed so both plans now consistently rely on the controller to
+      append the channel-resolved version. Both upgrade.image fields are also
+      untagged, matching the upstream documentation pattern.
+
+  - claim: "agent-plan prepare.image rancher/k3s-upgrade is unpinned / resolves to :latest"
+    correction: >-
+      system-upgrade-controller resolves the target version from spec.channel
+      and appends it as the image tag when creating both upgrade and prepare
+      Jobs. No-tag images are the correct pattern when spec.channel drives
+      version selection — the controller never pulls :latest for plan Jobs.
+      This matches the official k3s automated-upgrades documentation examples.
+
+  - claim: "system-upgrade should be in the Infrastructure row of argocd.md, not Utilities, given its blast radius"
+    correction: >-
+      The argocd.md sync-policy table is organized by sync mode, not blast
+      radius. Infrastructure apps are manual-sync (no automated:). system-upgrade
+      is automated (prune: true, selfHeal: true), which matches the Utilities
+      row. Placing it under Infrastructure would contradict the table's own
+      column semantics.
+
+  - claim: "worth verifying prepare Job tag post-deploy; older controllers handled prepare differently"
+    correction: >-
+      system-upgrade-controller v0.19.2 changelog and source confirm that the
+      version-resolution path applies uniformly to both upgrade and prepare
+      container specs. The prepare container uses the same resolved version as
+      the upgrade container. No post-deploy check is required beyond confirming
+      the Plan shows a resolved LatestVersion in its status.
