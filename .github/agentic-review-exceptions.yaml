@@ -862,6 +862,24 @@ exceptions:
       securityContext (allowPrivilegeEscalation: false, capabilities dropped,
       seccompProfile: RuntimeDefault). Documented in argocd.md.
 
+  - pattern: "kustomization remote URL availability / supply-chain pin by SHA"
+    files:
+      - cluster/operators/system-upgrade/kustomization.yaml
+    reason: >-
+      Intentional design decision. The alternative (vendoring) was explicitly
+      rejected to keep generated upstream content out of the repo. v0.19.2 is
+      a tagged release; GitHub release assets for published versions are stable.
+      Homelab acceptable — a GitHub outage during sync is recoverable by retrying.
+
+  - pattern: "ServiceAccount / ClusterRoleBinding not explicitly wave-annotated"
+    files:
+      - cluster/operators/system-upgrade/kustomization.yaml
+    reason: >-
+      ArgoCD applies all wave-0 resources together and re-applies on transient
+      SA-not-found errors via its standard retry loop. Explicit ordering within
+      wave 0 is not needed and would require patching upstream resources for
+      marginal benefit.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
