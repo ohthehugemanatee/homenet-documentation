@@ -16,7 +16,7 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Infrastructure | manual | no | no | metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 
-**system-upgrade note:** The `system-upgrade` Application is auto-sync. ArgoCD sync waves handle resource ordering automatically: the `upgrade.cattle.io` CRD (wave −1) is established before the controller Deployment (wave 0), which must be ready before the server-plan and agent-plan `Plan` CRs (wave 1). `SYSTEM_UPGRADE_JOB_PRIVILEGED=true` is set by design — upgrade Jobs must replace the k3s binary on the host.
+**system-upgrade note:** The `system-upgrade` Application is auto-sync. ArgoCD sync waves handle resource ordering automatically: the `plans.upgrade.cattle.io` CRD (wave −1) is established before the controller Deployment (wave 0), which must be ready before the server-plan and agent-plan `Plan` CRs (wave 1). `SYSTEM_UPGRADE_JOB_PRIVILEGED=true` is set by design — upgrade Jobs must replace the k3s binary on the host.
 
 Auto-sync apps self-heal when someone `kubectl edit`s a managed resource. Manual-sync apps alert on drift but wait for operator approval in the ArgoCD UI.
 

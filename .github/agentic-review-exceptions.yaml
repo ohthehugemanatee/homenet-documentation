@@ -892,6 +892,14 @@ factual_corrections:
       hpe.monkeyble is published by Hewlett Packard Enterprise on Ansible
       Galaxy. The namespace is correct and expected.
 
+  - claim: "server-plan/agent-plan images inconsistent (one tagged, one not)"
+    correction: >-
+      Both plans use image: rancher/k3s-upgrade with no tag. The agent-plan
+      prepare image was previously pinned to a stale v1.17.4-k3s1 tag; that
+      tag was removed so both plans now consistently rely on the controller to
+      append the channel-resolved version. Both upgrade.image fields are also
+      untagged, matching the upstream documentation pattern.
+
   - claim: "agent-plan prepare.image rancher/k3s-upgrade is unpinned / resolves to :latest"
     correction: >-
       system-upgrade-controller resolves the target version from spec.channel
