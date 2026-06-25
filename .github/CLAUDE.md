@@ -2,7 +2,7 @@
 
 ## Workflow inventory
 
-- `workflows/lint.yaml` — `yamllint` + `kubeconform` + `ansible-lint`.
+- `workflows/lint.yaml` — `yamllint` + `kubeconform` + `kustomize build` + `ansible-lint` (+ advisory kube-score/polaris/trivy).
 - `workflows/test-ansible.yaml` — three jobs: shoebox validators (`shoebox/tests/*.sh`), monkeyble (`cluster/ansible/tests/monkeyble/run-tests.sh`), molecule (`cluster/ansible/molecule/`).
 - `workflows/test-cluster.yaml` — k3d smoke test: spins up a local cluster and applies manifests.
 - `workflows/pr-review.yaml` + `workflows/pr-review-gate.yaml` — Claude AI review + status-check gate.
