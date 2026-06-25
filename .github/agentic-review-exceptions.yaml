@@ -879,6 +879,18 @@ exceptions:
       would diverge from upstream and complicate future version bumps.
       Documented in argocd.md.
 
+  - pattern: "system-upgrade-plans no sync-wave to enforce ordering after controller"
+    files:
+      - cluster/argocd/apps/system-upgrade-plans.yaml
+      - cluster/argocd/apps/system-upgrade-controller.yaml
+    reason: >-
+      Both apps are manual sync — the operator drives ordering explicitly.
+      The argocd.md sync note documents "sync controller first". CreateNamespace=true
+      on the plans app prevents a namespace-missing failure if synced out of order;
+      it will still fail on missing CRDs, which is a clear actionable error.
+      Sync waves add ArgoCD-specific complexity for a two-app manual workflow
+      in a single-maintainer homelab.
+
   - pattern: "system-upgrade-controller image tag v0.11.0 stale"
     files:
       - cluster/operators/system-upgrade/system-upgrade-controller.yaml
