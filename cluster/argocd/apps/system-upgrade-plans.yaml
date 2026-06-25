@@ -16,3 +16,6 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: system-upgrade
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

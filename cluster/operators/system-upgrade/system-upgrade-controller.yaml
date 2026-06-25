@@ -78,10 +78,13 @@ spec:
         volumeMounts:
         - mountPath: /etc/ssl
           name: etc-ssl
+          readOnly: true
         - mountPath: /etc/pki
           name: etc-pki
+          readOnly: true
         - mountPath: /etc/ca-certificates
           name: etc-ca-certificates
+          readOnly: true
         - mountPath: /tmp
           name: tmp
       serviceAccountName: system-upgrade

@@ -852,6 +852,48 @@ exceptions:
       Same homelab accepted-tradeoff class as the linuxserver / nodelocaldns
       entries in .trivyignore.
 
+  - pattern: "system-upgrade-controller cluster-admin ClusterRoleBinding"
+    files:
+      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
+    reason: >-
+      Upstream-prescribed configuration. The controller must cordon/drain/uncordon
+      nodes, manage Jobs cluster-wide, and the spawned upgrade Jobs replace the
+      k3s binary on the host — cluster-admin is the minimum viable grant for
+      this workflow. Documented in argocd.md.
+
+  - pattern: "system-upgrade-controller no resource requests/limits"
+    files:
+      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
+    reason: >-
+      Vendored upstream manifest (rancher/system-upgrade-controller v0.11.0).
+      Diverging from upstream would block clean version bumps. Homelab
+      control-plane node has sufficient headroom for this controller.
+
+  - pattern: "system-upgrade-controller no securityContext / no probes"
+    files:
+      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
+    reason: >-
+      Vendored upstream manifest. The controller process itself is not
+      privileged, but spawned upgrade Jobs are (by design — they replace the
+      k3s binary). Adding securityContext or probes to the vendored manifest
+      would diverge from upstream and complicate future version bumps.
+      Documented in argocd.md.
+
+  - pattern: "system-upgrade-controller image tag v0.11.0 stale"
+    files:
+      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
+    reason: >-
+      Maintains parity with the existing install-system-upgrade.sh. Version
+      bump to current upstream (v0.14.x) is a separate follow-up — changing
+      the version during the ArgoCD wiring PR expands scope and risk.
+
+  - pattern: "SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE rancher/kubectl:v1.21.9 stale"
+    files:
+      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
+    reason: >-
+      Same rationale as image tag staleness above. Upgrade to current kubectl
+      image should accompany the controller version bump, not this PR.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
