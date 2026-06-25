@@ -4,6 +4,8 @@ kind: Plan
 metadata:
   name: server-plan
   namespace: system-upgrade
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   concurrency: 1
   cordon: true
@@ -29,6 +31,8 @@ kind: Plan
 metadata:
   name: agent-plan
   namespace: system-upgrade
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   concurrency: 1
   cordon: true
@@ -40,7 +44,7 @@ spec:
     args:
     - prepare
     - server-plan
-    image: rancher/k3s-upgrade:v1.17.4-k3s1
+    image: rancher/k3s-upgrade
   serviceAccountName: system-upgrade
   tolerations:
     - key: "node-role.kubernetes.io/master"

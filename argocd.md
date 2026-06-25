@@ -11,12 +11,12 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Category | Sync | Self-heal | Prune | Apps |
 |---|---|---|---|---|
 | Media | auto | yes | yes | plex, radarr, sonarr, ombi, jackett, nzbget, delugevpn, calibre |
-| Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs |
+| Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade |
 | Stateful | manual | no | no | nextcloud, collabora |
-| Infrastructure | manual | no | no | metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, system-upgrade-controller, system-upgrade-plans |
+| Infrastructure | manual | no | no | metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 
-**system-upgrade-controller sync note:** sync `system-upgrade-controller` before `system-upgrade-plans` on first install — the controller Deployment installs the `upgrade.cattle.io` CRDs that Plans depend on. Both are manual sync, so the operator controls ordering. The controller runs with a `cluster-admin` ClusterRoleBinding (required to cordon/drain nodes and manage Jobs cluster-wide) and sets `SYSTEM_UPGRADE_JOB_PRIVILEGED=true` (upgrade Jobs replace the k3s binary on the host, requiring host-level access).
+**system-upgrade note:** The `system-upgrade` Application is auto-sync. ArgoCD sync waves handle resource ordering automatically: the `upgrade.cattle.io` CRD (wave −1) is established before the controller Deployment (wave 0), which must be ready before the server-plan and agent-plan `Plan` CRs (wave 1). `SYSTEM_UPGRADE_JOB_PRIVILEGED=true` is set by design — upgrade Jobs must replace the k3s binary on the host.
 
 Auto-sync apps self-heal when someone `kubectl edit`s a managed resource. Manual-sync apps alert on drift but wait for operator approval in the ArgoCD UI.
 

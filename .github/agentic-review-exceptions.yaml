@@ -852,59 +852,31 @@ exceptions:
       Same homelab accepted-tradeoff class as the linuxserver / nodelocaldns
       entries in .trivyignore.
 
-  - pattern: "system-upgrade-controller cluster-admin ClusterRoleBinding"
-    files:
-      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
-    reason: >-
-      Upstream-prescribed configuration. The controller must cordon/drain/uncordon
-      nodes, manage Jobs cluster-wide, and the spawned upgrade Jobs replace the
-      k3s binary on the host — cluster-admin is the minimum viable grant for
-      this workflow. Documented in argocd.md.
-
   - pattern: "system-upgrade-controller no resource requests/limits"
     files:
       - cluster/operators/system-upgrade/system-upgrade-controller.yaml
     reason: >-
-      Vendored upstream manifest (rancher/system-upgrade-controller v0.11.0).
+      Vendored upstream manifest (rancher/system-upgrade-controller v0.19.2).
       Diverging from upstream would block clean version bumps. Homelab
       control-plane node has sufficient headroom for this controller.
 
-  - pattern: "system-upgrade-controller no securityContext / no probes"
+  - pattern: "system-upgrade-controller no liveness/readiness probes"
     files:
       - cluster/operators/system-upgrade/system-upgrade-controller.yaml
     reason: >-
-      Vendored upstream manifest. The controller process itself is not
-      privileged, but spawned upgrade Jobs are (by design — they replace the
-      k3s binary). Adding securityContext or probes to the vendored manifest
-      would diverge from upstream and complicate future version bumps.
-      Documented in argocd.md.
+      Vendored upstream manifest (v0.19.2). Upstream ships no probes for this
+      controller; adding them would diverge and complicate future version bumps.
+      Homelab acceptable — the Deployment's own restart policy covers failure recovery.
 
-  - pattern: "system-upgrade-plans no sync-wave to enforce ordering after controller"
-    files:
-      - cluster/argocd/apps/system-upgrade-plans.yaml
-      - cluster/argocd/apps/system-upgrade-controller.yaml
-    reason: >-
-      Both apps are manual sync — the operator drives ordering explicitly.
-      The argocd.md sync note documents "sync controller first". CreateNamespace=true
-      on the plans app prevents a namespace-missing failure if synced out of order;
-      it will still fail on missing CRDs, which is a clear actionable error.
-      Sync waves add ArgoCD-specific complexity for a two-app manual workflow
-      in a single-maintainer homelab.
-
-  - pattern: "system-upgrade-controller image tag v0.11.0 stale"
+  - pattern: "SYSTEM_UPGRADE_JOB_PRIVILEGED ConfigMap value true"
     files:
       - cluster/operators/system-upgrade/system-upgrade-controller.yaml
     reason: >-
-      Maintains parity with the existing install-system-upgrade.sh. Version
-      bump to current upstream (v0.14.x) is a separate follow-up — changing
-      the version during the ArgoCD wiring PR expands scope and risk.
-
-  - pattern: "SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE rancher/kubectl:v1.21.9 stale"
-    files:
-      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
-    reason: >-
-      Same rationale as image tag staleness above. Upgrade to current kubectl
-      image should accompany the controller version bump, not this PR.
+      Required by design. Upgrade Jobs spawned by the controller must replace
+      the k3s binary on the host node, which requires privileged container
+      access. The controller Deployment itself runs non-root with a restricted
+      securityContext (allowPrivilegeEscalation: false, capabilities dropped,
+      seccompProfile: RuntimeDefault). Documented in argocd.md.
 
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
