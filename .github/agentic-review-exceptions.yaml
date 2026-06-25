@@ -852,22 +852,6 @@ exceptions:
       Same homelab accepted-tradeoff class as the linuxserver / nodelocaldns
       entries in .trivyignore.
 
-  - pattern: "system-upgrade-controller no resource requests/limits"
-    files:
-      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
-    reason: >-
-      Vendored upstream manifest (rancher/system-upgrade-controller v0.19.2).
-      Diverging from upstream would block clean version bumps. Homelab
-      control-plane node has sufficient headroom for this controller.
-
-  - pattern: "system-upgrade-controller no liveness/readiness probes"
-    files:
-      - cluster/operators/system-upgrade/system-upgrade-controller.yaml
-    reason: >-
-      Vendored upstream manifest (v0.19.2). Upstream ships no probes for this
-      controller; adding them would diverge and complicate future version bumps.
-      Homelab acceptable — the Deployment's own restart policy covers failure recovery.
-
   - pattern: "SYSTEM_UPGRADE_JOB_PRIVILEGED ConfigMap value true"
     files:
       - cluster/operators/system-upgrade/system-upgrade-controller.yaml
@@ -889,3 +873,11 @@ factual_corrections:
     correction: >-
       hpe.monkeyble is published by Hewlett Packard Enterprise on Ansible
       Galaxy. The namespace is correct and expected.
+
+  - claim: "agent-plan prepare.image rancher/k3s-upgrade is unpinned / resolves to :latest"
+    correction: >-
+      system-upgrade-controller resolves the target version from spec.channel
+      and appends it as the image tag when creating both upgrade and prepare
+      Jobs. No-tag images are the correct pattern when spec.channel drives
+      version selection — the controller never pulls :latest for plan Jobs.
+      This matches the official k3s automated-upgrades documentation examples.
