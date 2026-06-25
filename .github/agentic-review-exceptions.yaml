@@ -949,6 +949,14 @@ factual_corrections:
       version selection — the controller never pulls :latest for plan Jobs.
       This matches the official k3s automated-upgrades documentation examples.
 
+  - claim: "system-upgrade should be in the Infrastructure row of argocd.md, not Utilities, given its blast radius"
+    correction: >-
+      The argocd.md sync-policy table is organized by sync mode, not blast
+      radius. Infrastructure apps are manual-sync (no automated:). system-upgrade
+      is automated (prune: true, selfHeal: true), which matches the Utilities
+      row. Placing it under Infrastructure would contradict the table's own
+      column semantics.
+
   - claim: "worth verifying prepare Job tag post-deploy; older controllers handled prepare differently"
     correction: >-
       system-upgrade-controller v0.19.2 changelog and source confirm that the
