@@ -901,6 +901,19 @@ exceptions:
       bootstrap. No code change is warranted — this is an operational note, not
       a defect.
 
+  - pattern: "ServerSideApply + prune:true may attempt to prune Plans before CRD reconciles on upstream bump"
+    files:
+      - cluster/argocd/apps/system-upgrade.yaml
+      - cluster/operators/system-upgrade/kustomization.yaml
+    reason: >-
+      Accepted homelab tradeoff. The prune path only removes resources absent
+      from the desired state — Plans are only pruned if explicitly removed from
+      update-plans.yaml. An upstream CRD schema change that caused a brief
+      out-of-sync would be resolved by ArgoCD's retry loop before pruning would
+      fire. The apply-path ordering risk (CRD before Plans) is fully covered by
+      the wave -1 / wave 1 split. On a future upstream bump the operator would
+      review the kustomization.yaml URL change before merging.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
