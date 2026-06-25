@@ -880,6 +880,27 @@ exceptions:
       wave 0 is not needed and would require patching upstream resources for
       marginal benefit.
 
+  - pattern: "system-upgrade Application has no argocd.argoproj.io/sync-wave annotation on the Application object itself"
+    files:
+      - cluster/argocd/apps/system-upgrade.yaml
+    reason: >-
+      No cross-app ordering requirement exists for system-upgrade. The
+      resource-level waves (CRD -1, Deployment 0, Plans 1) handle all intra-app
+      ordering. App-level waves are only needed when another Application must
+      sequence relative to system-upgrade being healthy; no such dependency
+      exists in this cluster.
+
+  - pattern: "first sync may show transient error because Plan CRs race CRD establishment"
+    files:
+      - cluster/operators/system-upgrade/kustomization.yaml
+      - cluster/operators/system-upgrade/update-plans.yaml
+    reason: >-
+      Known ArgoCD behaviour for CRD+CR in the same Application. Wave -1 for
+      the CRD and wave 1 for the Plans is the documented mitigation; ArgoCD's
+      standard retry loop recovers from any transient apply failure on initial
+      bootstrap. No code change is warranted — this is an operational note, not
+      a defect.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
