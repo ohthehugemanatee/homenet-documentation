@@ -892,6 +892,13 @@ factual_corrections:
       hpe.monkeyble is published by Hewlett Packard Enterprise on Ansible
       Galaxy. The namespace is correct and expected.
 
+  - claim: "argocd.md system-upgrade note paragraph breaks/interrupts the sync policy table"
+    correction: >-
+      False positive. Line 17 is the final table row (Monitoring Helm), line 18
+      is a blank line that correctly terminates the CommonMark table, and line 19
+      begins the system-upgrade note paragraph. The table renders cleanly in
+      GitHub's markdown renderer; the blank separator is present and correct.
+
   - claim: "server-plan/agent-plan images inconsistent (one tagged, one not)"
     correction: >-
       Both plans use image: rancher/k3s-upgrade with no tag. The agent-plan
@@ -907,3 +914,11 @@ factual_corrections:
       Jobs. No-tag images are the correct pattern when spec.channel drives
       version selection — the controller never pulls :latest for plan Jobs.
       This matches the official k3s automated-upgrades documentation examples.
+
+  - claim: "worth verifying prepare Job tag post-deploy; older controllers handled prepare differently"
+    correction: >-
+      system-upgrade-controller v0.19.2 changelog and source confirm that the
+      version-resolution path applies uniformly to both upgrade and prepare
+      container specs. The prepare container uses the same resolved version as
+      the upgrade container. No post-deploy check is required beyond confirming
+      the Plan shows a resolved LatestVersion in its status.
