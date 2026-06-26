@@ -52,7 +52,7 @@ spec:
                 storageClassName: "longhorn-ephemeral"
                 resources:
                   requests:
-                    storage: 3Gi
+                    storage: 30Gi
       securityContext:
         fsGroup: 1000
       containers:
