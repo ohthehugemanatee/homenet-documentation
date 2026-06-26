@@ -11,3 +11,15 @@ tls-san:
   - "{{ node_state_k3s_api_server_vip }}"
 node-taint:
   - "node-role.kubernetes.io/control-plane=:NoSchedule"
+# Memory headroom: reserve RAM for the OS + control-plane and evict workload
+# pods before the node OOM-thrashes. Critical on the 4 GB Pi masters, where
+# memory exhaustion evicts page cache and re-pages off the slow SD-card root.
+kubelet-arg:
+  - "system-reserved={{ node_state_kubelet_system_reserved }}"
+  - "kube-reserved={{ node_state_kubelet_kube_reserved }}"
+  - "eviction-hard={{ node_state_kubelet_eviction_hard }}"
+  - "eviction-minimum-reclaim={{ node_state_kubelet_eviction_minimum_reclaim }}"
+{% if node_state_zram_enabled | bool %}
+  # zram swap cushion is enabled on this node; let kubelet tolerate swap.
+  - "fail-swap-on=false"
+{% endif %}

@@ -11,3 +11,17 @@
     - name: Pause for systemd to finish mounting /tmp
       ansible.builtin.pause:
         seconds: 20
+
+# Stand in for the real USB data disk so the SD-offload symlink tasks (which
+# only act when /mnt/usb is a mountpoint) are actually exercised under test.
+- name: Provide a mounted /mnt/usb for the SD-offload path
+  hosts: node-state-master-test
+  gather_facts: false
+  tasks:
+    - name: Mount a tmpfs at /mnt/usb
+      ansible.posix.mount:
+        path: /mnt/usb
+        src: tmpfs
+        fstype: tmpfs
+        opts: nodev,nosuid
+        state: mounted

@@ -181,6 +181,124 @@
         fail_msg: "config.yaml missing tls-san for the VIP — apiserver cert will not be valid for 10.10.10.9"
       when: cluster_role in ['first-master', 'multi-master']
 
+    # ── Memory headroom: kubelet reserve/evict args (control-plane) ───────────
+
+    - name: Assert k3s config sets memory reserve + eviction kubelet args
+      ansible.builtin.assert:
+        that:
+          - "'kubelet-arg' in (k3s_config_content.content | b64decode)"
+          - "'system-reserved=cpu=250m,memory=512Mi' in (k3s_config_content.content | b64decode)"
+          - "'kube-reserved=memory=512Mi' in (k3s_config_content.content | b64decode)"
+          - "'eviction-hard=memory.available<300Mi' in (k3s_config_content.content | b64decode)"
+          - "'eviction-minimum-reclaim=memory.available=100Mi' in (k3s_config_content.content | b64decode)"
+        fail_msg: "config.yaml missing kubelet memory reserve/eviction args — control plane has no OOM headroom"
+      when: cluster_role in ['first-master', 'multi-master']
+
+    - name: Assert k3s config tolerates swap when zram is enabled
+      ansible.builtin.assert:
+        that: "'fail-swap-on=false' in (k3s_config_content.content | b64decode)"
+        fail_msg: "zram enabled but kubelet still has fail-swap-on=true — k3s will refuse to start"
+      when:
+        - cluster_role in ['first-master', 'multi-master']
+        - node_state_zram_enabled | default(false) | bool
+
+    # ── Memory headroom: k3s MemoryHigh systemd drop-in (control-plane) ───────
+
+    - name: Stat k3s MemoryHigh systemd drop-in
+      ansible.builtin.stat:
+        path: /etc/systemd/system/k3s.service.d/memory.conf
+      register: k3s_memory_dropin
+
+    - name: Assert MemoryHigh drop-in absent for agent role
+      ansible.builtin.assert:
+        that: not k3s_memory_dropin.stat.exists
+        success_msg: "k3s MemoryHigh drop-in correctly absent on agent nodes"
+      when: cluster_role == 'agent'
+
+    - name: Assert MemoryHigh drop-in present and soft-capping the control plane
+      ansible.builtin.assert:
+        that: k3s_memory_dropin.stat.exists
+        fail_msg: "k3s MemoryHigh systemd drop-in missing on a control-plane node"
+      when: cluster_role in ['first-master', 'multi-master']
+
+    - name: Read k3s MemoryHigh drop-in
+      ansible.builtin.slurp:
+        src: /etc/systemd/system/k3s.service.d/memory.conf
+      register: k3s_memory_dropin_content
+      when: cluster_role in ['first-master', 'multi-master']
+
+    - name: Assert drop-in sets MemoryHigh and not a hard MemoryMax
+      ansible.builtin.assert:
+        that:
+          - "'MemoryHigh=2G' in (k3s_memory_dropin_content.content | b64decode)"
+          - "'MemoryMax=' not in (k3s_memory_dropin_content.content | b64decode)"
+        fail_msg: "drop-in must set a soft MemoryHigh, never a hard MemoryMax (would OOM-kill the control plane)"
+      when: cluster_role in ['first-master', 'multi-master']
+
+    # ── zram compressed-RAM swap cushion (opt-in) ─────────────────────────────
+
+    - name: Stat zramswap config
+      ansible.builtin.stat:
+        path: /etc/default/zramswap
+      register: zramswap_conf
+
+    - name: Assert zramswap config absent when zram disabled
+      ansible.builtin.assert:
+        that: not zramswap_conf.stat.exists
+        success_msg: "zramswap config correctly absent when zram is disabled"
+      when: not (node_state_zram_enabled | default(false) | bool)
+
+    - name: Assert zramswap config present and tuned when zram enabled
+      ansible.builtin.assert:
+        that: zramswap_conf.stat.exists
+        fail_msg: "zram enabled but /etc/default/zramswap was not written"
+      when: node_state_zram_enabled | default(false) | bool
+
+    - name: Read zramswap config
+      ansible.builtin.slurp:
+        src: /etc/default/zramswap
+      register: zramswap_content
+      when: node_state_zram_enabled | default(false) | bool
+
+    - name: Assert zramswap config carries the algorithm + percent
+      ansible.builtin.assert:
+        that:
+          - "'ALGO=zstd' in (zramswap_content.content | b64decode)"
+          - "'PERCENT=50' in (zramswap_content.content | b64decode)"
+        fail_msg: "zramswap config missing ALGO/PERCENT tuning"
+      when: node_state_zram_enabled | default(false) | bool
+
+    # ── SD-card offload: kubelet root + pod logs symlinked onto /mnt/usb ───────
+
+    - name: Stat SD-offload paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/kubelet
+        - /var/log/pods
+      register: sd_offload_paths
+
+    - name: Assert SD-offload paths untouched when offload disabled
+      ansible.builtin.assert:
+        that: not (item.stat.exists and item.stat.islnk)
+        success_msg: "{{ item.item }} not symlinked — correct when SD-offload disabled"
+      loop: "{{ sd_offload_paths.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: not (node_state_sd_offload_enabled | default(false) | bool)
+
+    - name: Assert kubelet root + pod logs are symlinked onto /mnt/usb
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.islnk
+          - item.stat.lnk_target is match('/mnt/usb/.*')
+        fail_msg: "{{ item.item }} is not a symlink onto /mnt/usb — SD-offload did not apply"
+      loop: "{{ sd_offload_paths.results }}"
+      loop_control:
+        label: "{{ item.item }} -> {{ item.stat.lnk_target | default('?') }}"
+      when: node_state_sd_offload_enabled | default(false) | bool
+
     # ── kube_vip role (master path; no-op on agents) ──────────────────────────
 
     - name: Stat kube-vip auto-deploy manifest
