@@ -51,10 +51,10 @@ alloy:
 
 controller:
   type: daemonset
-  tolerations:
-    - key: node-role.kubernetes.io/control-plane
-      operator: Exists
-      effect: NoSchedule
-    - key: node-role.kubernetes.io/master
-      operator: Exists
-      effect: NoSchedule
+  # Do NOT tolerate the control-plane taint. The control-plane nodes are 4 GB
+  # Pis with root-on-SD; a log scraper tailing pod logs there competes with
+  # etcd/apiserver for RAM and I/O and has triggered etcd-quorum-loss incidents.
+  # With no toleration this DaemonSet skips the tainted control-plane nodes;
+  # their pod logs are still collected via the Kubernetes API by the Alloy
+  # instances running on the agent nodes.
+  tolerations: []
