@@ -52,7 +52,7 @@ spec:
                 storageClassName: "longhorn-ephemeral"
                 resources:
                   requests:
-                    storage: 3Gi
+                    storage: 30Gi
       securityContext:
         fsGroup: 1000
       containers:
@@ -185,26 +185,6 @@ metadata:
     ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
-  - host: plex.cluster.vert
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: plex
-            port:
-              number: 32400
-  - host: plex.vert
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: plex
-            port:
-              number: 32400
   - host: plex.berlin.vertesi.com
     http:
       paths:
