@@ -33,3 +33,10 @@
     state: restarted
   when: ansible_virtualization_type != 'docker'
   throttle: 1
+
+- name: Restart zramswap
+  ansible.builtin.systemd:
+    name: zramswap
+    state: restarted
+    enabled: true
+  when: ansible_virtualization_type != 'docker'
