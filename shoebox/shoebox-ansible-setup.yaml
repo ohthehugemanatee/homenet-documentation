@@ -262,6 +262,66 @@
         group: root
         mode: '0644'
 
+    # ── Control-plane watchdog (external downtime alerting) ───────────────────
+    # A host-level systemd timer — deliberately NOT scheduled via Semaphore, so
+    # it keeps probing even if Docker/Semaphore is down. Probes the kube-apiserver
+    # VIP and pushes a Pushover alert when the control plane is unreachable; this
+    # is the watcher that lives OUTSIDE the cluster it watches.
+
+    - name: Install control-plane watchdog script
+      ansible.builtin.copy:
+        src: scripts/check-control-plane.sh
+        dest: /usr/local/bin/check-control-plane.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install control-plane watchdog systemd service
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=External k3s control-plane watchdog (Pushover alert)
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          User=ansible
+          # Reads Pushover creds from /etc/ansible/pushover.env; writes state to
+          # /var/lib/ansible-upgrade and logs to /var/log/ansible.
+          Environment=WATCHDOG_PROBE_URL=https://10.10.10.9:6443/livez
+          Environment=WATCHDOG_FAIL_THRESHOLD=3
+          ExecStart=/usr/local/bin/check-control-plane.sh
+        dest: /etc/systemd/system/control-plane-watchdog.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install control-plane watchdog systemd timer
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Run the external k3s control-plane watchdog every minute
+
+          [Timer]
+          OnBootSec=2min
+          OnUnitActiveSec=1min
+          AccuracySec=15s
+
+          [Install]
+          WantedBy=timers.target
+        dest: /etc/systemd/system/control-plane-watchdog.timer
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable and start control-plane watchdog timer
+      ansible.builtin.systemd:
+        name: control-plane-watchdog.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
     # ── Semaphore Docker ──────────────────────────────────────────────────────
     # node-state.yaml is scheduled and run by Semaphore (not a separate systemd
     # timer) — Semaphore is the single execution and scheduling layer.
