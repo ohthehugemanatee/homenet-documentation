@@ -6,7 +6,8 @@ Shoebox is the always-on NFS host. It runs Semaphore UI in Docker to **schedule*
 
 - `semaphore/docker-compose.yaml` — Semaphore v2.10.22 (port 3000) + Python deps from `requirements.txt`.
 - `scripts/validate-semaphore-key.sh` — validates `SEMAPHORE_ACCESS_KEY_ENCRYPTION` (URL-safe base64, exact length, no whitespace).
-- `tests/test-validate-semaphore-key.sh` — unit tests for the validator.
+- `scripts/check-control-plane.sh` — external control-plane watchdog: probes the kube-apiserver VIP and Pushover-alerts on downtime. Driven by the `control-plane-watchdog.timer` systemd unit (every 1 min), installed by the bootstrap playbook. Reuses `/etc/ansible/pushover.env`; state in `/var/lib/ansible-upgrade/`, log in `/var/log/ansible/`.
+- `tests/validate-semaphore-key` + `tests/check-control-plane` — unit tests for the scripts above.
 - `shoebox-ansible-setup.yaml` — bootstrap playbook; runs from the operator's workstation against the shoebox host.
 
 ## Conventions
@@ -20,6 +21,7 @@ Shoebox is the always-on NFS host. It runs Semaphore UI in Docker to **schedule*
 
 ```sh
 bash shoebox/tests/test-validate-semaphore-key.sh
+bash shoebox/tests/test-check-control-plane.sh
 shellcheck shoebox/scripts/*.sh shoebox/tests/*.sh
 ```
 
