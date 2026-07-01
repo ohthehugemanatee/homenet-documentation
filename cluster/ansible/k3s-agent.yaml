@@ -19,7 +19,7 @@
       ansible.posix.mount:
         path: /mnt/usb
         src: 'PARTUUID={{ partuuid.stdout }}'
-        fstype: ext4
+        fstype: ext2
         opts: noatime
         state: mounted
       when: usb_disk is defined
