@@ -23,6 +23,7 @@ docker exec openbao bao operator init -key-shares=3 -key-threshold=2
 
 # Store the 3 unseal keys and root token OFFLINE (password manager / paper).
 # You need any 2 of the 3 unseal keys to unseal after a reboot.
+# WARNING: lose 2 of the 3 keys and the data dir is permanently unreadable — no recovery.
 
 # Unseal (run twice with two different keys)
 docker exec openbao bao operator unseal <key-1>
