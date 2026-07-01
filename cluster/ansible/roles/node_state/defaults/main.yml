@@ -36,7 +36,7 @@ node_state_zram_algorithm: "zstd"
 # disk (/mnt/usb), beside the existing k3s/longhorn symlinks. Opt-in. Acts only
 # when /mnt/usb is mounted and the path is absent or already a symlink — it
 # never clobbers an unmigrated directory (live migration must stop k3s first).
-node_state_sd_offload_enabled: false
+node_state_sd_offload_enabled: true
 node_state_sd_offload_links:
   - {src: /mnt/usb/kubelet, dest: /var/lib/kubelet}
   - {src: /mnt/usb/log/pods, dest: /var/log/pods}
