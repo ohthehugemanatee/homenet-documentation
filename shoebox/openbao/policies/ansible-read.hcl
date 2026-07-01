@@ -1,6 +1,6 @@
 # Least-privilege policy for the Ansible/Semaphore service token.
 # Create the policy and a token:
-#   bao policy write ansible-read cluster/openbao/policies/ansible-read.hcl
+#   bao policy write ansible-read shoebox/openbao/policies/ansible-read.hcl
 #   bao token create -policy=ansible-read -display-name=semaphore
 #
 # Store the resulting token in Semaphore's project environment as VAULT_TOKEN.

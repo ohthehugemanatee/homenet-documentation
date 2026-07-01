@@ -5,6 +5,7 @@ Shoebox is the always-on NFS host. It runs Semaphore UI in Docker to **schedule*
 ## Layout
 
 - `semaphore/docker-compose.yaml` — Semaphore v2.10.22 (port 3000) + Python deps from `requirements.txt`.
+- `openbao/` — OpenBao keystore compose + `config.hcl` + `policies/` + README. Deployed by `cluster/ansible/deploy-openbao.yaml` (playbook lives with the shared inventory); see `openbao/README.md`.
 - `scripts/validate-semaphore-key.sh` — validates `SEMAPHORE_ACCESS_KEY_ENCRYPTION` (URL-safe base64, exact length, no whitespace).
 - `tests/test-validate-semaphore-key.sh` — unit tests for the validator.
 - `shoebox-ansible-setup.yaml` — bootstrap playbook; runs from the operator's workstation against the shoebox host.

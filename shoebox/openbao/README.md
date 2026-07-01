@@ -52,7 +52,7 @@ bao kv put secret/cluster/semaphore     admin_password=<VALUE> access_key_encryp
 bao kv put secret/cluster/ansible       vault_password=migrated-to-openbao
 
 # Create a scoped Ansible token (uses policies/ansible-read.hcl)
-bao policy write ansible-read cluster/openbao/policies/ansible-read.hcl
+bao policy write ansible-read shoebox/openbao/policies/ansible-read.hcl
 bao token create -policy=ansible-read -display-name=semaphore
 # → store the resulting token as VAULT_TOKEN in Semaphore project environment
 

@@ -4,10 +4,10 @@
 # What this does:
 #   1. Installs docker.io and docker-compose-plugin via apt, ensures the daemon runs.
 #   2. Creates /opt/openbao/ and /opt/openbao/data on shoebox.
-#   3. Copies cluster/openbao/config.hcl and cluster/openbao/docker-compose.yaml.
+#   3. Copies shoebox/openbao/config.hcl and shoebox/openbao/docker-compose.yaml.
 #   4. Starts OpenBao with docker compose up -d.
 #
-# After first run, init and unseal manually — see cluster/openbao/README.md.
+# After first run, init and unseal manually — see shoebox/openbao/README.md.
 #
 # Prerequisites:
 #   - SSH access to the shoebox inventory group (see inventory.yaml)
@@ -54,7 +54,7 @@
 
     - name: Copy OpenBao config
       ansible.builtin.copy:
-        src: ../openbao/config.hcl
+        src: ../../shoebox/openbao/config.hcl
         dest: "{{ openbao_dir }}/config.hcl"
         owner: root
         group: root
@@ -63,7 +63,7 @@
 
     - name: Copy docker-compose.yaml
       ansible.builtin.copy:
-        src: ../openbao/docker-compose.yaml
+        src: ../../shoebox/openbao/docker-compose.yaml
         dest: "{{ openbao_dir }}/docker-compose.yaml"
         owner: root
         group: root
@@ -95,7 +95,7 @@
           OpenBao needs attention (HTTP {{ openbao_health.status }}):
           501 = uninitialized, run `bao operator init`; 503 = sealed, run
           `bao operator unseal` twice with two keys.
-          See cluster/openbao/README.md for the full init/unseal steps.
+          See shoebox/openbao/README.md for the full init/unseal steps.
       when: openbao_health.status in [501, 503]
 
   handlers:

@@ -838,12 +838,12 @@ exceptions:
 
   - pattern: "OpenBao tls_disable=true / tokens in cleartext"
     files:
-      - cluster/openbao/config.hcl
-      - cluster/openbao/docker-compose.yaml
+      - shoebox/openbao/config.hcl
+      - shoebox/openbao/docker-compose.yaml
       - cluster/ansible/deploy-openbao.yaml
     reason: >-
       Conscious tradeoff, documented in config.hcl comments and
-      cluster/openbao/README.md Security notes. The LAN is private;
+      shoebox/openbao/README.md Security notes. The LAN is private;
       all traffic is internal to shoebox (Semaphore reaches OpenBao via
       host LAN IP). Remote operator access requires SSH tunnel per the
       README. Mitigating TLS adds a self-signed cert + VAULT_CACERT
@@ -870,7 +870,7 @@ exceptions:
 
   - pattern: "secret/k3s/* glob in ansible-read.hcl broader than needed"
     files:
-      - cluster/openbao/policies/ansible-read.hcl
+      - shoebox/openbao/policies/ansible-read.hcl
     reason: >-
       Intentional. The k3s/ path prefix is reserved for k3s-related
       secrets (cluster join token now, encryption key in the follow-up
@@ -880,7 +880,7 @@ exceptions:
 
   - pattern: "export VAULT_TOKEN=<root-token> in README"
     files:
-      - cluster/openbao/README.md
+      - shoebox/openbao/README.md
     reason: >-
       The README block immediately above shows creating a scoped token
       first (bao token create -policy=ansible-read) and the final
@@ -890,7 +890,7 @@ exceptions:
 
   - pattern: "Container runs as root / no user directive"
     files:
-      - cluster/openbao/docker-compose.yaml
+      - shoebox/openbao/docker-compose.yaml
     reason: >-
       Partially mitigated in this PR (security_opt: no-new-privileges:true
       added). Full non-root requires knowing the openbao container UID/GID
