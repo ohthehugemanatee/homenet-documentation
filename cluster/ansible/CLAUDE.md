@@ -4,7 +4,7 @@ Playbooks here provision the k3s nodes' OS (apt, sysctl, k3s service, NTP, iSCSI
 
 ## Playbook contracts
 
-- **`node-state.yaml`** — fully idempotent; converges packages, kernel modules, sysctl, NTP, iSCSI, swap, journald. Safe to re-run.
+- **`node-state.yaml`** — fully idempotent; converges packages, kernel modules, sysctl, NTP, iSCSI, swap, journald. Safe to re-run. On control-plane nodes it also hardens the low-RAM (4 GB Pi) masters: kubelet memory `system-reserved`/`kube-reserved`/`eviction-hard` (in the server `config.yaml`), a soft `MemoryHigh` systemd drop-in on `k3s.service`, an opt-in `zram` swap cushion (`node_state_zram_enabled`, adds kubelet `fail-swap-on=false` and skips the blanket `swapoff`), and an opt-in SD-card offload (`node_state_sd_offload_enabled`) that symlinks `/var/lib/kubelet` + `/var/log/pods` onto `/mnt/usb` beside the k3s/longhorn symlinks. The offload only manages symlink state when `/mnt/usb` is mounted and the path is absent/already a symlink — it never clobbers a populated dir, so the live data move (stop k3s, rsync) is still manual.
 - **`rolling-upgrade.yaml`** — `apt dist-upgrade` + reboot + health check + uncordon; `serial: 1`; agents → multimasters → masters (first-master last); rescue path on health failure.
 - **`rolling-release-upgrade.yaml`** — Ubuntu major-version `do-release-upgrade`; same serial/rescue pattern as `rolling-upgrade.yaml`.
 - **`k3s-agent.yaml`** — legacy one-time bootstrap for a fresh node; **NOT idempotent**. Requires `--ask-become-pass --ask-vault-pass` and `new_hostname` / `k3s_token` / `usb_disk` / `cluster_role` vars.

@@ -1,0 +1,6 @@
+# zram compressed-RAM swap — managed by Ansible (node_state role).
+# Consumed by the zram-tools zramswap.service. Provides a compressed in-RAM
+# swap cushion so low-RAM nodes degrade gracefully instead of hitting the hard
+# OOM/thrash wall. kubelet runs with fail-swap-on=false so it tolerates swap.
+ALGO={{ node_state_zram_algorithm }}
+PERCENT={{ node_state_zram_percent }}
