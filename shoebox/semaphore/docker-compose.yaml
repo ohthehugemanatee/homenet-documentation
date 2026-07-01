@@ -54,3 +54,15 @@ services:
     env_file:
       - /opt/semaphore/.env
     restart: unless-stopped
+
+  gatus:
+    image: twinproduction/gatus:v5.12.0
+    dns:
+      - 10.10.10.40  # Pi-hole (same as semaphore — resolves homelab hostnames)
+    volumes:
+      - /etc/gatus/config.yaml:/config/config.yaml:ro
+    env_file:
+      - /etc/ansible/pushover.env
+    ports:
+      - "8080:8080"  # Gatus status page
+    restart: unless-stopped

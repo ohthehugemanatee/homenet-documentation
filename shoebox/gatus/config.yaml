@@ -1,0 +1,32 @@
+# Gatus external health monitor — runs on shoebox alongside Semaphore.
+#
+# Probes the kube-apiserver VIP once per minute from outside the cluster, so
+# alerting works even when the in-cluster Prometheus/Alertmanager pipeline is
+# down. Pushover credentials are injected via /etc/ansible/pushover.env
+# (PUSHOVER_TOKEN / PUSHOVER_USER), mounted as env_file in docker-compose.yaml.
+#
+# Failure logic: 3 consecutive failures → Pushover "down" alert;
+#                first probe that passes after an alert → "recovered" alert.
+# HTTP 200/401/403 all count as "up" ([STATUS] < 500); connection failures and
+# 5xx responses count as "down".
+
+alerting:
+  pushover:
+    application-token: "${PUSHOVER_TOKEN}"
+    user-key: "${PUSHOVER_USER}"
+    default-alert:
+      failure-threshold: 3
+      success-threshold: 1
+      send-on-resolved: true
+
+endpoints:
+  - name: k3s control plane
+    url: https://10.10.10.9:6443/livez
+    client:
+      insecure: true  # k3s apiserver uses a self-signed cert on the VIP
+    interval: 1m
+    conditions:
+      - "[STATUS] < 500"  # 200/401/403 = apiserver responding = up; 5xx/conn-fail = down
+    alerts:
+      - type: pushover
+        description: "kube-apiserver at 10.10.10.9:6443 is unreachable"

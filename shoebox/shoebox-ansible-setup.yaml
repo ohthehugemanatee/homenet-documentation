@@ -334,6 +334,28 @@
         group: root
         mode: '0644'
 
+    # ── Control-plane watchdog (Gatus) ────────────────────────────────────────
+    # Gatus is a community health-monitoring tool that handles probe logic,
+    # consecutive-failure debounce, and Pushover alerting natively — no custom
+    # bash script needed. Runs in Docker alongside Semaphore; reads Pushover
+    # credentials from pushover.env via env_file in docker-compose.yaml.
+
+    - name: Create Gatus config directory
+      ansible.builtin.file:
+        path: /etc/gatus
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Deploy Gatus config
+      ansible.builtin.copy:
+        src: gatus/config.yaml
+        dest: /etc/gatus/config.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
     - name: Install Semaphore Docker systemd service
       ansible.builtin.copy:
         content: |

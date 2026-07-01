@@ -9,6 +9,7 @@ Loki/Prometheus/Grafana monitoring and scheduled Ansible automation for the home
 ```
 shoebox (external, always-on NFS server)
 ├── Semaphore (Docker)          ← schedules + runs both playbooks; alerts on failure
+├── Gatus (Docker)              ← external control-plane watchdog; probes kube-apiserver VIP → Pushover
 ├── kubectl + kubeconfigs       ← for rolling-upgrade.yaml delegate_to tasks
 ├── /var/log/ansible/           ← playbook logs, logrotated weekly (12 weeks)
 └── /var/lib/ansible-upgrade/  ← run state files (failure flag, maintenance flag)
@@ -41,9 +42,7 @@ the cluster, and immune to this observer paradox.
 |---|---|---|
 | Ansible playbook failure | Shell wrapper / rescue block → Pushover | Yes (runs on shoebox) |
 | k8s node health, pod events | Alertmanager → Pushover | No — dies with cluster |
-
-A total cluster blackout is naturally observable (Nextcloud, Plex go offline). An
-external watchdog (RPi Zero script) can be added later without changing this design.
+| Control-plane downtime | Gatus (Docker on shoebox) → Pushover | Yes (external to cluster) |
 
 ---
 
