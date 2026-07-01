@@ -15,9 +15,7 @@ services:
       - openbao-data:/openbao/data
     command: server
     healthcheck:
-      # Healthy whenever the API responds: exit 0 (unsealed) or 2 (sealed) both
-      # mean the listener is alive. Only a dead/wedged API (other exit codes)
-      # is unhealthy — sealed is a normal resting state after a reboot.
+      # Healthy when the API responds — exit 0 (unsealed) or 2 (sealed); sealed is normal post-reboot.
       test: ["CMD-SHELL", "BAO_ADDR=http://127.0.0.1:8200 bao status || test $$? -eq 2"]
       interval: 30s
       timeout: 5s

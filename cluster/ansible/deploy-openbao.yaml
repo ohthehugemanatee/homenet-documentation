@@ -89,14 +89,14 @@
       delay: 2
       until: openbao_health is not failed
 
-    - name: Remind operator to unseal if OpenBao is sealed
+    - name: Remind operator to init/unseal if OpenBao is not ready
       ansible.builtin.debug:
         msg: >-
-          OpenBao is sealed (HTTP 503). Run:
-            docker exec openbao bao operator unseal <key-1>
-            docker exec openbao bao operator unseal <key-2>
-          See cluster/openbao/README.md for details.
-      when: openbao_health.status == 503
+          OpenBao needs attention (HTTP {{ openbao_health.status }}):
+          501 = uninitialized, run `bao operator init`; 503 = sealed, run
+          `bao operator unseal` twice with two keys.
+          See cluster/openbao/README.md for the full init/unseal steps.
+      when: openbao_health.status in [501, 503]
 
   handlers:
     - name: Restart openbao

@@ -39,11 +39,9 @@ export VAULT_TOKEN=<root-token>  # create a scoped token before regular use
 
 bao secrets enable -path=secret kv
 
-# Enable the file audit device — without this, no reads are logged. This is the
-# "every access is logged" guarantee that motivated OpenBao over ansible-vault.
-# Path is on the bind-mounted data dir (/opt/openbao/data on the host). Secret
-# values are HMAC-hashed in the log by default. Rotate/truncate it out of band
-# (logrotate on shoebox) since OpenBao appends indefinitely.
+# Enable the file audit device — without it no reads are logged (the
+# "every access is logged" property that motivated OpenBao). Values are
+# HMAC-hashed; rotate the log out of band (logrotate) as OpenBao appends forever.
 bao audit enable file file_path=/openbao/data/audit.log
 
 # Populate secrets (values from old group_vars/vault.yaml)
