@@ -40,9 +40,8 @@ export VAULT_TOKEN=<root-token>  # create a scoped token before regular use
 
 bao secrets enable -path=secret kv
 
-# Enable the file audit device — without it no reads are logged (the
-# "every access is logged" property that motivated OpenBao). Values are
-# HMAC-hashed; rotate the log out of band (logrotate) as OpenBao appends forever.
+# Enable the file audit device — without it no reads are logged (OpenBao's
+# "every access is logged" property). Values HMAC-hashed; logrotate it (appends forever).
 bao audit enable file file_path=/openbao/data/audit.log
 
 # Populate secrets (values from old group_vars/vault.yaml)
@@ -72,6 +71,8 @@ docker exec openbao bao operator unseal <key-2>
 ---
 
 ## Day-2 operations
+
+Back up the Raft store before upgrades: `docker exec openbao bao operator raft snapshot save /openbao/data/openbao.snap` — `/opt/openbao/data` is the sole copy of every secret, unrecoverable from unseal keys alone. Copy the snapshot off-host.
 
 ### Rotate the Ansible token
 
