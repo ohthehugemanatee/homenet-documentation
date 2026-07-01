@@ -918,6 +918,18 @@ exceptions:
       require knowing the Semaphore container subnet at provision time
       (dynamic Docker bridge). Documented in README Security notes as
       future hardening. Accepted homelab tradeoff.
+
+  - pattern: "Wait for OpenBao API accepts HTTP 501 in status_code list"
+    files:
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      False positive. 501 is Vault/OpenBao's documented sys/health uninitcode
+      (the status returned when the node is not yet initialized). deploy-openbao.yaml
+      runs on first bootstrap BEFORE `bao operator init`, so the health probe must
+      accept 501 — trimming it would make the wait fail on the very first deploy.
+      The full list [200, 429, 472, 473, 501, 503] maps to active / standby /
+      DR-secondary / perf-standby / uninitialized / sealed respectively.
+
   - pattern: "event-exporter sourced from third-party ownkube OCI registry (ghcr.io/ownkube/charts)"
     files:
       - cluster/argocd/apps/kubernetes-event-exporter.yaml
