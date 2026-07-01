@@ -60,7 +60,12 @@ provisioner:
         cluster_role: multi-master
         # Exercise the low-RAM control-plane hardening on the master path.
         node_state_zram_enabled: true
-        node_state_sd_offload_enabled: true
+        # node_state_usb_offload_enabled auto-derives from cluster_role as a
+        # role default, so it's only in scope while node_state runs (converge).
+        # verify.yml is a separate ansible-playbook invocation that never
+        # includes the role — set it explicitly here so it's an inventory var
+        # visible to both plays.
+        node_state_usb_offload_enabled: true
 
 verifier:
   name: ansible
