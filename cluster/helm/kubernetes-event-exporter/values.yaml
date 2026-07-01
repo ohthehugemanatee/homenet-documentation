@@ -1,0 +1,33 @@
+# ownkube/kubernetes-events-exporter — ships cluster Events into Loki so the
+# workload-debug Grafana dashboard can show recent events per namespace.
+# Chart: kubernetes-events-exporter 0.1.2 (OCI: oci://ghcr.io/ownkube/charts),
+# image ghcr.io/ownkube/kubernetes-events-exporter.
+config:
+  logLevel: error
+  logFormat: json
+  # Cap replay to the last 60s so a restart ships only new events.
+  maxEventAgeSeconds: 60
+  route:
+    routes:
+      - match:
+          - receiver: loki
+  receivers:
+    - name: loki
+      loki:
+        url: http://loki.loki.svc.cluster.local:3100/loki/api/v1/push
+        # Loki stream labels — keep cardinality MINIMAL. Only `job` (the
+        # dashboard's selector) and `namespace` (the dashboard's filter).
+        streamLabels:
+          job: kubernetes-event-exporter
+          namespace: "{{ .InvolvedObject.Namespace }}"
+
+# Match the rest of the monitoring stack: amd64 nodes, explicit requests.
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 128Mi

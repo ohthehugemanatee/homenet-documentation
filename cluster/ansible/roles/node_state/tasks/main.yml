@@ -182,7 +182,10 @@
 
 - name: Disable swap immediately
   ansible.builtin.command: swapoff -a
-  when: ansible_swaptotal_mb | int > 0 and ansible_virtualization_type != 'docker'
+  when:
+    - ansible_swaptotal_mb | int > 0
+    - ansible_virtualization_type != 'docker'
+    - not (node_state_zram_enabled | bool)  # keep the zram cushion enabled
   changed_when: ansible_swaptotal_mb | int > 0
 
 - name: Disable swap in fstab
@@ -190,6 +193,37 @@
     path: /etc/fstab
     regexp: '^([^#].*?\sswap\s+\S+\s+.*)$'
     replace: '# \1'
+
+# ── zram compressed-RAM swap cushion (opt-in; low-RAM nodes) ─────────────────
+# Coexists with the swap-disable tasks above: the blanket swapoff is skipped
+# when zram is enabled, and zram-tools manages its own swap device (not fstab).
+
+- name: Install zram-tools
+  ansible.builtin.apt:
+    name: zram-tools
+    state: present
+  when: node_state_zram_enabled | bool
+  tags: [molecule-notest]  # universe not enabled in Docker test containers
+
+- name: Configure zramswap
+  ansible.builtin.template:
+    src: zramswap.j2
+    dest: /etc/default/zramswap
+    owner: root
+    group: root
+    mode: '0644'
+  when: node_state_zram_enabled | bool
+  notify: Restart zramswap
+
+- name: Enable and start zramswap
+  ansible.builtin.systemd:
+    name: zramswap
+    enabled: true
+    state: started
+  when:
+    - node_state_zram_enabled | bool
+    - ansible_virtualization_type != 'docker'
+  tags: [molecule-notest]  # no /dev/zram in Docker test containers
 
 # ── Journald ─────────────────────────────────────────────────────────────
 
@@ -221,6 +255,101 @@
     group: root
     mode: '0600'
   when: cluster_role in ['first-master', 'multi-master']
+  notify: Restart k3s
+
+# ── k3s control-plane memory ceiling (systemd drop-in) ────────────────────
+# Soft MemoryHigh cap on the k3s-server process so it throttles + reclaims
+# under pressure instead of ballooning and thrashing a low-RAM master.
+
+- name: Ensure k3s systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/k3s.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: cluster_role in ['first-master', 'multi-master']
+
+- name: Template k3s MemoryHigh systemd drop-in
+  ansible.builtin.template:
+    src: k3s-memory.conf.j2
+    dest: /etc/systemd/system/k3s.service.d/memory.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: cluster_role in ['first-master', 'multi-master']
+  notify:
+    - Reload systemd
+    - Restart k3s
+
+# ── SD-card offload: relocate kubelet root + pod logs onto the USB disk ───
+# Beside the existing /var/lib/rancher/{k3s,longhorn} -> /mnt/usb symlinks.
+# A log shipper (alloy/promtail) tailing /var/log/pods and kubelet's emptyDir
+# under /var/lib/kubelet on the SD-card root are heavy SD readers; moving them
+# to the USB disk keeps them off the SD. This task only manages the symlink
+# state — it never converts a populated directory (the live data migration
+# must stop k3s first), so an unmigrated dir is left untouched and reported.
+
+- name: Detect whether the USB data disk is mounted
+  ansible.builtin.command: grep -qE '[[:space:]]/mnt/usb[[:space:]]' /proc/mounts
+  register: node_state_usb_mp
+  changed_when: false
+  failed_when: false
+  when: node_state_sd_offload_enabled | bool
+
+- name: Stat SD-offload target paths
+  ansible.builtin.stat:
+    path: "{{ item.dest }}"
+  loop: "{{ node_state_sd_offload_links }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  register: node_state_offload_stat
+  when:
+    - node_state_sd_offload_enabled | bool
+    - (node_state_usb_mp.rc | default(1)) == 0
+
+- name: Ensure USB-side target directories exist for SD-offload
+  ansible.builtin.file:
+    path: "{{ item.src }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ node_state_sd_offload_links }}"
+  loop_control:
+    label: "{{ item.src }}"
+  when:
+    - node_state_sd_offload_enabled | bool
+    - (node_state_usb_mp.rc | default(1)) == 0
+
+- name: Warn on unmigrated SD-offload directories
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.item.dest }} is a populated directory, not a symlink — skipping.
+      Stop k3s and rsync it to {{ item.item.src }} before this can take effect.
+  loop: "{{ node_state_offload_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when:
+    - node_state_sd_offload_enabled | bool
+    - (node_state_usb_mp.rc | default(1)) == 0
+    - item.stat.exists
+    - item.stat.isdir
+    - not item.stat.islnk
+
+- name: Symlink kubelet root + pod logs onto the USB disk
+  ansible.builtin.file:
+    src: "{{ item.item.src }}"
+    dest: "{{ item.item.dest }}"
+    state: link
+    force: true
+  loop: "{{ node_state_offload_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when:
+    - node_state_sd_offload_enabled | bool
+    - (node_state_usb_mp.rc | default(1)) == 0
+    - not (item.stat.exists and item.stat.isdir and not item.stat.islnk)
   notify: Restart k3s
 
 # ── Multipath (must be absent — conflicts with Longhorn iSCSI) ───────────

@@ -1,0 +1,9 @@
+# k3s control-plane memory ceiling — managed by Ansible (node_state role).
+# Changes trigger a daemon-reload + k3s restart via handlers.
+#
+# MemoryHigh is a SOFT limit: the kernel throttles the cgroup and reclaims its
+# memory under pressure, but does not OOM-kill it. We deliberately do NOT set
+# MemoryMax here — a hard cap on a low-RAM node would let the kernel kill the
+# k3s-server (apiserver + etcd) process itself, taking the control plane down.
+[Service]
+MemoryHigh={{ node_state_k3s_memory_high }}

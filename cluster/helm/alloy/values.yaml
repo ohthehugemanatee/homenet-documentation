@@ -3,6 +3,17 @@ alloy:
     content: |
       discovery.kubernetes "pods" {
         role = "pod"
+
+        // Only discover pods scheduled on THIS node. loki.source.kubernetes
+        // streams each pod's logs THROUGH the kube-apiserver (which lives only
+        // on the single control-plane node); without this filter every
+        // DaemonSet replica streamed every pod cluster-wide, peaking at ~1200
+        // concurrent apiserver log streams and saturating the 4 GB Pi. Scoping
+        // discovery to the local node makes each pod scraped exactly once.
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("NODE_NAME")
+        }
       }
 
       discovery.relabel "pods" {
@@ -49,8 +60,22 @@ alloy:
     limits:
       memory: 256Mi
 
+  # NODE_NAME is referenced by the discovery field selector above to scope log
+  # collection to pods on this node. Populated from the pod's own spec.nodeName.
+  extraEnv:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+
 controller:
   type: daemonset
+  # Tolerate the control-plane taint so an Alloy instance runs on the
+  # control-plane node too and collects its pod logs. This is safe now that
+  # discovery is node-scoped (see selectors above): the control-plane Alloy
+  # only scrapes its ~15 local pods (~15 apiserver streams), not the whole
+  # cluster. The node filter — not a taint — is what prevents the apiserver
+  # log-stream overload that previously took the node down.
   tolerations:
     - key: node-role.kubernetes.io/control-plane
       operator: Exists

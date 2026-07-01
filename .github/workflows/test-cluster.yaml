@@ -69,6 +69,25 @@ jobs:
             | sort)
           exit "$FAILED"
 
+      - name: Validate embedded Grafana dashboard JSON
+        run: |
+          python3 - <<'PY'
+          import glob, json, sys, yaml
+          failed = 0
+          for f in sorted(glob.glob("cluster/services/grafana-*.yaml")):
+              cm = yaml.safe_load(open(f))
+              for key, val in (cm.get("data") or {}).items():
+                  if not key.endswith(".json"):
+                      continue
+                  try:
+                      json.loads(val)
+                      print(f"OK  {f}:{key}")
+                  except json.JSONDecodeError as e:
+                      print(f"BAD {f}:{key} — {e}")
+                      failed = 1
+          sys.exit(failed)
+          PY
+
   helm-dry-run:
     name: Helm dry-run
     runs-on: ubuntu-latest
@@ -108,12 +127,34 @@ jobs:
             --namespace monitoring \
             -f cluster/helm/kube-prometheus-stack/values.yaml > /dev/null
 
+      - name: Validate Alertmanager config (amtool)
+        env:
+          AM_VERSION: "0.27.0"
+        run: |
+          # Extract the alertmanager.config block we maintain and lint it
+          # (catches Go-template typos in the Grafana deep link, group_by, etc.)
+          python3 - <<'PY'
+          import yaml
+          v = yaml.safe_load(open("cluster/helm/kube-prometheus-stack/values.yaml"))
+          open("/tmp/am.yaml", "w").write(yaml.safe_dump(v["alertmanager"]["config"]))
+          PY
+          curl -fsSL "https://github.com/prometheus/alertmanager/releases/download/v${AM_VERSION}/alertmanager-${AM_VERSION}.linux-amd64.tar.gz" \
+            | tar xz
+          "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
+
       - name: Dry-run alloy
         run: |
           helm upgrade --install alloy grafana/alloy \
             --namespace monitoring --create-namespace \
             --dry-run \
             -f cluster/helm/alloy/values.yaml
+
+      - name: Dry-run kubernetes-event-exporter
+        run: |
+          helm template kubernetes-event-exporter \
+            oci://ghcr.io/ownkube/charts/kubernetes-events-exporter --version 0.1.2 \
+            --namespace monitoring \
+            -f cluster/helm/kubernetes-event-exporter/values.yaml > /dev/null
 
       - name: Dry-run nfs-subdir-external-provisioner
         run: |

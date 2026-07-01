@@ -43,6 +43,35 @@ jobs:
               --ignore-missing-schemas \
               --kubernetes-version 1.29.0
 
+  kustomize:
+    name: Kustomize builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize
+        env:
+          KUSTOMIZE_VERSION: v5.4.3
+        run: |
+          curl -fsSLo /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
+          kustomize version
+      - name: Build every kustomization
+        # ArgoCD runs `kustomize build` at manifest-generation time. The
+        # kubeconform job only validates raw YAML and never exercises
+        # patches/overlays, so a kustomization that fails to build (bad patch
+        # target, missing resource, invalid syntax) passes lint but breaks the
+        # live ArgoCD sync. Building each one here reproduces what ArgoCD does
+        # and fails CI on the same error.
+        run: |
+          set -euo pipefail
+          find . -name kustomization.yaml -not -path '*/.git/*' -printf '%h\n' \
+            | sort -u | while read -r dir; do
+              echo "::group::kustomize build ${dir}"
+              kustomize build "${dir}"
+              echo "::endgroup::"
+            done
+
   shell:
     name: Shell scripts
     runs-on: ubuntu-latest
