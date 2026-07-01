@@ -2,7 +2,7 @@
 # Deploy OpenBao to shoebox via Docker Compose.
 #
 # What this does:
-#   1. Installs docker.io and docker-compose-plugin via apt, ensures the daemon runs.
+#   1. Installs docker.io (provides `docker compose`) via apt, ensures the daemon runs.
 #   2. Creates /opt/openbao/ and /opt/openbao/data on shoebox.
 #   3. Copies shoebox/openbao/config.hcl and shoebox/openbao/docker-compose.yaml.
 #   4. Starts OpenBao with docker compose up -d.
@@ -27,11 +27,13 @@
     openbao_data_dir: /opt/openbao/data
 
   tasks:
-    - name: Install Docker and Compose plugin
+    - name: Install Docker
+      # docker.io only — it pulls in the compose v2 plugin, matching the proven
+      # pattern in shoebox-ansible-setup.yaml (Semaphore runs via `docker compose`).
+      # docker-compose-plugin is a Docker-official-repo package not in shoebox's
+      # apt sources, so installing it would fail on first bootstrap.
       ansible.builtin.apt:
-        name:
-          - docker.io
-          - docker-compose-plugin
+        name: docker.io
         state: present
         update_cache: true
 
