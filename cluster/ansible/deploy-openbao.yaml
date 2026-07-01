@@ -2,7 +2,7 @@
 # Deploy OpenBao to shoebox via Docker Compose.
 #
 # What this does:
-#   1. Installs docker.io and docker-compose-plugin via apt.
+#   1. Installs docker.io and docker-compose-plugin via apt, ensures the daemon runs.
 #   2. Creates /opt/openbao/ and /opt/openbao/data on shoebox.
 #   3. Copies cluster/openbao/config.hcl and cluster/openbao/docker-compose.yaml.
 #   4. Starts OpenBao with docker compose up -d.
@@ -34,6 +34,12 @@
           - docker-compose-plugin
         state: present
         update_cache: true
+
+    - name: Ensure Docker daemon is running and enabled
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
 
     - name: Create OpenBao directories
       ansible.builtin.file:
