@@ -1,0 +1,25 @@
+services:
+  openbao:
+    image: ghcr.io/openbao/openbao:2
+    container_name: openbao
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    security_opt:
+      - "no-new-privileges:true"
+    ports:
+      - "8200:8200"
+      # 8201 (Raft peer) intentionally not published — single-node deployment
+    volumes:
+      - ./config.hcl:/openbao/config/config.hcl:ro
+      # Plain bind mount: /opt/openbao/data is Ansible-managed (0700 root:root).
+      # A named volume would let `docker compose down -v` wipe the secret store.
+      - /opt/openbao/data:/openbao/data
+    command: server
+    healthcheck:
+      # Healthy when the API responds — exit 0 (unsealed) or 2 (sealed); sealed is normal post-reboot.
+      test: ["CMD-SHELL", "BAO_ADDR=http://127.0.0.1:8200 bao status || test $$? -eq 2"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

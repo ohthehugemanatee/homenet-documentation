@@ -836,6 +836,100 @@ exceptions:
       was necessary to unblock this PR. A separate PR would create a circular
       dependency (gate blocked merge; fix required merge to take effect).
 
+  - pattern: "OpenBao tls_disable=true / tokens in cleartext"
+    files:
+      - shoebox/openbao/config.hcl
+      - shoebox/openbao/docker-compose.yaml
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      Conscious tradeoff, documented in config.hcl comments and
+      shoebox/openbao/README.md Security notes. The LAN is private;
+      all traffic is internal to shoebox (Semaphore reaches OpenBao via
+      host LAN IP). Remote operator access requires SSH tunnel per the
+      README. Mitigating TLS adds a self-signed cert + VAULT_CACERT
+      mount into Semaphore; deferred until TLS is added as a future
+      hardening step.
+
+  - pattern: "Recreate openbao handler redundant / same command as Start task"
+    files:
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      The prior AI review round specifically requested a separate handler
+      for compose-file changes (recreate) vs config-only changes (restart).
+      The handler's second docker compose up -d is idempotent and harmless;
+      removing it would conflict with that earlier request. Accepted.
+
+  - pattern: "shoebox inventory IP placeholder / 192.168.1.10"
+    files:
+      - cluster/ansible/inventory.yaml
+    reason: >-
+      Intentional. The placeholder documents the required field and
+      tells operators exactly what to fill in. An assert in pre_tasks
+      would add complexity for a one-time first-run setup step in a
+      homelab. The comment "update to actual shoebox IP" is the prompt.
+
+  - pattern: "secret/k3s/* glob in ansible-read.hcl broader than needed"
+    files:
+      - shoebox/openbao/policies/ansible-read.hcl
+    reason: >-
+      Intentional. The k3s/ path prefix is reserved for k3s-related
+      secrets (cluster join token now, encryption key in the follow-up
+      PR). A glob over the reserved namespace is the correct scoping;
+      narrowing to secret/k3s/cluster would require a policy update for
+      each new k3s secret added.
+
+  - pattern: "export VAULT_TOKEN=<root-token> in README"
+    files:
+      - shoebox/openbao/README.md
+    reason: >-
+      The README block immediately above shows creating a scoped token
+      first (bao token create -policy=ansible-read) and the final
+      step is bao token revoke <root-token>. The root token is ephemeral
+      bootstrap material; its exposure is the same as the existing
+      vault-password-file pattern it replaces.
+
+  - pattern: "Container runs as root / no user directive"
+    files:
+      - shoebox/openbao/docker-compose.yaml
+    reason: >-
+      Partially mitigated in this PR (security_opt: no-new-privileges:true
+      added). Full non-root requires knowing the openbao container UID/GID
+      and updating /opt/openbao/data ownership in deploy-openbao.yaml
+      simultaneously. Deferred to a hardening pass once the UID is confirmed
+      from the upstream image manifest; adding user: openbao and chowning
+      /opt/openbao/data can be done in one atomic follow-up commit.
+
+  - pattern: "changed_when docker compose stderr fragile across versions"
+    files:
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      Handler-driven restart is the primary change signal; changed_when is
+      advisory for idempotency reporting only. The stderr heuristic is correct
+      for docker-compose-plugin on Ubuntu 22.04/24.04 and acceptable for a
+      homelab. community.docker.docker_compose_v2 deferred (would require
+      adding the collection to requirements.yaml, out of PR A scope).
+
+  - pattern: "No firewall / iptables task scoping port 8200"
+    files:
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      shoebox is a private LAN node with no direct internet exposure.
+      Host-level iptables rules scoping 8200 to a specific subnet would
+      require knowing the Semaphore container subnet at provision time
+      (dynamic Docker bridge). Documented in README Security notes as
+      future hardening. Accepted homelab tradeoff.
+
+  - pattern: "Wait for OpenBao API accepts HTTP 501 in status_code list"
+    files:
+      - cluster/ansible/deploy-openbao.yaml
+    reason: >-
+      False positive. 501 is Vault/OpenBao's documented sys/health uninitcode
+      (the status returned when the node is not yet initialized). deploy-openbao.yaml
+      runs on first bootstrap BEFORE `bao operator init`, so the health probe must
+      accept 501 — trimming it would make the wait fail on the very first deploy.
+      The full list [200, 429, 472, 473, 501, 503] maps to active / standby /
+      DR-secondary / perf-standby / uninitialized / sealed respectively.
+
   - pattern: "event-exporter sourced from third-party ownkube OCI registry (ghcr.io/ownkube/charts)"
     files:
       - cluster/argocd/apps/kubernetes-event-exporter.yaml
