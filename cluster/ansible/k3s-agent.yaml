@@ -32,9 +32,15 @@
       ansible.builtin.include_role:
         name: node_state
 
-    # ── Pre-installation reboot ────────────────────────────────────────────────
+    # ── Reboot only if node_state flagged it necessary ────────────────────────
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
     - name: Pre-installation reboot
       ansible.builtin.reboot:
+      when: reboot_required.stat.exists
 
     # ── k3s installation ───────────────────────────────────────────────────────
     - name: Download k3s agent installer
