@@ -41,7 +41,8 @@ export VAULT_TOKEN=<root-token>  # create a scoped token before regular use
 bao secrets enable -path=secret kv
 
 # Enable the file audit device — without it no reads are logged (OpenBao's
-# "every access is logged" property). Values HMAC-hashed; logrotate it (appends forever).
+# "every access is logged" property). Values HMAC-hashed. It appends forever, so
+# logrotate with copytruncate (OpenBao holds the fd open, won't reopen on SIGHUP).
 bao audit enable file file_path=/openbao/data/audit.log
 
 # Populate secrets (values from old group_vars/vault.yaml)
