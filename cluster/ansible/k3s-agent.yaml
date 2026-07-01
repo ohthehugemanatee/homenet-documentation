@@ -10,59 +10,37 @@
     - "{{ vault_file }}"
 
   tasks:
-    # ── USB data disk (bootstrap-only: initial PARTUUID mount + Longhorn dir) ──
+    # ── USB data disk (bootstrap-only: initial PARTUUID mount + fstab) ─────────
     - name: Get PARTUUID
       ansible.builtin.command: 'lsblk {{ usb_disk }} -no PARTUUID'
       register: partuuid
       when: usb_disk is defined
-    - name: Mount up USB disk
+    - name: Mount USB disk and persist in fstab
       ansible.posix.mount:
         path: /mnt/usb
         src: 'PARTUUID={{ partuuid.stdout }}'
-        fstype: ext4
+        fstype: ext2
         opts: noatime
         state: mounted
-      when: usb_disk is defined
-    - name: Create k3s directory on usb device
-      ansible.builtin.file:
-        path: /mnt/usb/k3s
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      when: usb_disk is defined
-    - name: Create longhorn directory on usb device
-      ansible.builtin.file:
-        path: /mnt/usb/longhorn
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      when: usb_disk is defined
-    - name: Create rancher root directory
-      ansible.builtin.file:
-        path: /var/lib/rancher
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-    - name: Create symbolic link for usb dir
-      ansible.builtin.file:
-        dest: "/var/lib/rancher/k3s"
-        src: "/mnt/usb/k3s"
-        state: link
       when: usb_disk is defined
 
     # ── Converge OS state via the node_state role ──────────────────────────────
     # Covers: packages, kernel modules, sysctl, NTP, swap, journald, multipath,
-    # iSCSI, k3s server config (control-plane only), and the memory drop-in.
+    # iSCSI, k3s server config (control-plane only), memory drop-in, and USB
+    # offload symlinks (k3s, longhorn, kubelet, pod logs).
     - name: Converge OS state
       ansible.builtin.include_role:
         name: node_state
 
-    # ── Pre-installation reboot ────────────────────────────────────────────────
+    # ── Reboot only if node_state flagged it necessary ────────────────────────
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
     - name: Pre-installation reboot
       ansible.builtin.reboot:
+      when: reboot_required.stat.exists
 
     # ── k3s installation ───────────────────────────────────────────────────────
     - name: Download k3s agent installer
