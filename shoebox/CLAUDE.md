@@ -4,7 +4,8 @@ Shoebox is the always-on NFS host. It runs Semaphore UI in Docker to **schedule*
 
 ## Layout
 
-- `semaphore/docker-compose.yaml` — Semaphore v2.10.22 (port 3000) + Python deps from `requirements.txt`.
+- `semaphore/docker-compose.yaml` — Semaphore v2.10.22 (port 3000) + Gatus v5.12.0 (port 8080); Python deps from `requirements.txt`.
+- `gatus/config.yaml` — Gatus external availability monitor config: probes key services (kube-apiserver VIP, Nextcloud, Plex, Grafana, ArgoCD, Semaphore) and Pushover-alerts on consecutive failures. Credentials injected from `/etc/ansible/pushover.env` via docker-compose `env_file`. Status page on `localhost:8080`.
 - `scripts/validate-semaphore-key.sh` — validates `SEMAPHORE_ACCESS_KEY_ENCRYPTION` (URL-safe base64, exact length, no whitespace).
 - `tests/test-validate-semaphore-key.sh` — unit tests for the validator.
 - `shoebox-ansible-setup.yaml` — bootstrap playbook; runs from the operator's workstation against the shoebox host.
