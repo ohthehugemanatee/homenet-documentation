@@ -1,14 +1,21 @@
 # Gatus external health monitor — runs on shoebox alongside Semaphore.
 #
-# Probes the kube-apiserver VIP once per minute from outside the cluster, so
-# alerting works even when the in-cluster Prometheus/Alertmanager pipeline is
-# down. Pushover credentials are injected via /etc/ansible/pushover.env
-# (PUSHOVER_TOKEN / PUSHOVER_USER), mounted as env_file in docker-compose.yaml.
+# Probes key cluster and user-facing services from outside the cluster.
+# This is the "external availability" layer of the monitoring stack:
+#   - Prometheus/Alertmanager covers K8s-internal signals (pod health, resource pressure)
+#   - Gatus covers "can you reach this URL?" — including total cluster blackout scenarios
 #
-# Failure logic: 3 consecutive failures → Pushover "down" alert;
-#                first probe that passes after an alert → "recovered" alert.
-# HTTP 200/401/403 all count as "up" ([STATUS] < 500); connection failures and
-# 5xx responses count as "down".
+# Pushover credentials injected via /etc/ansible/pushover.env (PUSHOVER_TOKEN /
+# PUSHOVER_USER), mounted as env_file in docker-compose.yaml.
+#
+# Two alert tiers:
+#   Tier 1 (critical): failure-threshold 2, interval 1m → ~2 min to alert
+#   Tier 2 (operational): failure-threshold 3, interval 2m → ~6 min to alert
+# All tiers: send-on-resolved true (recovery notification on first passing probe).
+#
+# DNS note: public hostnames resolve via Pi-hole (10.10.10.40 set as docker dns).
+# If Pi-hole is down those probes also fail — that is itself a notable event.
+# The kube-apiserver probe uses a raw IP, so it is DNS-independent.
 
 alerting:
   pushover:
@@ -20,13 +27,67 @@ alerting:
       send-on-resolved: true
 
 endpoints:
+  # ── Tier 1: critical services — alert after 2 consecutive failures (~2 min) ────
+
   - name: k3s control plane
     url: https://10.10.10.9:6443/livez
     client:
       insecure: true  # k3s apiserver uses a self-signed cert on the VIP
     interval: 1m
     conditions:
-      - "[STATUS] < 500"  # 200/401/403 = apiserver responding = up; 5xx/conn-fail = down
+      - "[STATUS] < 500"  # 200/401/403 = apiserver responding = up; conn-fail/5xx = down
     alerts:
       - type: pushover
-        description: "kube-apiserver at 10.10.10.9:6443 is unreachable"
+        failure-threshold: 2
+        description: "kube-apiserver VIP unreachable — possible total cluster outage"
+
+  - name: Nextcloud
+    url: https://nextcloud.berlin.vertesi.com
+    interval: 1m
+    conditions:
+      - "[STATUS] < 500"
+    alerts:
+      - type: pushover
+        failure-threshold: 2
+        description: "nextcloud.berlin.vertesi.com is unreachable"
+
+  - name: Plex
+    url: https://plex.berlin.vertesi.com
+    interval: 1m
+    conditions:
+      - "[STATUS] < 500"
+    alerts:
+      - type: pushover
+        failure-threshold: 2
+        description: "plex.berlin.vertesi.com is unreachable"
+
+  # ── Tier 2: operational tools — alert after 3 consecutive failures (~6 min) ────
+  # Semaphore is probed via Docker service name (same Compose network); this catches
+  # individual container failure without needing to leave the Docker stack.
+
+  - name: Semaphore
+    url: http://semaphore:3000
+    interval: 2m
+    conditions:
+      - "[STATUS] < 500"
+    alerts:
+      - type: pushover
+        description: "Semaphore UI is unreachable"
+
+  - name: Grafana
+    url: https://grafana.berlin.vertesi.com
+    interval: 2m
+    conditions:
+      - "[STATUS] < 500"
+    alerts:
+      - type: pushover
+        description: "grafana.berlin.vertesi.com is unreachable"
+
+  - name: ArgoCD
+    url: https://argocd.berlin.vertesi.com
+    interval: 2m
+    conditions:
+      - "[STATUS] < 500"
+    alerts:
+      - type: pushover
+        description: "argocd.berlin.vertesi.com is unreachable"

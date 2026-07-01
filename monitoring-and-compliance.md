@@ -9,7 +9,7 @@ Loki/Prometheus/Grafana monitoring and scheduled Ansible automation for the home
 ```
 shoebox (external, always-on NFS server)
 ├── Semaphore (Docker)          ← schedules + runs both playbooks; alerts on failure
-├── Gatus (Docker)              ← external control-plane watchdog; probes kube-apiserver VIP → Pushover
+├── Gatus (Docker)              ← external availability monitor; probes key services → Pushover + status page
 ├── kubectl + kubeconfigs       ← for rolling-upgrade.yaml delegate_to tasks
 ├── /var/log/ansible/           ← playbook logs, logrotated weekly (12 weeks)
 └── /var/lib/ansible-upgrade/  ← run state files (failure flag, maintenance flag)
@@ -38,11 +38,19 @@ the cluster, and immune to this observer paradox.
 
 ### Alerting layers
 
-| What | How | Survives cluster down? |
+Each layer answers a different question; no duplication between them.
+
+| What | Tool | Survives cluster down? |
 |---|---|---|
-| Ansible playbook failure | Shell wrapper / rescue block → Pushover | Yes (runs on shoebox) |
-| k8s node health, pod events | Alertmanager → Pushover | No — dies with cluster |
-| Control-plane downtime | Gatus (Docker on shoebox) → Pushover | Yes (external to cluster) |
+| Pod crash loops, OOM kills, high restarts | Alertmanager → Pushover | Yes — pods survive apiserver death |
+| kube-apiserver process down | Alertmanager → Pushover (`KubeAPIServerDown` rule) | Yes — Alertmanager pod keeps running |
+| Service endpoint availability; total cluster blackout | Gatus → Pushover + status page | Yes — runs on shoebox, external |
+| Ansible playbook failure | Ansible rescue block → Pushover | Yes — runs on shoebox |
+| GitOps drift / sync failure | ArgoCD notifications → Pushover | No — in-cluster |
+
+Gatus probes are the only signal that detects a total cluster blackout (all nodes
+down simultaneously). Alertmanager can survive a kube-apiserver crash because
+the Alertmanager pod keeps running — but it cannot survive the entire node failing.
 
 ---
 
