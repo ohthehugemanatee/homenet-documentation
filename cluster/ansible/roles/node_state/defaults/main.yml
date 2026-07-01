@@ -32,11 +32,15 @@ node_state_zram_enabled: false
 node_state_zram_percent: 50
 node_state_zram_algorithm: "zstd"
 
-# Relocate the kubelet root and pod logs off the SD-card root onto the USB data
-# disk (/mnt/usb), beside the existing k3s/longhorn symlinks. Opt-in. Acts only
-# when /mnt/usb is mounted and the path is absent or already a symlink — it
-# never clobbers an unmigrated directory (live migration must stop k3s first).
-node_state_sd_offload_enabled: true
-node_state_sd_offload_links:
+# ── USB offload: relocate heavy I/O paths off the SD-card onto the USB disk ───
+# Auto-enabled for control-plane nodes (masters always have a USB data disk in
+# this cluster). The runtime /mnt/usb mount check is the safety gate — if the
+# disk isn't mounted, all offload tasks are skipped regardless of this flag.
+# Override to false per-host to disable even when mounted.
+node_state_usb_offload_enabled: >-
+  {{ (cluster_role | default('agent')) in ['first-master', 'multi-master'] }}
+node_state_usb_offload_links:
+  - {src: /mnt/usb/k3s, dest: /var/lib/rancher/k3s}
+  - {src: /mnt/usb/longhorn, dest: /var/lib/rancher/longhorn}
   - {src: /mnt/usb/kubelet, dest: /var/lib/kubelet}
   - {src: /mnt/usb/log/pods, dest: /var/log/pods}

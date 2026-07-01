@@ -282,47 +282,59 @@
     - Reload systemd
     - Restart k3s
 
-# ── SD-card offload: relocate kubelet root + pod logs onto the USB disk ───
-# Beside the existing /var/lib/rancher/{k3s,longhorn} -> /mnt/usb symlinks.
-# A log shipper (alloy/promtail) tailing /var/log/pods and kubelet's emptyDir
-# under /var/lib/kubelet on the SD-card root are heavy SD readers; moving them
-# to the USB disk keeps them off the SD. This task only manages the symlink
-# state — it never converts a populated directory (the live data migration
-# must stop k3s first), so an unmigrated dir is left untouched and reported.
+# ── USB offload: relocate heavy I/O paths onto the USB data disk ──────────────
+# Manages symlinks for k3s data, longhorn, kubelet root, and pod logs — all onto
+# /mnt/usb. Only acts when /mnt/usb is mounted and the path is absent or already
+# a symlink — never clobbers a populated directory (live migration must stop k3s
+# first and rsync).
 
 - name: Detect whether the USB data disk is mounted
   ansible.builtin.command: grep -qE '[[:space:]]/mnt/usb[[:space:]]' /proc/mounts
   register: node_state_usb_mp
   changed_when: false
   failed_when: false
-  when: node_state_sd_offload_enabled | bool
+  when: node_state_usb_offload_enabled | bool
 
-- name: Stat SD-offload target paths
+- name: Ensure parent directories exist for USB offload targets
+  ansible.builtin.file:
+    path: "{{ item.dest | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ node_state_usb_offload_links }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  when:
+    - node_state_usb_offload_enabled | bool
+    - (node_state_usb_mp.rc | default(1)) == 0
+
+- name: Stat USB-offload target paths
   ansible.builtin.stat:
     path: "{{ item.dest }}"
-  loop: "{{ node_state_sd_offload_links }}"
+  loop: "{{ node_state_usb_offload_links }}"
   loop_control:
     label: "{{ item.dest }}"
   register: node_state_offload_stat
   when:
-    - node_state_sd_offload_enabled | bool
+    - node_state_usb_offload_enabled | bool
     - (node_state_usb_mp.rc | default(1)) == 0
 
-- name: Ensure USB-side target directories exist for SD-offload
+- name: Ensure USB-side target directories exist for offload
   ansible.builtin.file:
     path: "{{ item.src }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
-  loop: "{{ node_state_sd_offload_links }}"
+  loop: "{{ node_state_usb_offload_links }}"
   loop_control:
     label: "{{ item.src }}"
   when:
-    - node_state_sd_offload_enabled | bool
+    - node_state_usb_offload_enabled | bool
     - (node_state_usb_mp.rc | default(1)) == 0
 
-- name: Warn on unmigrated SD-offload directories
+- name: Warn on unmigrated USB-offload directories
   ansible.builtin.debug:
     msg: >-
       {{ item.item.dest }} is a populated directory, not a symlink — skipping.
@@ -331,13 +343,13 @@
   loop_control:
     label: "{{ item.item.dest }}"
   when:
-    - node_state_sd_offload_enabled | bool
+    - node_state_usb_offload_enabled | bool
     - (node_state_usb_mp.rc | default(1)) == 0
     - item.stat.exists
     - item.stat.isdir
     - not item.stat.islnk
 
-- name: Symlink kubelet root + pod logs onto the USB disk
+- name: Symlink heavy I/O paths onto the USB disk
   ansible.builtin.file:
     src: "{{ item.item.src }}"
     dest: "{{ item.item.dest }}"
@@ -347,7 +359,7 @@
   loop_control:
     label: "{{ item.item.dest }}"
   when:
-    - node_state_sd_offload_enabled | bool
+    - node_state_usb_offload_enabled | bool
     - (node_state_usb_mp.rc | default(1)) == 0
     - not (item.stat.exists and item.stat.isdir and not item.stat.islnk)
   notify: Restart k3s

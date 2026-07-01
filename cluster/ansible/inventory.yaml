@@ -10,9 +10,8 @@ all:
           cluster_role: "first-master"
       vars:
         # 4 GB Pi control-plane nodes with root on SD card: enable the memory
-        # cushion + SD-card offload (kubelet root + pod logs onto /mnt/usb).
+        # cushion (zram). USB offload is auto-derived from cluster_role.
         node_state_zram_enabled: true
-        node_state_sd_offload_enabled: true
     multimasters:
       hosts:
         cluster3:
@@ -22,7 +21,6 @@ all:
       vars:
         cluster_role: "multi-master"
         node_state_zram_enabled: true
-        node_state_sd_offload_enabled: true
     agents:
       hosts:
         nuc1:
