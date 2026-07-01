@@ -64,5 +64,5 @@ services:
     env_file:
       - /etc/ansible/pushover.env
     ports:
-      - "8080:8080"  # Gatus status page
+      - "127.0.0.1:8080:8080"  # Gatus status page (localhost only — not LAN-wide)
     restart: unless-stopped
