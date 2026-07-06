@@ -1,0 +1,16 @@
+---
+# Scenario: mint-remote-debug-token.yaml mints a token via TokenRequest.
+# Expected: the TokenRequest task actually runs (not skipped) with the
+# exact SA name/namespace/--duration flag baked into the playbook.
+monkeyble_scenarios:
+  mint_remote_debug_token:
+    tasks_to_test:
+      - task: "Create token via TokenRequest"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "fake.debug.token"
+                rc: 0

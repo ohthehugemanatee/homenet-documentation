@@ -90,5 +90,32 @@ fi
 
 echo "  PASSED: cross_play_abort (play aborted with expected message, failure flag persists)"
 
+# ── Scenario 4: mint-remote-debug-token.yaml mints a token with the expected invocation ──
+echo ""
+echo "══════════════════════════════════════════════"
+echo "  Scenario: mint_remote_debug_token"
+echo "══════════════════════════════════════════════"
+
+mint_output=$(ansible-playbook \
+    -i "$INVENTORY" \
+    -e "@${SCRIPT_DIR}/test_mint_remote_debug_token.yml" \
+    -e "monkeyble_scenario=mint_remote_debug_token" \
+    -vv \
+    mint-remote-debug-token.yaml 2>&1)
+
+echo "$mint_output"
+
+if ! echo "$mint_output" | grep -q -- "--duration=8h"; then
+  echo "  ERROR: expected default --duration=8h in the rendered kubectl command"
+  exit 1
+fi
+
+if ! echo "$mint_output" | grep -q "create token claude-remote-debug -n default"; then
+  echo "  ERROR: expected 'create token claude-remote-debug -n default' in the rendered kubectl command"
+  exit 1
+fi
+
+echo "  PASSED: mint_remote_debug_token"
+
 echo ""
 echo "All Monkeyble scenarios passed."

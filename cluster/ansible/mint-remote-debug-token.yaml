@@ -1,0 +1,33 @@
+---
+# Mints a short-lived, bounded, revocable bearer token for the
+# claude-remote-debug ServiceAccount (cluster/services/claude-remote-debug-rbac.yaml),
+# for pasting into a Claude Code cloud environment's "Environment variables"
+# as K8S_BEARER_TOKEN. See remote-debugging.md for the full setup.
+#
+# Usage:
+#   ansible-playbook -i inventory.yaml mint-remote-debug-token.yaml
+#   ansible-playbook -i inventory.yaml -e debug_token_duration=24h mint-remote-debug-token.yaml
+#
+# Intentionally prints the token (no `no_log`) — the operator must see and
+# copy it. Safe because the identity is read-only, has no Secrets access,
+# and any minted token is trivially revoked (see remote-debugging.md).
+- name: Mint a bounded-TTL debug token for claude-remote-debug
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
+    debug_token_duration: "8h"
+  tasks:
+    - name: Create token via TokenRequest
+      ansible.builtin.command:
+        cmd: >
+          kubectl --kubeconfig={{ k8s_kubeconfig }}
+          create token claude-remote-debug -n default
+          --duration={{ debug_token_duration }}
+      changed_when: false
+      register: minted_token
+
+    - name: Print token for the operator to paste into the Claude Code environment
+      ansible.builtin.debug:
+        msg: "{{ minted_token.stdout }}"
