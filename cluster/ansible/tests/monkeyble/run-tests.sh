@@ -90,7 +90,11 @@ fi
 
 echo "  PASSED: cross_play_abort (play aborted with expected message, failure flag persists)"
 
-# ── Scenario 4: mint-remote-debug-token.yaml mints a token with the expected invocation ──
+# ── Scenario 4: mint-remote-debug-token.yaml mints and prints a token ────────
+# Monkeyble replaces the TokenRequest task's module+args entirely with its own
+# mock, so the rendered kubectl command line is never observable here — what
+# IS observable, and worth asserting, is that the mocked stdout actually flows
+# through `register` into the final debug print.
 echo ""
 echo "══════════════════════════════════════════════"
 echo "  Scenario: mint_remote_debug_token"
@@ -100,18 +104,16 @@ mint_output=$(ansible-playbook \
     -i "$INVENTORY" \
     -e "@${SCRIPT_DIR}/test_mint_remote_debug_token.yml" \
     -e "monkeyble_scenario=mint_remote_debug_token" \
-    -vv \
-    mint-remote-debug-token.yaml 2>&1)
+    mint-remote-debug-token.yaml 2>&1) || {
+  echo "  ERROR: mint-remote-debug-token.yaml failed"
+  echo "$mint_output"
+  exit 1
+}
 
 echo "$mint_output"
 
-if ! echo "$mint_output" | grep -q -- "--duration=8h"; then
-  echo "  ERROR: expected default --duration=8h in the rendered kubectl command"
-  exit 1
-fi
-
-if ! echo "$mint_output" | grep -q "create token claude-remote-debug -n default"; then
-  echo "  ERROR: expected 'create token claude-remote-debug -n default' in the rendered kubectl command"
+if ! echo "$mint_output" | grep -q '"msg": "fake.debug.token"'; then
+  echo "  ERROR: expected the minted token to be printed via the final debug task"
   exit 1
 fi
 
