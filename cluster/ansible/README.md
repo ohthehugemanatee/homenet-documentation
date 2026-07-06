@@ -7,6 +7,7 @@
 | `k3s-agent.yaml` | Initial node provisioning — hostname, k3s install | No (imperative) |
 | `node-state.yaml` | Idempotent state enforcement — packages, config, services | Yes |
 | `rolling-upgrade.yaml` | Rolling OS dist-upgrade with drain/uncordon | Yes |
+| `mint-remote-debug-token.yaml` | Mints a bounded-TTL bearer token for the `claude-remote-debug` ServiceAccount (see `remote-debugging.md`) | Yes |
 
 Note that to keep CI happy, the encrypted vault file is not loaded by default.
 `k3s-agent.yaml` and `rolling-upgrade.yaml` load it via

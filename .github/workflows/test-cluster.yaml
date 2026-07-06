@@ -47,6 +47,18 @@ jobs:
           done
           kubectl apply -f cluster/priorityClasses/
 
+      - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
+        run: |
+          kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
+          SA=system:serviceaccount:default:claude-remote-debug
+          test "$(kubectl auth can-i list pods --as="$SA")" = yes
+          test "$(kubectl auth can-i get pods/log --as="$SA")" = yes
+          test "$(kubectl auth can-i list events --as="$SA" -A)" = yes
+          test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
+          test "$(kubectl auth can-i create pods/exec --as="$SA")" = no
+          test "$(kubectl auth can-i delete pods --as="$SA")" = no
+          echo "claude-remote-debug auth matrix OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
