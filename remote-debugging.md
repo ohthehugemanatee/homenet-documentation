@@ -40,6 +40,17 @@ no `attach`, no writes). There is no logging backend (Loki isn't deployed) — `
 logs` reads directly from the API server, which is why this design exposes the API
 server rather than Prometheus/Grafana.
 
+**`view` also grants cluster-wide `get`/`list` on ConfigMaps** — don't use ConfigMaps
+for secret-adjacent data, since anything in one is now readable from a Claude Code
+session.
+
+**Privacy note:** `view` grants `get pods/log` cluster-wide, and a session with a
+valid token can read live logs from every workload — Plex, Nextcloud, Unifi,
+delugevpn, etc. Those logs can contain personal viewing/download activity and
+household network topology (Unifi). This is the actual personal-data exposure
+surface of this design, distinct from "no Secrets access" — weigh it before
+widening scope (e.g. handing the token to anything beyond this one use case).
+
 ## Configuring the Claude Code environment
 
 1. **Network access:** set to `Custom`. Add the tunnel hostname (e.g.
@@ -83,7 +94,11 @@ certs and DDNS — no new signup):
    **Service Auth** (this is a machine client, not a browser login).
 5. Access → Service Auth → Service Tokens → create one. The Client ID/Secret shown
    (once, non-retrievable after) become `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`.
-6. Sync the `cloudflared` ArgoCD Application now that the real secret exists.
+6. Sync the `cloudflared` ArgoCD Application now that the real secret exists. Don't
+   sync it before step 3 — `cloudflared` will `CrashLoopBackOff` without the token,
+   and the Application's `on-out-of-sync` Pushover alert will page you for a state
+   you caused on purpose. Same ordering caveat applies if this Application is ever
+   re-synced from scratch (e.g. cluster rebuild).
 
 **Verify:** `curl -o /dev/null -w "%{http_code}" https://k8s-debug.vertesi.com/api/v1/namespaces`
 should return `403` (Access blocks unauthenticated requests), and the tunnel should
@@ -133,3 +148,9 @@ kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
   cluster's actual k3s `--tls-san` config — confirm with a live smoke test
   (`kubectl get/describe/logs/logs -f/get events` succeed; `get secrets`/`exec`
   are `Forbidden`) before relying on this day to day.
+- `cluster/services/cloudflared.yaml`'s image tag is pinned and will drift. This
+  pod fronts the API server, so a stale tag here is higher-priority to keep current
+  than most other workloads in this cluster — check
+  [cloudflared releases](https://github.com/cloudflare/cloudflared/releases)
+  periodically and bump manually; there's no Renovate/Dependabot wired up for
+  cluster manifests.
