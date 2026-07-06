@@ -1,6 +1,6 @@
 # CLAUDE.md — repo-wide rules for agents
 
-This is a homelab k3s cluster's docs + IaC: K8s manifests + Helm overrides in `cluster/`, Ansible (playbooks + roles + tests) in `cluster/ansible/`, an external Ansible runner in `shoebox/`, CI in `.github/`. For project context read `@README.md`, `@dns.md`, `@nextcloud.md`, `@warehouse.md`, `@ansible-scheduler.md`.
+This is a homelab k3s cluster's docs + IaC: K8s manifests + Helm overrides in `cluster/`, Ansible (playbooks + roles + tests) in `cluster/ansible/`, an external Ansible runner in `shoebox/`, CI in `.github/`. For project context read `@README.md`, `@dns.md`, `@nextcloud.md`, `@warehouse.md`, `@ansible-scheduler.md`, `@remote-debugging.md`.
 
 Every directory has its own `CLAUDE.md` (with `AGENTS.md` symlink); Claude Code loads each from cwd up to repo root, so this file holds only the cross-cutting rules.
 
