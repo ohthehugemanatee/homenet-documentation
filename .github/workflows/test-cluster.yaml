@@ -53,7 +53,7 @@ jobs:
           SA=system:serviceaccount:default:claude-remote-debug
           test "$(kubectl auth can-i list pods --as="$SA")" = yes
           test "$(kubectl auth can-i get pods/log --as="$SA")" = yes
-          test "$(kubectl auth can-i list events.k8s.io --as="$SA" -A)" = yes
+          test "$(kubectl auth can-i list events --as="$SA" -A)" = yes
           test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
           test "$(kubectl auth can-i create pods/exec --as="$SA")" = no
           test "$(kubectl auth can-i delete pods --as="$SA")" = no
