@@ -22,7 +22,8 @@ spec:
       containers:
         - name: cloudflared
           # Check https://github.com/cloudflare/cloudflared/releases for the
-          # current stable tag before bumping.
+          # current stable tag before bumping — this pod fronts the API
+          # server, so treat a stale tag here as higher-priority than most.
           image: cloudflare/cloudflared:2024.12.2
           args:
             - tunnel
@@ -44,6 +45,19 @@ spec:
           ports:
             - name: metrics
               containerPort: 2000
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /ready
@@ -55,10 +69,15 @@ spec:
               path: /ready
               port: metrics
             periodSeconds: 30
-            failureThreshold: 3
+            # Looser than readiness: a transient upstream blip during
+            # reconnect shouldn't trigger a restart/reconnect storm.
+            failureThreshold: 6
           resources:
             requests:
               cpu: 10m
               memory: 32Mi
             limits:
               memory: 64Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}
