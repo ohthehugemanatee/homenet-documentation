@@ -1,0 +1,132 @@
+#!/bin/bash
+# SessionStart hook: bootstrap read-only kubectl access to the k3s cluster
+# through the cloudflared Access tunnel described in remote-debugging.md.
+#
+# Only runs in Claude Code cloud sessions, and only if the operator has
+# configured the remote-debug env vars for this environment. Safe to re-run
+# on resume/clear/compact (idempotent): reuses an already-installed
+# cloudflared/kubectl and an already-running forwarder instead of restarting.
+set -uo pipefail
+
+if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
+  exit 0
+fi
+
+# Remote debug is opt-in per environment. If it isn't configured, stay quiet
+# and let the session start normally — this is not an error.
+if [ -z "${K8S_API_HOSTNAME:-}" ] || [ -z "${CF_ACCESS_CLIENT_ID:-}" ] ||
+   [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ] || [ -z "${K8S_BEARER_TOKEN:-}" ]; then
+  echo "session-start: remote-debug env vars not set, skipping cloudflared bootstrap" >&2
+  exit 0
+fi
+
+# Keep in sync with the image tag in cluster/services/cloudflared.yaml —
+# see remote-debugging.md open risks for why this pod's version matters.
+CLOUDFLARED_VERSION="2024.12.2"
+BIN_DIR="${HOME}/.local/bin"
+mkdir -p "$BIN_DIR"
+export PATH="${BIN_DIR}:${PATH}"
+echo "export PATH=\"${BIN_DIR}:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+
+arch() {
+  case "$(uname -m)" in
+    x86_64) echo "amd64" ;;
+    aarch64|arm64) echo "arm64" ;;
+    *) echo "unsupported" ;;
+  esac
+}
+ARCH="$(arch)"
+
+if ! command -v cloudflared >/dev/null 2>&1; then
+  if [ "$ARCH" = "unsupported" ]; then
+    echo "session-start: unsupported arch $(uname -m), skipping cloudflared install" >&2
+  else
+    curl -fsSL -o "${BIN_DIR}/cloudflared" \
+      "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${ARCH}" \
+      && chmod +x "${BIN_DIR}/cloudflared" \
+      || echo "session-start: cloudflared download failed (check environment's Custom allowed domains for github.com/objects.githubusercontent.com)" >&2
+  fi
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  if [ "$ARCH" = "unsupported" ]; then
+    echo "session-start: unsupported arch $(uname -m), skipping kubectl install" >&2
+  else
+    KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt 2>/dev/null)"
+    if [ -n "$KUBECTL_VERSION" ]; then
+      curl -fsSL -o "${BIN_DIR}/kubectl" \
+        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
+        && chmod +x "${BIN_DIR}/kubectl" \
+        || echo "session-start: kubectl download failed (check environment's Custom allowed domains for dl.k8s.io)" >&2
+    else
+      echo "session-start: could not resolve dl.k8s.io/release/stable.txt, skipping kubectl install" >&2
+    fi
+  fi
+fi
+
+# Reuse an already-running forwarder across resume/clear/compact.
+PIDFILE="/tmp/cloudflared-access-tcp.pid"
+LOGFILE="/tmp/cloudflared-access-tcp.log"
+FORWARDER_UP=0
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  FORWARDER_UP=1
+fi
+
+if [ "$FORWARDER_UP" -eq 0 ] && command -v cloudflared >/dev/null 2>&1; then
+  nohup cloudflared access tcp \
+    --hostname "$K8S_API_HOSTNAME" \
+    --url 127.0.0.1:6443 \
+    --service-token-id "$CF_ACCESS_CLIENT_ID" \
+    --service-token-secret "$CF_ACCESS_CLIENT_SECRET" \
+    > "$LOGFILE" 2>&1 &
+  echo $! > "$PIDFILE"
+
+  # Give the forwarder a few seconds to come up. Non-fatal if it doesn't —
+  # this can legitimately fail if the environment's Custom network allowlist
+  # doesn't include the tunnel hostname / *.cloudflareaccess.com, and we'd
+  # rather let the session start than block on it (see remote-debugging.md).
+  UP=0
+  for _ in $(seq 1 15); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/6443") 2>/dev/null; then
+      exec 3<&- 3>&-
+      UP=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$UP" -eq 0 ]; then
+    echo "session-start: cloudflared forwarder did not come up on 127.0.0.1:6443 within 15s — see $LOGFILE" >&2
+  fi
+fi
+
+# Throwaway kubeconfig — regenerated every session, never committed.
+KUBE_DIR="${HOME}/.kube"
+mkdir -p "$KUBE_DIR"
+KUBECONFIG_PATH="${KUBE_DIR}/config-remote-debug"
+cat > "$KUBECONFIG_PATH" <<EOF
+apiVersion: v1
+kind: Config
+clusters:
+  - name: homenet-remote-debug
+    cluster:
+      server: https://127.0.0.1:6443
+      # The forwarder's inner TLS handshake terminates at the real API
+      # server, not at 127.0.0.1, so the SAN won't match — see
+      # remote-debugging.md open risks. The Cloudflare Access service token
+      # plus the bearer token below are the actual auth boundary here.
+      insecure-skip-tls-verify: true
+contexts:
+  - name: homenet-remote-debug
+    context:
+      cluster: homenet-remote-debug
+      user: homenet-remote-debug
+current-context: homenet-remote-debug
+users:
+  - name: homenet-remote-debug
+    user:
+      token: "${K8S_BEARER_TOKEN}"
+EOF
+chmod 600 "$KUBECONFIG_PATH"
+
+echo "export KUBECONFIG=${KUBECONFIG_PATH}" >> "$CLAUDE_ENV_FILE"
+echo "session-start: remote-debug kubeconfig written to ${KUBECONFIG_PATH}" >&2
