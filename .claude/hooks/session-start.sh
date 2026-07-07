@@ -37,14 +37,42 @@ arch() {
 }
 ARCH="$(arch)"
 
+# Downloads to a temp file in the same directory as $2 (so the final `mv` is
+# an atomic rename — a failed/partial download never leaves a broken binary
+# at the real path) and, if $3 is given, verifies it against a published
+# sha256 before installing. A missing/unreachable checksum file is not
+# treated as fatal — it degrades to an unverified install with a warning,
+# since not every release channel is confirmed to publish one.
+download_verified() {
+  local url="$1" dest="$2" checksum_url="${3:-}" tmp expected actual
+  tmp="$(mktemp "${dest}.XXXXXX")" || return 1
+  if ! curl -fsSL -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if [ -n "$checksum_url" ]; then
+    if expected="$(curl -fsSL "$checksum_url" 2>/dev/null | awk '{print $1; exit}')" && [ -n "$expected" ]; then
+      actual="$(sha256sum "$tmp" | awk '{print $1}')"
+      if [ "$expected" != "$actual" ]; then
+        echo "session-start: checksum mismatch for $(basename "$dest") (expected $expected, got $actual) — refusing to install" >&2
+        rm -f "$tmp"
+        return 1
+      fi
+    else
+      echo "session-start: no checksum available at $checksum_url, installing $(basename "$dest") unverified" >&2
+    fi
+  fi
+  chmod +x "$tmp"
+  mv "$tmp" "$dest"
+}
+
 if ! command -v cloudflared >/dev/null 2>&1; then
   if [ "$ARCH" = "unsupported" ]; then
     echo "session-start: unsupported arch $(uname -m), skipping cloudflared install" >&2
   else
-    curl -fsSL -o "${BIN_DIR}/cloudflared" \
-      "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${ARCH}" \
-      && chmod +x "${BIN_DIR}/cloudflared" \
-      || echo "session-start: cloudflared download failed (check environment's Custom allowed domains for github.com/objects.githubusercontent.com)" >&2
+    CF_URL="https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${ARCH}"
+    download_verified "$CF_URL" "${BIN_DIR}/cloudflared" "${CF_URL}.sha256" \
+      || echo "session-start: cloudflared install failed (check environment's Custom allowed domains for github.com/objects.githubusercontent.com)" >&2
   fi
 fi
 
@@ -54,10 +82,9 @@ if ! command -v kubectl >/dev/null 2>&1; then
   else
     KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt 2>/dev/null)"
     if [ -n "$KUBECTL_VERSION" ]; then
-      curl -fsSL -o "${BIN_DIR}/kubectl" \
-        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
-        && chmod +x "${BIN_DIR}/kubectl" \
-        || echo "session-start: kubectl download failed (check environment's Custom allowed domains for dl.k8s.io)" >&2
+      KUBECTL_URL="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+      download_verified "$KUBECTL_URL" "${BIN_DIR}/kubectl" "${KUBECTL_URL}.sha256" \
+        || echo "session-start: kubectl install failed (check environment's Custom allowed domains for dl.k8s.io)" >&2
     else
       echo "session-start: could not resolve dl.k8s.io/release/stable.txt, skipping kubectl install" >&2
     fi
