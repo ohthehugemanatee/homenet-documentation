@@ -14,8 +14,6 @@ if [ -z "${K8S_API_HOSTNAME:-}" ] || [ -z "${CF_ACCESS_CLIENT_ID:-}" ] ||
   exit 0
 fi
 
-# Keep in sync with the image tag in cluster/services/cloudflared.yaml.
-CLOUDFLARED_VERSION="2024.12.2"
 BIN_DIR="${HOME}/.local/bin"
 mkdir -p "$BIN_DIR"
 export PATH="${BIN_DIR}:${PATH}"
@@ -56,13 +54,24 @@ download_verified() {
   mv "$tmp" "$dest"
 }
 
+# Installs from Cloudflare's own apt repo (pkg.cloudflare.com) rather than
+# GitHub releases; apt verifies the package signature against the repo's
+# GPG key, so there's no separate checksum step here.
 if ! command -v cloudflared >/dev/null 2>&1; then
-  if [ "$ARCH" = "unsupported" ]; then
-    echo "session-start: unsupported arch $(uname -m), skipping cloudflared install" >&2
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "session-start: apt-get not found, skipping cloudflared install (pkg.cloudflare.com ships apt/yum repos only)" >&2
+  elif [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+    echo "session-start: not root and no sudo available, skipping cloudflared install" >&2
   else
-    CF_URL="https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${ARCH}"
-    download_verified "$CF_URL" "${BIN_DIR}/cloudflared" "${CF_URL}.sha256" \
-      || echo "session-start: cloudflared install failed (check environment's Custom allowed domains for github.com/objects.githubusercontent.com)" >&2
+    SUDO=()
+    [ "$(id -u)" -ne 0 ] && SUDO=(sudo)
+    if ! { "${SUDO[@]}" mkdir -p --mode=0755 /usr/share/keyrings \
+      && curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | "${SUDO[@]}" tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null \
+      && echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | "${SUDO[@]}" tee /etc/apt/sources.list.d/cloudflared.list >/dev/null \
+      && "${SUDO[@]}" apt-get update -qq \
+      && "${SUDO[@]}" apt-get install -y cloudflared >/dev/null; }; then
+      echo "session-start: cloudflared install failed (check environment's Custom allowed domains for pkg.cloudflare.com)" >&2
+    fi
   fi
 fi
 
