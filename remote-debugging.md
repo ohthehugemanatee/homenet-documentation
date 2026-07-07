@@ -53,11 +53,14 @@ widening scope (e.g. handing the token to anything beyond this one use case).
 
 ## Configuring the Claude Code environment
 
-1. **Network access:** set to `Custom`. Add the tunnel hostname (e.g.
-   `k8s-debug.vertesi.com`) to **Allowed domains**, plus whatever Cloudflare edge
-   FQDNs the chosen client mechanism needs (`*.cloudflareaccess.com`,
-   `*.argotunnel.com` are likely candidates — confirm empirically from inside a
-   real session before finalizing, since Cloudflare doesn't publish one static list).
+1. **Network access:** set to `Custom`. Add to **Allowed domains**: the tunnel
+   hostname (e.g. `k8s-debug.vertesi.com`); `*.cloudflareaccess.com` (confirmed
+   needed by the Access handshake — `*.argotunnel.com` wasn't hit in testing,
+   add it later if a future version needs it); `github.com` and
+   `objects.githubusercontent.com` (SessionStart hook's `cloudflared` download —
+   missing these just warns and skips the forwarder); `dl.k8s.io` (same hook's
+   `kubectl` download — reachable without allowlisting in at least one tested
+   environment, but add it explicitly if your policy is stricter).
 2. **Environment variables:**
    - `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — from the Cloudflare Access
      Service Token (Issue setup below).
@@ -68,11 +71,15 @@ widening scope (e.g. handing the token to anything beyond this one use case).
    environment configuration — there is no dedicated secrets store.** Every credential
    here is deliberately read-only, has no Secrets access, and is short-lived. Do not
    widen this scope later without re-reading this paragraph.
-3. **SessionStart hook:** installs `cloudflared` and starts a local forwarder
-   (`cloudflared access tcp --hostname $K8S_API_HOSTNAME --url 127.0.0.1:6443
-   --service-token-id=$CF_ACCESS_CLIENT_ID --service-token-secret=$CF_ACCESS_CLIENT_SECRET`),
-   then writes a throwaway kubeconfig pointing `server:` at `https://127.0.0.1:6443`
-   with `token: $K8S_BEARER_TOKEN`.
+3. **SessionStart hook:** `.claude/hooks/session-start.sh` (registered in
+   `.claude/settings.json`). No-ops unless all four env vars above are set.
+   Installs `cloudflared`/`kubectl` into `~/.local/bin` if missing (checksum-
+   verified where reachable), starts the forwarder (`cloudflared access tcp
+   --hostname $K8S_API_HOSTNAME --url 127.0.0.1:6443 --service-token-id=...
+   --service-token-secret=...`) unless one's already running, then writes a
+   throwaway kubeconfig (`~/.kube/config-remote-debug`, `insecure-skip-tls-verify:
+   true` per the loopback TLS SAN caveat below) and exports `KUBECONFIG`. Steps
+   that depend on network policy warn and continue rather than abort.
 
 ## One-time Cloudflare setup (out-of-band, operator-run)
 
