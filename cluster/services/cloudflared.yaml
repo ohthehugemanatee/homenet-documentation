@@ -24,7 +24,7 @@ spec:
           # Check https://github.com/cloudflare/cloudflared/releases for the
           # current stable tag before bumping — this pod fronts the API
           # server, so treat a stale tag here as higher-priority than most.
-          image: cloudflare/cloudflared:2024.12.2
+          image: cloudflare/cloudflared:2026.6.1
           args:
             - tunnel
             - --no-autoupdate
