@@ -1,27 +1,20 @@
 #!/bin/bash
-# SessionStart hook: bootstrap read-only kubectl access to the k3s cluster
-# through the cloudflared Access tunnel described in remote-debugging.md.
-#
-# Only runs in Claude Code cloud sessions, and only if the operator has
-# configured the remote-debug env vars for this environment. Safe to re-run
-# on resume/clear/compact (idempotent): reuses an already-installed
-# cloudflared/kubectl and an already-running forwarder instead of restarting.
+# Bootstraps read-only kubectl access via the cloudflared Access tunnel
+# described in remote-debugging.md. Idempotent across resume/clear/compact.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-# Remote debug is opt-in per environment. If it isn't configured, stay quiet
-# and let the session start normally — this is not an error.
+# Opt-in per environment: quietly no-op if remote debug isn't configured.
 if [ -z "${K8S_API_HOSTNAME:-}" ] || [ -z "${CF_ACCESS_CLIENT_ID:-}" ] ||
    [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ] || [ -z "${K8S_BEARER_TOKEN:-}" ]; then
   echo "session-start: remote-debug env vars not set, skipping cloudflared bootstrap" >&2
   exit 0
 fi
 
-# Keep in sync with the image tag in cluster/services/cloudflared.yaml —
-# see remote-debugging.md open risks for why this pod's version matters.
+# Keep in sync with the image tag in cluster/services/cloudflared.yaml.
 CLOUDFLARED_VERSION="2024.12.2"
 BIN_DIR="${HOME}/.local/bin"
 mkdir -p "$BIN_DIR"
@@ -37,12 +30,9 @@ arch() {
 }
 ARCH="$(arch)"
 
-# Downloads to a temp file in the same directory as $2 (so the final `mv` is
-# an atomic rename — a failed/partial download never leaves a broken binary
-# at the real path) and, if $3 is given, verifies it against a published
-# sha256 before installing. A missing/unreachable checksum file is not
-# treated as fatal — it degrades to an unverified install with a warning,
-# since not every release channel is confirmed to publish one.
+# Downloads to a temp file and atomically mv's it into place (no partial
+# binaries on failure); verifies sha256 against $3 if reachable, else warns
+# and installs unverified rather than treating a missing checksum as fatal.
 download_verified() {
   local url="$1" dest="$2" checksum_url="${3:-}" tmp expected actual
   tmp="$(mktemp "${dest}.XXXXXX")" || return 1
@@ -108,10 +98,7 @@ if [ "$FORWARDER_UP" -eq 0 ] && command -v cloudflared >/dev/null 2>&1; then
     > "$LOGFILE" 2>&1 &
   echo $! > "$PIDFILE"
 
-  # Give the forwarder a few seconds to come up. Non-fatal if it doesn't —
-  # this can legitimately fail if the environment's Custom network allowlist
-  # doesn't include the tunnel hostname / *.cloudflareaccess.com, and we'd
-  # rather let the session start than block on it (see remote-debugging.md).
+  # Non-fatal if this never comes up (e.g. tunnel hostname not allowlisted).
   UP=0
   for _ in $(seq 1 15); do
     if (exec 3<>"/dev/tcp/127.0.0.1/6443") 2>/dev/null; then
@@ -137,10 +124,9 @@ clusters:
   - name: homenet-remote-debug
     cluster:
       server: https://127.0.0.1:6443
-      # The forwarder's inner TLS handshake terminates at the real API
-      # server, not at 127.0.0.1, so the SAN won't match — see
-      # remote-debugging.md open risks. The Cloudflare Access service token
-      # plus the bearer token below are the actual auth boundary here.
+      # TLS terminates at the real API server, not 127.0.0.1, so the SAN
+      # won't match (see remote-debugging.md); the CF Access token + bearer
+      # token below are the real auth boundary.
       insecure-skip-tls-verify: true
 contexts:
   - name: homenet-remote-debug
