@@ -56,10 +56,10 @@ widening scope (e.g. handing the token to anything beyond this one use case).
 1. **Network access:** set to `Custom`. Add to **Allowed domains**: the tunnel
    hostname (e.g. `k8s-debug.vertesi.com`); `*.cloudflareaccess.com` (confirmed
    needed by the Access handshake — `*.argotunnel.com` wasn't hit in testing,
-   add it later if a future version needs it); `github.com` and
-   `objects.githubusercontent.com` (SessionStart hook's `cloudflared` download —
-   missing these just warns and skips the forwarder); `dl.k8s.io` (same hook's
-   `kubectl` download — reachable without allowlisting in at least one tested
+   add it later if a future version needs it); `pkg.cloudflare.com` (SessionStart
+   hook's `cloudflared` install, via Cloudflare's own apt repo — missing this
+   just warns and skips the forwarder); `dl.k8s.io` (same hook's `kubectl`
+   download — reachable without allowlisting in at least one tested
    environment, but add it explicitly if your policy is stricter).
 2. **Environment variables:**
    - `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — from the Cloudflare Access
@@ -73,8 +73,12 @@ widening scope (e.g. handing the token to anything beyond this one use case).
    widen this scope later without re-reading this paragraph.
 3. **SessionStart hook:** `.claude/hooks/session-start.sh` (registered in
    `.claude/settings.json`). No-ops unless all four env vars above are set.
-   Installs `cloudflared`/`kubectl` into `~/.local/bin` if missing (checksum-
-   verified where reachable), starts the forwarder (`cloudflared access tcp
+   Installs `cloudflared` (if missing) via apt from Cloudflare's own repo at
+   `pkg.cloudflare.com` — adds the repo's GPG key and an
+   `/etc/apt/sources.list.d` entry, needs root (uses `sudo` if not already
+   root; warns and skips if neither `apt-get` nor root/`sudo` is available)
+   — and installs `kubectl` into `~/.local/bin` if missing (checksum-verified
+   where reachable), starts the forwarder (`cloudflared access tcp
    --hostname $K8S_API_HOSTNAME --url 127.0.0.1:6443 --service-token-id=...
    --service-token-secret=...`) unless one's already running, then writes a
    throwaway kubeconfig (`~/.kube/config-remote-debug`, `insecure-skip-tls-verify:
