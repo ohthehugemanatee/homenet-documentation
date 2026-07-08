@@ -1,0 +1,53 @@
+image:
+  repository: containers/kubernetes_mcp_server
+  # Pin explicitly; check https://github.com/containers/kubernetes-mcp-server/releases
+  # for the current stable tag before bumping.
+  version: v0.0.63
+
+serviceAccount:
+  create: false
+  # Reuse the existing read-only identity from
+  # cluster/services/claude-remote-debug-rbac.yaml (bound to the built-in `view`
+  # ClusterRole) instead of letting the chart create its own ServiceAccount/RBAC.
+  name: claude-remote-debug
+
+rbac:
+  create: false
+
+ingress:
+  # External exposure is out of scope for this workload's initial deployment
+  # (see the Cloudflare tunnel/Access issue that follows this one).
+  enabled: false
+
+config:
+  read_only: true
+  disable_destructive: true
+  toolsets:
+    - core
+    - config
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# The chart's Deployment template does `default .Values.securityContext
+# .Values.defaultSecurityContext` — a wholesale replace, not a merge — so a
+# partial override here would silently drop the chart's own hardening
+# (allowPrivilegeEscalation/readOnlyRootFilesystem/capabilities). Restate it
+# explicitly, matching cluster/services/cloudflared.yaml's pattern plus the
+# chart's own defaultSecurityContext values (confirmed against the chart's
+# templates/deployment.yaml source).
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault

@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubernetes-mcp-server
+  namespace: argocd
+  annotations:
+    notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      ref: values
+    - chart: kubernetes-mcp-server
+      repoURL: ghcr.io/containers/charts
+      targetRevision: 0.1.0
+      helm:
+        valueFiles:
+          - $values/cluster/helm/kubernetes-mcp-server/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
