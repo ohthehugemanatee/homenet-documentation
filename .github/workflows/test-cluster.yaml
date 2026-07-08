@@ -73,12 +73,7 @@ jobs:
             -l app.kubernetes.io/name=kubernetes-mcp-server \
             -n default --timeout=90s
 
-      # NOTE: the exact MCP JSON-RPC handshake below was authored from upstream
-      # docs/source (pkg/http/http.go, pkg/mcp), not live-tested end-to-end —
-      # this repo's CI sandbox has no docker daemon to run k3d locally. Treat
-      # the first real CI run of this step as the actual verification and
-      # adjust protocolVersion/response parsing if the real server disagrees.
-      - name: Verify kubernetes-mcp-server is read-only (no exec tool registered)
+      - name: Verify kubernetes-mcp-server is read-only (no destructive tools registered)
         run: |
           kubectl -n default port-forward svc/kubernetes-mcp-server 8080:8080 &
           PF_PID=$!
@@ -91,18 +86,48 @@ jobs:
           INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
           INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
           INIT_PAYLOAD+='"clientInfo":{"name":"test-cluster-ci","version":"0.0.0"}}}'
-          INIT_RESPONSE=$(curl -fsS -X POST http://127.0.0.1:8080/mcp \
+
+          INIT_HEADERS=$(mktemp)
+          INIT_BODY=$(curl -sS -D "$INIT_HEADERS" -X POST http://127.0.0.1:8080/mcp \
             -H 'Content-Type: application/json' \
             -H 'Accept: application/json, text/event-stream' \
             -d "$INIT_PAYLOAD")
-          echo "$INIT_RESPONSE" | grep -q '"protocolVersion"'
+          echo "== initialize response headers =="; cat "$INIT_HEADERS"
+          echo "== initialize response body =="; echo "$INIT_BODY"
+          echo "$INIT_BODY" | grep -q '"protocolVersion"' \
+            || { echo "FAILED: initialize did not return protocolVersion"; exit 1; }
 
-          TOOLS_RESPONSE=$(curl -fsS -X POST http://127.0.0.1:8080/mcp \
+          # Streamable-HTTP transport: the server may assign a session that
+          # subsequent requests must echo back via this header.
+          SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$INIT_HEADERS" | tr -d '\r' | cut -d' ' -f2-)
+          SESSION_HEADER=()
+          [ -n "$SESSION_ID" ] && SESSION_HEADER=(-H "Mcp-Session-Id: $SESSION_ID")
+
+          # Spec requires this notification before further requests on a
+          # freshly initialized session; harmless to send even if unused.
+          curl -sS -X POST http://127.0.0.1:8080/mcp \
             -H 'Content-Type: application/json' \
             -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >/dev/null
+
+          TOOLS_BODY=$(curl -sS -X POST http://127.0.0.1:8080/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
-          echo "$TOOLS_RESPONSE" | grep -q '"pods_list"'
-          if echo "$TOOLS_RESPONSE" | grep -q '"pods_exec"'; then
+          echo "== tools/list response body =="; echo "$TOOLS_BODY"
+          echo "$TOOLS_BODY" | grep -q '"pods_list"' \
+            || { echo "FAILED: pods_list not found in tools/list response"; exit 1; }
+
+          # Primary check: no tool the server itself marks destructive.
+          # Belt-and-suspenders: also reject the known exec tool by name, in
+          # case a future upstream version omits the annotation.
+          if echo "$TOOLS_BODY" | grep -q '"destructiveHint":[[:space:]]*true'; then
+            echo "FAILED: a tool with destructiveHint:true is registered despite --read-only"
+            exit 1
+          fi
+          if echo "$TOOLS_BODY" | grep -q '"pods_exec"'; then
             echo "FAILED: pods_exec is registered despite --read-only"
             exit 1
           fi
