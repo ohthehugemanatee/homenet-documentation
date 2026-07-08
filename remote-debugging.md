@@ -32,6 +32,15 @@ port is opened on the router. Cloudflare Access checks a Service Token at the ed
 before any request reaches the tunnel, which matters because Claude Code environment
 variables are not a real secrets store (see below).
 
+### kubernetes-mcp-server (new, not yet client-wired)
+
+An in-cluster `kubernetes-mcp-server` instance (#142, `cluster/helm/kubernetes-mcp-server/`)
+is also reachable through a second public hostname on the same `homenet-k8s-debug`
+tunnel, gated by the same Access/Service-Token mechanism (#143, setup below) — same
+read-only scope, exposed as MCP tools instead of raw `kubectl`. The Claude Code
+session doesn't call it yet: `session-start.sh` still only wires up the
+`$K8S_API_HOSTNAME` path above until #144 switches the client over.
+
 ## Read-only scope
 
 `claude-remote-debug` is bound to the built-in `view` ClusterRole: `get`/`list`/`watch`
@@ -54,7 +63,9 @@ widening scope (e.g. handing the token to anything beyond this one use case).
 ## Configuring the Claude Code environment
 
 1. **Network access:** set to `Custom`. Add to **Allowed domains**: the tunnel
-   hostname (e.g. `k8s-debug.vertesi.com`); `*.cloudflareaccess.com` (confirmed
+   hostname (e.g. `k8s-debug.vertesi.com`); the kubernetes-mcp-server hostname
+   (e.g. `k8s-mcp.vertesi.com` — not yet exercised by the SessionStart hook,
+   added ahead of #144's client cutover); `*.cloudflareaccess.com` (confirmed
    needed by the Access handshake — `*.argotunnel.com` wasn't hit in testing,
    add it later if a future version needs it); `pkg.cloudflare.com` (SessionStart
    hook's `cloudflared` install, via Cloudflare's own apt repo — missing this
@@ -66,13 +77,18 @@ widening scope (e.g. handing the token to anything beyond this one use case).
      Service Token (Issue setup below).
    - `K8S_BEARER_TOKEN` — minted by `mint-remote-debug-token.yaml` (below).
    - `K8S_API_HOSTNAME` — the tunnel hostname.
+   - `K8S_MCP_HOSTNAME` — the kubernetes-mcp-server hostname (setup below). Not
+     yet consumed by the SessionStart hook — #144 wires the client to use it.
 
    **These environment variables are visible to anyone who can edit the Claude Code
    environment configuration — there is no dedicated secrets store.** Every credential
    here is deliberately read-only, has no Secrets access, and is short-lived. Do not
    widen this scope later without re-reading this paragraph.
 3. **SessionStart hook:** `.claude/hooks/session-start.sh` (registered in
-   `.claude/settings.json`). No-ops unless all four env vars above are set.
+   `.claude/settings.json`). No-ops unless `K8S_API_HOSTNAME`,
+   `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`, and `K8S_BEARER_TOKEN` are
+   all set — `K8S_MCP_HOSTNAME` isn't checked yet, since the hook doesn't use
+   it until #144.
    Installs `cloudflared` (if missing) via apt from Cloudflare's own repo at
    `pkg.cloudflare.com` — adds the repo's GPG key and an
    `/etc/apt/sources.list.d` entry, needs root (uses `sudo` if not already
@@ -114,6 +130,30 @@ certs and DDNS — no new signup):
 **Verify:** `curl -o /dev/null -w "%{http_code}" https://k8s-debug.vertesi.com/api/v1/namespaces`
 should return `403` (Access blocks unauthenticated requests), and the tunnel should
 show **HEALTHY** in the dashboard.
+
+### Exposing kubernetes-mcp-server (#143, same tunnel)
+
+Adds a second public hostname to the *existing* `homenet-k8s-debug` tunnel — no new
+tunnel, no new `TUNNEL_TOKEN` secret, `cluster/services/cloudflared.yaml` is
+unchanged (routing lives entirely in the dashboard, same as the API hostname above).
+
+1. Zero Trust dashboard → Tunnels → `homenet-k8s-debug` → add a second public
+   hostname, e.g. `k8s-mcp.vertesi.com` → origin
+   `http://kubernetes-mcp-server.default.svc:8080`. **Plain `http://`, not
+   `https://`** — unlike the API server origin, the MCP server has no TLS listener.
+2. Access → Applications → self-hosted app for the new hostname, policy =
+   **Service Auth**.
+3. Access → Service Auth → Service Tokens → either select the existing token
+   from step 5 above as an allowed credential on this new Application (reuse —
+   fewer secrets, the default here; no new env vars needed beyond
+   `K8S_MCP_HOSTNAME` above), or create a dedicated token if you want separate
+   credential blast-radius between the two hostnames (#144 will define how a
+   second token's Client ID/Secret get supplied to the client, if you go this
+   route).
+
+**Verify:** `curl -o /dev/null -w "%{http_code}" https://k8s-mcp.vertesi.com/healthz`
+should return `403` without Service Token headers; with them, a `200` (or a valid
+MCP response from `/mcp`).
 
 ## Minting and rotating the debug token
 
