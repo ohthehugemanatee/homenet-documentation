@@ -1,0 +1,39 @@
+image:
+  repository: containers/kubernetes_mcp_server
+  # Pin explicitly; check https://github.com/containers/kubernetes-mcp-server/releases
+  # for the current stable tag before bumping.
+  version: v0.0.63
+
+serviceAccount:
+  create: false
+  # Reuse the existing read-only identity from
+  # cluster/services/claude-remote-debug-rbac.yaml (bound to the built-in `view`
+  # ClusterRole) instead of letting the chart create its own ServiceAccount/RBAC.
+  name: claude-remote-debug
+
+rbac:
+  create: false
+
+ingress:
+  # External exposure is out of scope for this workload's initial deployment
+  # (see the Cloudflare tunnel/Access issue that follows this one).
+  enabled: false
+
+config:
+  read_only: true
+  disable_destructive: true
+  toolsets:
+    - core
+    - config
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+securityContext:
+  runAsUser: 65532
+  runAsGroup: 65532

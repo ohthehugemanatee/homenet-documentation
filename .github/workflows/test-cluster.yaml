@@ -59,6 +59,55 @@ jobs:
           test "$(kubectl auth can-i delete pods --as="$SA")" = no
           echo "claude-remote-debug auth matrix OK"
 
+      - name: Install kubernetes-mcp-server (real, read-only smoke test)
+        run: |
+          helm upgrade --install kubernetes-mcp-server \
+            oci://ghcr.io/containers/charts/kubernetes-mcp-server --version 0.1.0 \
+            --namespace default \
+            -f cluster/helm/kubernetes-mcp-server/values.yaml \
+            --wait --timeout 90s
+
+      - name: Verify kubernetes-mcp-server rollout
+        run: |
+          kubectl wait --for=condition=Ready pod \
+            -l app.kubernetes.io/name=kubernetes-mcp-server \
+            -n default --timeout=90s
+
+      # NOTE: the exact MCP JSON-RPC handshake below was authored from upstream
+      # docs/source (pkg/http/http.go, pkg/mcp), not live-tested end-to-end —
+      # this repo's CI sandbox has no docker daemon to run k3d locally. Treat
+      # the first real CI run of this step as the actual verification and
+      # adjust protocolVersion/response parsing if the real server disagrees.
+      - name: Verify kubernetes-mcp-server is read-only (no exec tool registered)
+        run: |
+          kubectl -n default port-forward svc/kubernetes-mcp-server 8080:8080 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
+          INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
+          INIT_PAYLOAD+='"clientInfo":{"name":"test-cluster-ci","version":"0.0.0"}}}'
+          INIT_RESPONSE=$(curl -fsS -X POST http://127.0.0.1:8080/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d "$INIT_PAYLOAD")
+          echo "$INIT_RESPONSE" | grep -q '"protocolVersion"'
+
+          TOOLS_RESPONSE=$(curl -fsS -X POST http://127.0.0.1:8080/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+          echo "$TOOLS_RESPONSE" | grep -q '"pods_list"'
+          if echo "$TOOLS_RESPONSE" | grep -q '"pods_exec"'; then
+            echo "FAILED: pods_exec is registered despite --read-only"
+            exit 1
+          fi
+          echo "kubernetes-mcp-server read-only tool surface OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -183,3 +232,10 @@ jobs:
             --namespace node-feature-discovery --create-namespace \
             --dry-run \
             -f cluster/helm/node-feature-discovery/values.yaml
+
+      - name: Dry-run kubernetes-mcp-server
+        run: |
+          helm template kubernetes-mcp-server \
+            oci://ghcr.io/containers/charts/kubernetes-mcp-server --version 0.1.0 \
+            --namespace default \
+            -f cluster/helm/kubernetes-mcp-server/values.yaml > /dev/null
