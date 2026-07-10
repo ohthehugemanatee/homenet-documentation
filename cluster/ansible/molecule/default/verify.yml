@@ -230,7 +230,7 @@
     - name: Assert drop-in sets MemoryHigh and not a hard MemoryMax
       ansible.builtin.assert:
         that:
-          - "'MemoryHigh=2G' in (k3s_memory_dropin_content.content | b64decode)"
+          - "'MemoryHigh=3G' in (k3s_memory_dropin_content.content | b64decode)"
           - "'MemoryMax=' not in (k3s_memory_dropin_content.content | b64decode)"
         fail_msg: "drop-in must set a soft MemoryHigh, never a hard MemoryMax (would OOM-kill the control plane)"
       when: cluster_role in ['first-master', 'multi-master']
