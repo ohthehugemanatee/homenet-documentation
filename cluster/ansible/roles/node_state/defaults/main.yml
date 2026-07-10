@@ -12,9 +12,10 @@ node_state_k3s_api_server_vip: "10.10.10.9"
 
 # ── Control-plane memory headroom (low-RAM nodes, e.g. 4 GB Pi masters) ──────
 # Reserve RAM for the OS + the k3s control-plane process, and evict workload
-# pods BEFORE the node OOM-thrashes (which on an SD-card root spirals into
-# 100 % iowait and etcd quorum loss). Rendered into the k3s server config.yaml
-# as kubelet-arg, so it only applies to control-plane nodes.
+# pods BEFORE the node OOM-thrashes (cgroup memory reclaim evicts etcd's page
+# cache, causing disk-bound reads that stall heartbeats and lose quorum).
+# Rendered into the k3s server config.yaml as kubelet-arg, so it only applies
+# to control-plane nodes.
 node_state_kubelet_system_reserved: "cpu=250m,memory=512Mi"
 node_state_kubelet_kube_reserved: "memory=512Mi"
 node_state_kubelet_eviction_hard: "memory.available<300Mi,nodefs.available<10%"
@@ -23,7 +24,10 @@ node_state_kubelet_eviction_minimum_reclaim: "memory.available=100Mi"
 # Soft cgroup ceiling on the k3s control-plane process via a systemd drop-in.
 # MemoryHigh throttles + reclaims under pressure; deliberately NOT MemoryMax,
 # which would let the kernel OOM-kill the control plane itself on a low-RAM node.
-node_state_k3s_memory_high: "2G"
+# 3G leaves ~700 MB for OS/page-cache on a 4 GB Pi — tight, but 2G caused
+# continuous throttling (millions of cgroup high events) that evicted etcd's
+# mmap page cache and cascaded into quorum loss every few hours.
+node_state_k3s_memory_high: "3G"
 
 # zram compressed-RAM swap cushion to avoid the hard OOM/thrash wall on low-RAM
 # nodes. Opt-in (default off); when on, kubelet gets fail-swap-on=false and the
