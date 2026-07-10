@@ -1,8 +1,8 @@
 # Remote debugging — read-only cluster access for Claude Code cloud sessions
 
 Lets a Claude Code cloud session (an ephemeral container with no LAN presence) run
-`kubectl get/describe/logs/events` against the live cluster without the operator
-opening a laptop or connecting a VPN.
+read-only queries (list/describe/logs/events, kubectl-equivalent) against the live
+cluster via MCP tools, without the operator opening a laptop or connecting a VPN.
 
 ## Why not a VPN
 
@@ -17,20 +17,31 @@ way in is a public HTTPS hostname added to the environment's Custom allowlist.
 
 ```
 Claude Code cloud session (Custom network access: allowlisted hostname only)
-  │  local `cloudflared access` forwarder, started by a SessionStart hook
+  │  outbound HTTPS, MCP client (.mcp.json — kubernetes-mcp-server)
   ▼
 Cloudflare edge — Access policy (Service Token check) — Cloudflare Tunnel
   ▼
 in-cluster `cloudflared` Deployment (cluster/services/cloudflared.yaml)
   ▼
-kubernetes.default.svc:443 — RBAC-limited by the `view` ClusterRole bound to
+in-cluster `kubernetes-mcp-server` (cluster/helm/kubernetes-mcp-server/) — talks to
+kubernetes.default.svc:443 itself, RBAC-limited by the `view` ClusterRole bound to
 the `claude-remote-debug` ServiceAccount (cluster/services/claude-remote-debug-rbac.yaml)
 ```
 
-`cloudflared` makes an outbound-only connection to Cloudflare's edge — no inbound
-port is opened on the router. Cloudflare Access checks a Service Token at the edge
-before any request reaches the tunnel, which matters because Claude Code environment
-variables are not a real secrets store (see below).
+No local process runs in the sandbox — the session's own MCP client connects
+directly to the public hostname over outbound HTTPS, no forwarder needed. Cloudflare
+Access checks a Service Token (headers set via `.mcp.json`'s env-var interpolation)
+at the edge before any request reaches the tunnel, which matters because Claude Code
+environment variables are not a real secrets store (see below).
+
+The original forwarder-based path to `$K8S_API_HOSTNAME` (raw `kubectl` against
+`kubernetes.default.svc:443` through a local `cloudflared access tcp` forwarder)
+still exists as infrastructure — same tunnel, same Access mechanism, untouched by
+this change — but is no longer automated. It's a manual fallback only, for the rare
+case raw `kubectl` is needed beyond what MCP tools cover: see "One-time Cloudflare
+setup" below for how that path was configured; reconstructing the forwarder and a
+kubeconfig by hand runs the same commands the old SessionStart hook used to run
+automatically.
 
 ## Read-only scope
 
@@ -53,37 +64,38 @@ widening scope (e.g. handing the token to anything beyond this one use case).
 
 ## Configuring the Claude Code environment
 
-1. **Network access:** set to `Custom`. Add to **Allowed domains**: the tunnel
-   hostname (e.g. `k8s-debug.vertesi.com`); `*.cloudflareaccess.com` (confirmed
-   needed by the Access handshake — `*.argotunnel.com` wasn't hit in testing,
-   add it later if a future version needs it); `pkg.cloudflare.com` (SessionStart
-   hook's `cloudflared` install, via Cloudflare's own apt repo — missing this
-   just warns and skips the forwarder); `dl.k8s.io` (same hook's `kubectl`
-   download — reachable without allowlisting in at least one tested
-   environment, but add it explicitly if your policy is stricter).
+1. **Network access:** set to `Custom`. Add to **Allowed domains**: the
+   kubernetes-mcp-server hostname (e.g. `k8s-mcp.vertesi.com` — this is what the
+   MCP client actually connects to by default now); `*.cloudflareaccess.com`
+   (confirmed needed by the Access handshake); the original tunnel hostname
+   (e.g. `k8s-debug.vertesi.com` — only needed if you reconstruct the manual
+   forwarder fallback described in Architecture above).
 2. **Environment variables:**
    - `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — from the Cloudflare Access
-     Service Token (Issue setup below).
-   - `K8S_BEARER_TOKEN` — minted by `mint-remote-debug-token.yaml` (below).
-   - `K8S_API_HOSTNAME` — the tunnel hostname.
+     Service Token (Issue setup below); sent as `CF-Access-Client-Id`/
+     `CF-Access-Client-Secret` headers on the `kubernetes-mcp-server` MCP
+     connection (`.mcp.json`).
+   - `K8S_MCP_HOSTNAME` — the kubernetes-mcp-server hostname, used directly in
+     `.mcp.json`'s `url`.
+   - `K8S_BEARER_TOKEN` — minted by `mint-remote-debug-token.yaml` (below). No
+     longer consumed by the client — `kubernetes-mcp-server` authenticates to
+     the k8s API with its own in-cluster ServiceAccount token instead. Retained
+     until #145 removes the mint-token flow entirely.
+   - `K8S_API_HOSTNAME` — the original tunnel hostname. No longer used by
+     default; only needed for the manual forwarder fallback.
 
    **These environment variables are visible to anyone who can edit the Claude Code
    environment configuration — there is no dedicated secrets store.** Every credential
    here is deliberately read-only, has no Secrets access, and is short-lived. Do not
    widen this scope later without re-reading this paragraph.
-3. **SessionStart hook:** `.claude/hooks/session-start.sh` (registered in
-   `.claude/settings.json`). No-ops unless all four env vars above are set.
-   Installs `cloudflared` (if missing) via apt from Cloudflare's own repo at
-   `pkg.cloudflare.com` — adds the repo's GPG key and an
-   `/etc/apt/sources.list.d` entry, needs root (uses `sudo` if not already
-   root; warns and skips if neither `apt-get` nor root/`sudo` is available)
-   — and installs `kubectl` into `~/.local/bin` if missing (checksum-verified
-   where reachable), starts the forwarder (`cloudflared access tcp
-   --hostname $K8S_API_HOSTNAME --url 127.0.0.1:6443 --service-token-id=...
-   --service-token-secret=...`) unless one's already running, then writes a
-   throwaway kubeconfig (`~/.kube/config-remote-debug`, `insecure-skip-tls-verify:
-   true` per the loopback TLS SAN caveat below) and exports `KUBECONFIG`. Steps
-   that depend on network policy warn and continue rather than abort.
+3. **MCP server registration:** declared in [`.mcp.json`](./.mcp.json) at the
+   repo root, loaded automatically in every session (cloud or local — see
+   [Claude Code's MCP docs](https://code.claude.com/docs/en/mcp)). No
+   SessionStart hook, no bootstrap script, no local process: `type: "http"`,
+   and the `url`/`headers` fields use `${VAR:-}`-style interpolation against
+   the env vars above, so the file always parses even when they're unset — the
+   server just won't authenticate until they are. Claude Code's own MCP client
+   handles the streamable-HTTP session handshake.
 
 ## One-time Cloudflare setup (out-of-band, operator-run)
 
@@ -114,6 +126,30 @@ certs and DDNS — no new signup):
 **Verify:** `curl -o /dev/null -w "%{http_code}" https://k8s-debug.vertesi.com/api/v1/namespaces`
 should return `403` (Access blocks unauthenticated requests), and the tunnel should
 show **HEALTHY** in the dashboard.
+
+### Exposing kubernetes-mcp-server (#143, same tunnel)
+
+Adds a second public hostname to the *existing* `homenet-k8s-debug` tunnel — no new
+tunnel, no new `TUNNEL_TOKEN` secret, `cluster/services/cloudflared.yaml` is
+unchanged (routing lives entirely in the dashboard, same as the API hostname above).
+
+1. Zero Trust dashboard → Tunnels → `homenet-k8s-debug` → add a second public
+   hostname, e.g. `k8s-mcp.vertesi.com` → origin
+   `http://kubernetes-mcp-server.default.svc:8080`. **Plain `http://`, not
+   `https://`** — unlike the API server origin, the MCP server has no TLS listener.
+2. Access → Applications → self-hosted app for the new hostname, policy =
+   **Service Auth**.
+3. Access → Service Auth → Service Tokens → either select the existing token
+   from step 5 above as an allowed credential on this new Application (reuse —
+   fewer secrets, the default here; no new env vars needed beyond
+   `K8S_MCP_HOSTNAME` above), or create a dedicated token if you want separate
+   credential blast-radius between the two hostnames (#144 will define how a
+   second token's Client ID/Secret get supplied to the client, if you go this
+   route).
+
+**Verify:** `curl -o /dev/null -w "%{http_code}" https://k8s-mcp.vertesi.com/healthz`
+should return `403` without Service Token headers; with them, a `200` (or a valid
+MCP response from `/mcp`).
 
 ## Minting and rotating the debug token
 
@@ -148,20 +184,21 @@ kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
 
 ## Open risks
 
-- `kubectl` cannot send arbitrary custom headers, so the Cloudflare Access Service
-  Token can't be attached directly by kubectl — hence the local `cloudflared access
-  tcp` forwarder described above. Cloudflare Access's mTLS client-certificate policy
-  is a simpler alternative worth evaluating (it maps directly onto kubeconfig's
-  `client-certificate-data`/`client-key-data`, no local forwarder needed) before
-  committing to the Service Token approach above.
-- `kubectl logs -f` / `exec` (chunked/SPDY streaming) through the tunnel, and the
-  loopback TLS SAN for `https://127.0.0.1:6443`, are unverified against this
-  cluster's actual k3s `--tls-san` config — confirm with a live smoke test
-  (`kubectl get/describe/logs/logs -f/get events` succeed; `get secrets`/`exec`
-  are `Forbidden`) before relying on this day to day.
+- Project-scoped `.mcp.json` servers normally require interactive approval on
+  first use, and Claude Code's own docs note a freshly cloned repo may not be
+  able to self-approve in an untrusted folder. Whether a fresh Claude Code
+  cloud session counts as trusted enough to connect `kubernetes-mcp-server`
+  without getting stuck at "Pending approval" was unresolved as of this
+  writing — confirm empirically before relying on this day to day (check
+  `/mcp` or equivalent in a genuinely new session).
+- Long-lived/streaming calls (e.g. `kubectl logs -f`-equivalent via
+  `kubernetes-mcp-server`'s log tool) are unverified against this cluster's
+  actual behavior through the tunnel — confirm log/describe/list-style tools
+  succeed and no destructive tool is exposed (see #142's CI check for the
+  exec-suppression half of this) before relying on this day to day.
 - `cluster/services/cloudflared.yaml`'s image tag is pinned and will drift. This
-  pod fronts the API server, so a stale tag here is higher-priority to keep current
-  than most other workloads in this cluster — check
-  [cloudflared releases](https://github.com/cloudflare/cloudflared/releases)
+  pod fronts both the API server and kubernetes-mcp-server, so a stale tag here
+  is higher-priority to keep current than most other workloads in this cluster —
+  check [cloudflared releases](https://github.com/cloudflare/cloudflared/releases)
   periodically and bump manually; there's no Renovate/Dependabot wired up for
   cluster manifests.
