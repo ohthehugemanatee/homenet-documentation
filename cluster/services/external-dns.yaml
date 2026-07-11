@@ -12,6 +12,12 @@ rules:
 - apiGroups: [""]
   resources: ["services", "endpoints", "pods"]
   verbs: ["get", "watch", "list"]
+# v0.21.0 resolves service targets via EndpointSlices instead of core Endpoints;
+# without this, the informer cache never syncs and external-dns exits fatally
+# after a 1-minute timeout.
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "watch", "list"]
 - apiGroups: ["extensions", "networking.k8s.io"]
   resources: ["ingresses"]
   verbs: ["get", "watch", "list"]
