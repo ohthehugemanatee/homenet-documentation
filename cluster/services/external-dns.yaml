@@ -68,6 +68,8 @@ spec:
         # the policy to upsert-only so they do not get deleted.
         - --policy=upsert-only
         - --provider=pihole
+        # Switch to pihole V6 API
+        - --pihole-api-version=6
         # Change this to the actual address of your Pi-hole web server
         - --pihole-server=http://10.10.10.40
         livenessProbe:
