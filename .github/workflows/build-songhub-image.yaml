@@ -1,0 +1,63 @@
+name: Build SongHub image
+
+# Manual only: SongHub (https://github.com/Cesc1986/SongHub) ships no
+# published image, so we build it ourselves from a pinned upstream tag and
+# push to GHCR. No schedule/auto-trigger — bumping songhub_ref is a
+# deliberate, reviewable action, same spirit as the exact image pins used
+# for cluster/services/unifi/mongodb.yaml and mariadb.yaml.
+'on':
+  workflow_dispatch:
+    inputs:
+      songhub_ref:
+        description: 'Upstream Cesc1986/SongHub git ref to build (tag preferred over branch)'
+        required: true
+        default: v1.7
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout SongHub at pinned ref
+        uses: actions/checkout@v4
+        with:
+          repository: Cesc1986/SongHub
+          ref: ${{ inputs.songhub_ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # linux/amd64 only: the cluster's arm64 nodes are tainted
+      # control-plane-only, so untolerated workload pods (like this one)
+      # only ever schedule on the amd64 nodes. No multi-arch/QEMU needed.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/ohthehugemanatee/songhub:${{ inputs.songhub_ref }}
+            ghcr.io/ohthehugemanatee/songhub:latest
+
+      # GHCR packages default to private. The cluster (and the songhub
+      # test-cluster.yaml CI step) has no imagePullSecret configured, so
+      # this package must be made public one time in GHCR package settings
+      # (or an imagePullSecret added) before the image is pullable.
+      - name: Note on package visibility
+        run: |
+          echo "If this is the first push, set the ghcr.io/ohthehugemanatee/songhub"
+          echo "package visibility to public in GitHub package settings, or"
+          echo "configure an imagePullSecret in cluster/services/songhub.yaml."
