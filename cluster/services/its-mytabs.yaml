@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: its-mytabs
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      run: its-mytabs
+  replicas: 1
+  serviceName: its-mytabs
+  volumeClaimTemplates:
+    - metadata:
+        name: its-mytabs-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 2Gi
+  template:
+    metadata:
+      labels:
+        run: its-mytabs
+    spec:
+      containers:
+        - name: its-mytabs
+          image: louislam/its-mytabs:1
+          ports:
+            - containerPort: 47777
+          volumeMounts:
+            - name: its-mytabs-data
+              mountPath: /app/data
+          # Deno single-binary server, no documented HTTP health endpoint
+          # upstream; tcpSocket is the honest probe here.
+          startupProbe:
+            tcpSocket:
+              port: 47777
+            periodSeconds: 10
+            failureThreshold: 6   # ~60s grace for first boot / image pull
+          livenessProbe:
+            tcpSocket:
+              port: 47777
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 47777
+            periodSeconds: 15
+            failureThreshold: 3
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: its-mytabs
+  namespace: default
+  labels:
+    run: its-mytabs
+spec:
+  ports:
+  - port: 47777
+    protocol: TCP
+  selector:
+    run: its-mytabs
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: its-mytabs
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+spec:
+  rules:
+  - host: tabs.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: its-mytabs
+            port:
+              number: 47777
+  tls:
+  - hosts:
+    - tabs.berlin.vertesi.com

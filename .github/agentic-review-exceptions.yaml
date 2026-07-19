@@ -1008,6 +1008,35 @@ exceptions:
       the wave -1 / wave 1 split. On a future upstream bump the operator would
       review the kustomization.yaml URL change before merging.
 
+  - pattern: "its-mytabs no securityContext (runAsNonRoot, readOnlyRootFilesystem, drop capabilities, seccompProfile)"
+    files:
+      - cluster/services/its-mytabs.yaml
+    reason: >-
+      Consistent with every other simple cluster/services/ StatefulSet
+      (ombi, calibre, nzbget, ...) — none set an explicit securityContext.
+      Not a regression specific to its-mytabs.yaml; a repo-wide hardening
+      pass is the right place to address this across all of them at once.
+
+  - pattern: "louislam/its-mytabs:1 floating major-version tag"
+    files:
+      - cluster/services/its-mytabs.yaml
+    reason: >-
+      :1 is upstream's published major-version tag (louislam's own release
+      convention). It is more pinned than the :latest tag already used by
+      several sibling services in this repo (ombi, jackett). Accepted
+      homelab tradeoff.
+
+  - pattern: "its-mytabs Ingress publicly exposed with no auth middleware"
+    files:
+      - cluster/services/its-mytabs.yaml
+    reason: >-
+      Deliberate, operator-confirmed (see Issue #158 / PR #159 discussion).
+      it's-mytabs has no documented built-in authentication. Public
+      exposure at tabs.berlin.vertesi.com is required for YouTube-synced
+      tab playback (upstream: doesn't work over a private IP). Operator
+      explicitly chose to ship without an auth middleware for now; adding
+      one is a separate future Issue if wanted.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
