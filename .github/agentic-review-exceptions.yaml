@@ -1037,6 +1037,21 @@ exceptions:
       explicitly chose to ship without an auth middleware for now; adding
       one is a separate future Issue if wanted.
 
+  - pattern: "berlin.vertesi.com Ingress publicly exposed with no auth middleware"
+    files:
+      - cluster/services/songhub.yaml
+    reason: >-
+      Not actually public — recurring reviewer misread of this repo's DNS
+      architecture (see Issue #160/#161, PR #162). Every *.berlin.vertesi.com
+      Ingress is private-by-construction: external-dns auto-creates the
+      Pi-hole record pointed at Traefik's LAN-only MetalLB IP
+      (10.10.11.2), and there is no cloudflared tunnel route for it — that's
+      the only actual public-exposure path in this repo, and it's untouched
+      by songhub. Same pattern as jackett.yaml, ombi.yaml, radarr.yaml, none
+      of which carry this exception either, since none of them are public.
+      SongHub's own SONGHUB_LOGIN_*/SONGHUB_ADMIN_* env vars additionally
+      gate the app's login regardless of network reachability.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-
