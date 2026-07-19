@@ -27,6 +27,9 @@ spec:
         - name: songhub
           # Built from a pinned upstream tag by
           # .github/workflows/build-songhub-image.yaml — bump both together.
+          # First deploy: the ghcr.io/ohthehugemanatee/songhub package
+          # defaults to private and must be set public (or an
+          # imagePullSecret added here) or this pod sits in ImagePullBackOff.
           image: ghcr.io/ohthehugemanatee/songhub:v1.7
           ports:
             - containerPort: 3005
