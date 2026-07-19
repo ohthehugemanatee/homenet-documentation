@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: songhub
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      run: songhub
+  replicas: 1
+  serviceName: songhub
+  volumeClaimTemplates:
+    - metadata:
+        name: songhub-saved-tabs
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 5Gi
+  template:
+    metadata:
+      labels:
+        run: songhub
+    spec:
+      containers:
+        - name: songhub
+          # Built from a pinned upstream tag by
+          # .github/workflows/build-songhub-image.yaml — bump both together.
+          image: ghcr.io/ohthehugemanatee/songhub:v1.7
+          ports:
+            - containerPort: 3005
+          env:
+            - name: SONGHUB_SAVED_TABS_DIR
+              value: /app/saved-tabs
+            - name: SONGHUB_LOGIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  # CHANGEME: created out-of-band, never committed:
+                  #   kubectl create secret generic songhub-credentials \
+                  #     --from-literal=login-username=<user> \
+                  #     --from-literal=login-password=<password> \
+                  #     --from-literal=admin-username=<admin-user> \
+                  #     --from-literal=admin-password=<admin-password> \
+                  #     -n default
+                  name: songhub-credentials
+                  key: login-username
+            - name: SONGHUB_LOGIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: songhub-credentials
+                  key: login-password
+            - name: SONGHUB_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: songhub-credentials
+                  key: admin-username
+            - name: SONGHUB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: songhub-credentials
+                  key: admin-password
+          volumeMounts:
+            - name: songhub-saved-tabs
+              mountPath: /app/saved-tabs
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          # Node build + Xvfb + headless Chromium cold start; upstream's own
+          # docker-compose healthcheck uses a 20s start_period against the
+          # same endpoint.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3005
+            periodSeconds: 10
+            failureThreshold: 9   # ~90s grace for first boot / image pull
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3005
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3005
+            periodSeconds: 15
+            failureThreshold: 3
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: songhub
+  namespace: default
+  labels:
+    run: songhub
+spec:
+  ports:
+  - port: 3005
+    protocol: TCP
+  selector:
+    run: songhub
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: songhub
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+spec:
+  rules:
+  - host: songhub.cluster.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: songhub
+            port:
+              number: 3005
+  - host: songhub.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: songhub
+            port:
+              number: 3005
+  tls:
+  - hosts:
+    - songhub.berlin.vertesi.com

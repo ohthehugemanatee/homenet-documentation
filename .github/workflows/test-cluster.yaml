@@ -133,6 +133,22 @@ jobs:
           fi
           echo "kubernetes-mcp-server read-only tool surface OK"
 
+      - name: Deploy and verify songhub
+        # Requires ghcr.io/ohthehugemanatee/songhub to be a public GHCR
+        # package (or an imagePullSecret) — see
+        # .github/workflows/build-songhub-image.yaml. Credentials here are
+        # CI-only fixtures, not real secrets.
+        run: |
+          kubectl create secret generic songhub-credentials \
+            --from-literal=login-username=ci-test-user \
+            --from-literal=login-password=ci-test-password \
+            --from-literal=admin-username=ci-test-admin \
+            --from-literal=admin-password=ci-test-admin-password \
+            -n default
+          kubectl apply -f cluster/services/songhub.yaml
+          kubectl wait --for=condition=Ready pod -l run=songhub \
+            -n default --timeout=120s
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
