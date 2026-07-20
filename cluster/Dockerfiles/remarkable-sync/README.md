@@ -39,3 +39,11 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 - Invalid JSON (as opposed to valid-but-wrong-shaped JSON) is treated as
   transient - no `.failed` marker, keeps retrying - since it can happen if
   the sidecar reads a file mid-write by SongHub.
+- **A green pod does not mean uploads are succeeding.** The readiness/
+  liveness probes only check that the sync loop is alive (heartbeat file
+  freshness), not that `rmapi put` is actually succeeding. A persistent
+  auth failure (e.g. `rmapi.conf` expired) or reMarkable API outage will
+  not fail the probes - the loop keeps iterating and touching the
+  heartbeat even while every upload fails. Check `kubectl logs -n default
+  songhub-0 -c remarkable-sync` to confirm tabs are actually landing on
+  the tablet, don't rely on pod status alone.
