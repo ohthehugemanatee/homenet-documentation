@@ -113,6 +113,10 @@ spec:
             # solely on the Dockerfile ENV: the livenessProbe below also
             # references this var, and an unset var would silently evaluate
             # to 0 in the probe's shell arithmetic, not the image default.
+            # If you change this value, also update the probe's
+            # ${SYNC_INTERVAL_SECONDS:-1800} fallback below to match - the
+            # fallback only protects against unset, not against drift from
+            # a value that IS set here.
             - name: SYNC_INTERVAL_SECONDS
               value: "1800"
           volumeMounts:
