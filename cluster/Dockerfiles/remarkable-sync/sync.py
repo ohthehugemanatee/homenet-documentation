@@ -36,9 +36,20 @@ def marker_for(tab_file: Path) -> Path:
     return STATE_DIR / f"{tab_file.name}.synced"
 
 
+def failed_marker_for(tab_file: Path) -> Path:
+    return STATE_DIR / f"{tab_file.name}.failed"
+
+
+class MalformedTabError(Exception):
+    """Tab JSON doesn't have the shape we expect - retrying won't help."""
+
+
 def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
-    data = json.loads(tab_file.read_text())
-    html_tab = data["tab"]["htmlTab"]
+    try:
+        data = json.loads(tab_file.read_text())
+        html_tab = data["tab"]["htmlTab"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
     HTML(string=HTML_TEMPLATE.format(body=html_tab)).write_pdf(str(out_pdf))
 
 
@@ -63,10 +74,17 @@ def sync_one(tab_file: Path) -> None:
 def run_cycle() -> None:
     STATE_DIR.mkdir(exist_ok=True)
     for tab_file in sorted(TAB_DIR.glob("*.ultimatetab.json")):
-        if marker_for(tab_file).exists():
+        if marker_for(tab_file).exists() or failed_marker_for(tab_file).exists():
             continue
         try:
             sync_one(tab_file)
+        except MalformedTabError:
+            # Deterministic - the file itself is bad, retrying won't help.
+            # Upload/network errors (rmapi not yet paired, transient outage)
+            # deliberately fall through to the broad except below instead,
+            # so those keep retrying rather than being given up on forever.
+            failed_marker_for(tab_file).touch()
+            log.exception("permanently skipping malformed tab %s", tab_file.name)
         except Exception:
             log.exception("failed to sync %s, will retry next cycle", tab_file.name)
         # Touched after every file, not just at cycle end: a large first
