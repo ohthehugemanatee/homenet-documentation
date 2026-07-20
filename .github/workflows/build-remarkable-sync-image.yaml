@@ -1,0 +1,62 @@
+name: Build reMarkable sync image
+
+# Manual only: bundles ddvk/rmapi (https://github.com/ddvk/rmapi, the
+# maintained fork of the now-archived juruen/rmapi) built from a pinned tag,
+# plus our own sync entrypoint (cluster/Dockerfiles/remarkable-sync/), pushed
+# to GHCR. No schedule/auto-trigger - bumping rmapi_ref is a deliberate,
+# reviewable action, same spirit as build-songhub-image.yaml.
+'on':
+  workflow_dispatch:
+    inputs:
+      rmapi_ref:
+        description: 'Upstream ddvk/rmapi git ref to build (tag preferred over branch)'
+        required: true
+        default: v0.0.34
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # linux/amd64 only: the cluster's arm64 nodes are tainted
+      # control-plane-only, so untolerated workload pods (like this one)
+      # only ever schedule on the amd64 nodes. No multi-arch/QEMU needed.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: cluster/Dockerfiles/remarkable-sync
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            RMAPI_REF=${{ inputs.rmapi_ref }}
+          tags: |
+            ghcr.io/ohthehugemanatee/remarkable-sync:${{ inputs.rmapi_ref }}
+            ghcr.io/ohthehugemanatee/remarkable-sync:latest
+
+      # GHCR packages default to private. The cluster has no imagePullSecret
+      # configured, so this package must be made public one time in GHCR
+      # package settings (or an imagePullSecret added) before the image is
+      # pullable.
+      - name: Note on package visibility
+        run: |
+          echo "If this is the first push, set the ghcr.io/ohthehugemanatee/remarkable-sync"
+          echo "package visibility to public in GitHub package settings, or"
+          echo "configure an imagePullSecret in cluster/services/songhub.yaml."

@@ -98,6 +98,80 @@ spec:
             periodSeconds: 15
             failureThreshold: 3
 
+        - name: remarkable-sync
+          # Built from cluster/Dockerfiles/remarkable-sync/ by
+          # .github/workflows/build-remarkable-sync-image.yaml. Converts
+          # SongHub's saved *.ultimatetab.json tabs to PDF and pushes them
+          # to reMarkable Cloud via rmapi. Shares the songhub-saved-tabs
+          # volume with the songhub container above (same pod, so no NFS/RWX
+          # needed) and never modifies the original tab files.
+          image: ghcr.io/ohthehugemanatee/remarkable-sync:v0.0.34
+          env:
+            - name: RMAPI_CONFIG
+              value: /secrets/rmapi/rmapi.conf
+            # Explicit (matches the image's own default) rather than relying
+            # solely on the Dockerfile ENV: the livenessProbe below also
+            # references this var, and an unset var would silently evaluate
+            # to 0 in the probe's shell arithmetic, not the image default.
+            # If you change this value, also update the probe's
+            # ${SYNC_INTERVAL_SECONDS:-1800} fallback below to match - the
+            # fallback only protects against unset, not against drift from
+            # a value that IS set here.
+            - name: SYNC_INTERVAL_SECONDS
+              value: "1800"
+          volumeMounts:
+            - name: songhub-saved-tabs
+              mountPath: /app/saved-tabs
+            - name: remarkable-rmapi-token
+              mountPath: /secrets/rmapi
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          # No network listener - the sync loop touches HEARTBEAT_FILE
+          # (default /tmp/heartbeat) at the end of every cycle, every
+          # SYNC_INTERVAL_SECONDS (default 1800s, set in the image).
+          # Readiness: file exists, proving the loop completed at least once.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/tmp/heartbeat"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            failureThreshold: 5
+          # Liveness: file is fresh, catching a hung loop. 2x interval grace
+          # so one slow cycle (e.g. a large batch of new tabs) doesn't flap.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - test $(( $(date +%s) - $(stat -c %Y /tmp/heartbeat 2>/dev/null || echo 0) )) -lt $((2 * ${SYNC_INTERVAL_SECONDS:-1800}))
+            initialDelaySeconds: 60
+            periodSeconds: 300
+            failureThreshold: 2
+      volumes:
+        - name: remarkable-rmapi-token
+          secret:
+            # CHANGEME: created out-of-band, never committed. One-time
+            # interactive pairing (cannot be automated):
+            #   1. Visit my.remarkable.com/connect/remarkable for a
+            #      one-time code.
+            #   2. Run `rmapi` once locally/interactively to mint
+            #      ~/.config/rmapi/rmapi.conf (or wherever RMAPI_CONFIG
+            #      points for your rmapi version - confirm against the
+            #      pinned ddvk/rmapi release).
+            #   3. kubectl create secret generic remarkable-rmapi-token \
+            #        --from-file=rmapi.conf=<path-to-minted-config> \
+            #        -n default
+            secretName: remarkable-rmapi-token
+
 ---
 
 apiVersion: v1
