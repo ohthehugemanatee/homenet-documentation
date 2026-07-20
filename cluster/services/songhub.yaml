@@ -109,6 +109,12 @@ spec:
           env:
             - name: RMAPI_CONFIG
               value: /secrets/rmapi/rmapi.conf
+            # Explicit (matches the image's own default) rather than relying
+            # solely on the Dockerfile ENV: the livenessProbe below also
+            # references this var, and an unset var would silently evaluate
+            # to 0 in the probe's shell arithmetic, not the image default.
+            - name: SYNC_INTERVAL_SECONDS
+              value: "1800"
           volumeMounts:
             - name: songhub-saved-tabs
               mountPath: /app/saved-tabs
@@ -142,7 +148,7 @@ spec:
               command:
                 - sh
                 - -c
-                - test $(( $(date +%s) - $(stat -c %Y /tmp/heartbeat 2>/dev/null || echo 0) )) -lt $((2 * SYNC_INTERVAL_SECONDS))
+                - test $(( $(date +%s) - $(stat -c %Y /tmp/heartbeat 2>/dev/null || echo 0) )) -lt $((2 * ${SYNC_INTERVAL_SECONDS:-1800}))
             initialDelaySeconds: 60
             periodSeconds: 300
             failureThreshold: 2

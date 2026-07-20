@@ -69,6 +69,11 @@ def run_cycle() -> None:
             sync_one(tab_file)
         except Exception:
             log.exception("failed to sync %s, will retry next cycle", tab_file.name)
+        # Touched after every file, not just at cycle end: a large first
+        # batch (e.g. initial deploy) could otherwise take longer than the
+        # liveness probe's startup grace, killing the container mid-upload
+        # before any heartbeat was ever recorded.
+        HEARTBEAT_FILE.touch()
     HEARTBEAT_FILE.touch()
 
 
