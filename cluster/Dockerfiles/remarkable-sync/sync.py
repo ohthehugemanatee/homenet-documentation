@@ -41,14 +41,21 @@ def failed_marker_for(tab_file: Path) -> Path:
 
 
 class MalformedTabError(Exception):
-    """Tab JSON doesn't have the shape we expect - retrying won't help."""
+    """Tab JSON parses but lacks the shape we expect - retrying won't help.
+
+    Deliberately does NOT cover json.JSONDecodeError: invalid JSON syntax
+    can mean SongHub wrote this file non-atomically and we read it mid-write,
+    which is transient and should keep retrying next cycle. A KeyError/
+    TypeError means the JSON parsed fine but the structure is simply wrong -
+    that won't fix itself on retry.
+    """
 
 
 def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
+    data = json.loads(tab_file.read_text())
     try:
-        data = json.loads(tab_file.read_text())
         html_tab = data["tab"]["htmlTab"]
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (KeyError, TypeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
     HTML(string=HTML_TEMPLATE.format(body=html_tab)).write_pdf(str(out_pdf))
 
