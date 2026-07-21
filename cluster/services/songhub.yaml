@@ -23,6 +23,17 @@ spec:
       labels:
         run: songhub
     spec:
+      # songhub container has no runAsUser (runs as whatever the upstream
+      # image defaults to, likely root) and already owns files on
+      # songhub-saved-tabs from before remarkable-sync existed. fsGroup
+      # grants the sidecar's UID-1000 process group-write access to that
+      # same volume without touching the songhub container's own user, and
+      # is applied to existing files on (re)mount - same pattern as
+      # plex.yaml's shared-PVC fsGroup. OnRootMismatch skips the recursive
+      # chgrp on mounts where ownership is already correct.
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: songhub
           # Built from a pinned upstream tag by
