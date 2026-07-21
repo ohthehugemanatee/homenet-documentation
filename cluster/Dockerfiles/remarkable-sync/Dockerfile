@@ -38,8 +38,11 @@ RUN pip install --no-cache-dir weasyprint==69.0
 COPY --from=rmapi-builder /out/rmapi /usr/local/bin/rmapi
 COPY sync.py /app/sync.py
 
-RUN useradd --create-home --uid 1000 sync
-USER sync
+# Named remarkable-sync, not "sync": python:3.12-slim-bookworm already ships
+# a legacy system account literally named "sync" (Debian's historical
+# /bin/sync UID-4 account), and useradd fails outright on the collision.
+RUN useradd --create-home --uid 1000 remarkable-sync
+USER remarkable-sync
 WORKDIR /app
 
 ENV TAB_DIR=/app/saved-tabs \
