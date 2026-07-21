@@ -27,7 +27,7 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 ## Operating notes
 
 - **Resetting a permanently-failed tab.** A tab whose JSON parses but is
-  missing the expected `tab.htmlTab` field gets a `.failed` marker in
+  missing the expected `tab.raw_tabs` field gets a `.failed` marker in
   `.remarkable-sync-state/` (on the shared `songhub-saved-tabs` volume) and
   is never retried. If a tab was misclassified, or SongHub's export format
   changes and old failures should be re-attempted after a fix, clear the
@@ -39,6 +39,18 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 - Invalid JSON (as opposed to valid-but-wrong-shaped JSON) is treated as
   transient - no `.failed` marker, keeps retrying - since it can happen if
   the sidecar reads a file mid-write by SongHub.
+- **Forcing a re-sync after a rendering change.** A tab that already
+  uploaded successfully gets a `.synced` marker and is never re-converted or
+  re-uploaded, even if `sync.py`'s PDF rendering later changes (e.g. the
+  raw_tabs-vs-htmlTab / portrait fix). To regenerate specific tabs already
+  on the tablet, clear their markers the same way as `.failed` ones:
+  ```
+  kubectl exec -n default songhub-0 -c remarkable-sync -- \
+    rm -f "/app/saved-tabs/.remarkable-sync-state/<filename>.ultimatetab.json.synced"
+  ```
+  or `rm -f /app/saved-tabs/.remarkable-sync-state/*.synced` to force
+  everything to re-upload (creates duplicate documents on reMarkable Cloud
+  next to the old ones - delete the stale copies there manually).
 - **A green pod does not mean uploads are succeeding.** The readiness/
   liveness probes only check that the sync loop is alive (heartbeat file
   freshness), not that `rmapi put` is actually succeeding. A persistent
