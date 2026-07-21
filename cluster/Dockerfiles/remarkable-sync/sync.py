@@ -48,17 +48,37 @@ HTML_TEMPLATE = """<!doctype html>
     word-break: break-all;
     margin: 0;
   }}
+  .tab-block {{
+    display: block;
+    border-left: 2pt solid #999;
+    padding-left: 4pt;
+    margin: 2pt 0;
+  }}
 </style></head><body><pre>{body}</pre></body></html>
 """
 
 # Ultimate Guitar's raw tab text wraps structural blocks in BBCode-style
-# markers - [tab]...[/tab] around each six-line notation block, [ch]...[/ch]
-# around inline chord names - meant for UG's own site renderer to strip, not
-# for a human reader. Deliberately an exact-word match, NOT a generic
-# `\[.*?\]` strip: real tab notation also uses brackets for artificial
-# harmonics (e.g. a literal `[12]` on a string line, per the tab's own
-# legend), which must NOT be touched.
-UG_MARKUP_TAGS = re.compile(r"\[/?(?:tab|ch)\]")
+# markers: [tab]...[/tab] around each six-line notation block, [ch]...[/ch]
+# around inline chord names. UG's own site renderer uses these to typeset
+# specially (chords bolded, tab set apart); we do the same instead of just
+# discarding the markup, which would throw away real signal. Deliberately
+# exact-word matches, NOT a generic `\[.*?\]` strip: real tab notation also
+# uses brackets for artificial harmonics (e.g. a literal `[12]` on a string
+# line, per the tab's own legend), which must NOT be touched.
+#
+# We looked at using an established UG-format converter (ChordSheetJS's
+# UltimateGuitarParser, feeding the official chordpro CLI) instead of this
+# regex approach, since that's the real "prefer established components"
+# answer for chord-over-lyrics sheets. Verified empirically it does not fit
+# here: that parser is built for UG's "Chords" page format and badly
+# corrupts "Tabs"-type content like this (wraps string-letter tab lines
+# e.g. `B|...` in ChordPro's [Chord] syntax, mangling them). ChordPro's own
+# tab handling is just a verbatim monospace block (`{sot}`/`{eot}`) with no
+# special typesetting anyway - the same treatment we already give tab
+# blocks here, just via a much bigger Perl+Node toolchain for no gain on
+# the part of the content that's actually tab notation.
+TAB_BLOCK_TAG = re.compile(r"\[tab\](.*?)\[/tab\]", re.DOTALL)
+CHORD_TAG = re.compile(r"\[ch\](.*?)\[/ch\]", re.DOTALL)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("remarkable-sync")
@@ -89,8 +109,15 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
         raw_tabs = data["tab"]["raw_tabs"]
     except (KeyError, TypeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
-    raw_tabs = UG_MARKUP_TAGS.sub("", raw_tabs)
+    # Escape first, then turn UG's markup into real HTML tags on the
+    # now-safe text - html.escape() doesn't touch `[`/`]`/letters, so the
+    # UG tag regexes still match correctly afterward, and any stray
+    # `<`/`>`/`&` in the source tab content (e.g. the legend's own literal
+    # "<>" volume-swell notation) is neutralized before we start inserting
+    # real tags of our own.
     body = html.escape(raw_tabs)
+    body = TAB_BLOCK_TAG.sub(r'<span class="tab-block">\1</span>', body)
+    body = CHORD_TAG.sub(r"<b>\1</b>", body)
     WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
 
 
