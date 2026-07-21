@@ -2,11 +2,16 @@
 # *.ultimatetab.json tabs to PDF and pushes them to reMarkable Cloud via
 # rmapi. See cluster/Dockerfiles/remarkable-sync/sync.py for the loop.
 
-FROM golang:1.22-alpine AS rmapi-builder
+FROM golang:1.26-alpine AS rmapi-builder
 
 # Pinned upstream ref, bumped deliberately via workflow_dispatch input in
 # .github/workflows/build-remarkable-sync-image.yaml. ddvk/rmapi is the
 # maintained fork; upstream juruen/rmapi is archived.
+# Builder must be >= the Go version ddvk/rmapi's go.mod requires (1.23 as of
+# v0.0.34) - GOTOOLCHAIN=local in this image means it won't auto-download a
+# newer toolchain, so a too-old builder fails the build outright rather than
+# just warning. Bump this alongside RMAPI_REF if a future ref raises its
+# go.mod requirement further.
 ARG RMAPI_REF=v0.0.34
 
 RUN apk add --no-cache git
@@ -33,8 +38,11 @@ RUN pip install --no-cache-dir weasyprint==69.0
 COPY --from=rmapi-builder /out/rmapi /usr/local/bin/rmapi
 COPY sync.py /app/sync.py
 
-RUN useradd --create-home --uid 1000 sync
-USER sync
+# Named remarkable-sync, not "sync": python:3.12-slim-bookworm already ships
+# a legacy system account literally named "sync" (Debian's historical
+# /bin/sync UID-4 account), and useradd fails outright on the collision.
+RUN useradd --create-home --uid 1000 remarkable-sync
+USER remarkable-sync
 WORKDIR /app
 
 ENV TAB_DIR=/app/saved-tabs \
