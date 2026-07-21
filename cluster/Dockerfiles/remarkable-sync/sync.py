@@ -26,13 +26,27 @@ STATE_DIR = TAB_DIR / ".remarkable-sync-state"
 # with blank space beyond it - not a layout bug on our end, a source-data
 # choice. raw_tabs has full, un-chopped tab lines. It's plain text (not
 # pre-escaped like htmlTab was), so it must be html.escape()'d before
-# embedding. Portrait per operator request; pre-wrap (not pre) so a rare
-# oversized line soft-wraps at the page edge instead of being clipped off
-# it entirely - full lines mostly fit at this width/font size regardless.
+# embedding. Portrait per operator request.
+#
+# white-space/word-break MUST be set on the `pre` selector itself, not
+# `body`: <pre> has its own UA-stylesheet default of `white-space: pre`,
+# which wins over an inherited value from `body` (a direct rule on the
+# element beats inheritance regardless of stylesheet origin). Verified by
+# rendering: with the rule on `body` only, an oversized line silently
+# overflowed off the page edge and vanished instead of wrapping.
+# word-break: break-all is also required - tab lines are long unbroken runs
+# of dashes/pipes with no whitespace, so `pre-wrap` alone has no wrap point
+# to use and the line still overflows without it.
 HTML_TEMPLATE = """<!doctype html>
 <html><head><meta charset="utf-8"><style>
   @page {{ size: A4 portrait; margin: 1.2cm; }}
-  body {{ font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; white-space: pre-wrap; }}
+  pre {{
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 8pt;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+  }}
 </style></head><body><pre>{body}</pre></body></html>
 """
 
