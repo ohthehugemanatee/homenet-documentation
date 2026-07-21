@@ -5,6 +5,7 @@ import html
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,15 @@ HTML_TEMPLATE = """<!doctype html>
 </style></head><body><pre>{body}</pre></body></html>
 """
 
+# Ultimate Guitar's raw tab text wraps structural blocks in BBCode-style
+# markers - [tab]...[/tab] around each six-line notation block, [ch]...[/ch]
+# around inline chord names - meant for UG's own site renderer to strip, not
+# for a human reader. Deliberately an exact-word match, NOT a generic
+# `\[.*?\]` strip: real tab notation also uses brackets for artificial
+# harmonics (e.g. a literal `[12]` on a string line, per the tab's own
+# legend), which must NOT be touched.
+UG_MARKUP_TAGS = re.compile(r"\[/?(?:tab|ch)\]")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("remarkable-sync")
 
@@ -79,6 +89,7 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
         raw_tabs = data["tab"]["raw_tabs"]
     except (KeyError, TypeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
+    raw_tabs = UG_MARKUP_TAGS.sub("", raw_tabs)
     body = html.escape(raw_tabs)
     WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
 
