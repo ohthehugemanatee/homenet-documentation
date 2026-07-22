@@ -38,12 +38,30 @@ STATE_DIR = TAB_DIR / ".remarkable-sync-state"
 # word-break: break-all is also required - tab lines are long unbroken runs
 # of dashes/pipes with no whitespace, so `pre-wrap` alone has no wrap point
 # to use and the line still overflows without it.
+#
+# @page size is the reMarkable 2's ACTUAL physical screen size, not A4:
+# 1404x1872px at 226 DPI = 157.79mm x 210.39mm (confirmed device spec).
+# reMarkable has no in-app reflow/font-size control for PDFs, so the fixed
+# size has to be right at generation time - and A4 (210mm wide) doesn't
+# match the device's narrower 157.79mm screen. A4 content displayed on the
+# device gets auto-scaled to fit-width, which was silently shrinking every
+# font size by ~25% (157.79/210 = 0.751) below its nominal point size.
+# Matching @page to the real screen means "8pt" actually renders as 8pt.
+# font-size bumped 8pt -> 9pt on top of that fix: 9 / (8 * 0.751) = 1.50x
+# the apparent size the operator was actually seeing before - the ~50%
+# increase requested, landing almost exactly on that number once the A4
+# mismatch is accounted for. Tradeoff, by the numbers: at 9pt with 6mm
+# margins the content area is ~76 monospace characters wide (was ~105
+# under the old oversized A4 virtual page), so busier tab passages wrap
+# more often than before. This is a real, physical-width tradeoff, not a
+# bug - the device is only so wide, and bigger text always means fewer
+# characters fit per line.
 HTML_TEMPLATE = """<!doctype html>
 <html><head><meta charset="utf-8"><style>
-  @page {{ size: A4 portrait; margin: 1.2cm; }}
+  @page {{ size: 157.79mm 210.39mm; margin: 6mm; }}
   pre {{
     font-family: "DejaVu Sans Mono", monospace;
-    font-size: 8pt;
+    font-size: 9pt;
     white-space: pre-wrap;
     word-break: break-all;
     margin: 0;
