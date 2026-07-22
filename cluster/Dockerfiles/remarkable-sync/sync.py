@@ -29,23 +29,55 @@ STATE_DIR = TAB_DIR / ".remarkable-sync-state"
 # pre-escaped like htmlTab was), so it must be html.escape()'d before
 # embedding. Portrait per operator request.
 #
-# white-space/word-break MUST be set on the `pre` selector itself, not
+# white-space/overflow-wrap MUST be set on the `pre` selector itself, not
 # `body`: <pre> has its own UA-stylesheet default of `white-space: pre`,
 # which wins over an inherited value from `body` (a direct rule on the
 # element beats inheritance regardless of stylesheet origin). Verified by
 # rendering: with the rule on `body` only, an oversized line silently
 # overflowed off the page edge and vanished instead of wrapping.
-# word-break: break-all is also required - tab lines are long unbroken runs
-# of dashes/pipes with no whitespace, so `pre-wrap` alone has no wrap point
-# to use and the line still overflows without it.
+# overflow-wrap: anywhere is also required - tab lines are long unbroken
+# runs of dashes/pipes with no whitespace, so `pre-wrap` alone has no wrap
+# point to use and the line still overflows without it. It's a *fallback*
+# though, not the primary wrap mechanism - see the WBR_AFTER_BAR note in
+# convert_to_pdf() for why a plain forced break-all reads badly on tab
+# notation specifically, and what actually supplies the preferred wrap
+# points.
+#
+# @page size is the reMarkable 2's ACTUAL physical screen size, not A4:
+# 1404x1872px at 226 DPI = 157.79mm x 210.39mm (confirmed device spec).
+# reMarkable has no in-app reflow/font-size control for PDFs, so the fixed
+# size has to be right at generation time - and A4 (210mm wide) doesn't
+# match the device's narrower 157.79mm screen. A4 content displayed on the
+# device gets auto-scaled to fit-width, which was silently shrinking every
+# font size by ~25% (157.79/210 = 0.751) below its nominal point size.
+# Matching @page to the real screen means "8pt" actually renders as 8pt.
+# font-size bumped 8pt -> 9pt on top of that fix: 9 / (8 * 0.751) = 1.50x
+# the apparent size the operator was actually seeing before - the ~50%
+# increase requested, landing almost exactly on that number once the A4
+# mismatch is accounted for. Tradeoff, by the numbers: at 9pt with 6mm
+# margins the content area is ~76 monospace characters wide (was ~105
+# under the old oversized A4 virtual page), so busier tab passages wrap
+# more often than before. This is a real, physical-width tradeoff, not a
+# bug - the device is only so wide, and bigger text always means fewer
+# characters fit per line.
+#
+# .tab-block gets break-inside/page-break-inside: avoid (both properties
+# for engine compatibility - weasyprint honors the unprefixed Fragmentation
+# name but the legacy one costs nothing to also set) because weasyprint's
+# default pagination breaks between any two line boxes, including inside a
+# six-line tab-block's own lines - reproduced empirically (a block that
+# would otherwise straddle a page boundary got split 4 lines on one page,
+# 2 on the next, exactly the reported "page break in the middle of a
+# line/tab"). With the rule set, a block that doesn't fit in the remaining
+# space on the current page moves to the next page as a whole instead.
 HTML_TEMPLATE = """<!doctype html>
 <html><head><meta charset="utf-8"><style>
-  @page {{ size: A4 portrait; margin: 1.2cm; }}
+  @page {{ size: 157.79mm 210.39mm; margin: 6mm; }}
   pre {{
     font-family: "DejaVu Sans Mono", monospace;
-    font-size: 8pt;
+    font-size: 9pt;
     white-space: pre-wrap;
-    word-break: break-all;
+    overflow-wrap: anywhere;
     margin: 0;
   }}
   .tab-block {{
@@ -53,6 +85,8 @@ HTML_TEMPLATE = """<!doctype html>
     border-left: 2pt solid #999;
     padding-left: 4pt;
     margin: 2pt 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }}
 </style></head><body><pre>{body}</pre></body></html>
 """
@@ -109,13 +143,36 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
         raw_tabs = data["tab"]["raw_tabs"]
     except (KeyError, TypeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
+    # unescape() before escape(): UG's own "Tablature Legend" footer text
+    # (present verbatim in raw_tabs on many tabs) already comes
+    # HTML-entity-encoded from their API - e.g. the literal 8 characters
+    # "&lt;&gt;" for its "<>" volume-swell notation, not real "<"/">"
+    # characters. Escaping that as-is double-encodes the leading "&" into
+    # "&amp;", which the PDF's HTML parser then decodes exactly once back
+    # to the literal text "&lt;&gt;" - not the intended "<>" - since entity
+    # decoding doesn't recurse. unescape() first normalizes any such
+    # pre-encoded entities (and no-ops on plain text, since a bare "&" not
+    # part of a recognized entity is left alone), so every tab starts from
+    # the same true-plain-text baseline before we escape it for real.
+    #
     # Escape first, then turn UG's markup into real HTML tags on the
     # now-safe text - html.escape() doesn't touch `[`/`]`/letters, so the
     # UG tag regexes still match correctly afterward, and any stray
-    # `<`/`>`/`&` in the source tab content (e.g. the legend's own literal
-    # "<>" volume-swell notation) is neutralized before we start inserting
-    # real tags of our own.
-    body = html.escape(raw_tabs)
+    # `<`/`>`/`&` in the source tab content is neutralized before we start
+    # inserting real tags of our own.
+    body = html.escape(html.unescape(raw_tabs))
+    # WBR_AFTER_BAR: a `<wbr>` after every "|" gives the renderer a
+    # preferred wrap point at each bar/measure boundary. Without it, an
+    # overlong tab line (e.g. several measures concatenated on one raw_tabs
+    # line) has no wrap opportunity at all - it's one unbroken run of
+    # dashes - so overflow-wrap: anywhere's forced fallback break lands
+    # wherever the character count runs out, typically mid-measure. That
+    # reads as the tab breaking "mid-stanza" and was reported as such.
+    # `<wbr>` is always preferred by the line-breaking algorithm over a
+    # forced break, so this fixes the common case (bar-length segments
+    # that individually fit); overflow-wrap: anywhere remains the fallback
+    # for the rare single measure that's still too wide on its own.
+    body = body.replace("|", "|<wbr>")
     body = TAB_BLOCK_TAG.sub(r'<span class="tab-block">\1</span>', body)
     body = CHORD_TAG.sub(r"<b>\1</b>", body)
     WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
