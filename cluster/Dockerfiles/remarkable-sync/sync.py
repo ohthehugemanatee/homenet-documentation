@@ -56,6 +56,16 @@ STATE_DIR = TAB_DIR / ".remarkable-sync-state"
 # more often than before. This is a real, physical-width tradeoff, not a
 # bug - the device is only so wide, and bigger text always means fewer
 # characters fit per line.
+#
+# .tab-block gets break-inside/page-break-inside: avoid (both properties
+# for engine compatibility - weasyprint honors the unprefixed Fragmentation
+# name but the legacy one costs nothing to also set) because weasyprint's
+# default pagination breaks between any two line boxes, including inside a
+# six-line tab-block's own lines - reproduced empirically (a block that
+# would otherwise straddle a page boundary got split 4 lines on one page,
+# 2 on the next, exactly the reported "page break in the middle of a
+# line/tab"). With the rule set, a block that doesn't fit in the remaining
+# space on the current page moves to the next page as a whole instead.
 HTML_TEMPLATE = """<!doctype html>
 <html><head><meta charset="utf-8"><style>
   @page {{ size: 157.79mm 210.39mm; margin: 6mm; }}
@@ -71,6 +81,8 @@ HTML_TEMPLATE = """<!doctype html>
     border-left: 2pt solid #999;
     padding-left: 4pt;
     margin: 2pt 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }}
 </style></head><body><pre>{body}</pre></body></html>
 """
@@ -127,13 +139,24 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
         raw_tabs = data["tab"]["raw_tabs"]
     except (KeyError, TypeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
+    # unescape() before escape(): UG's own "Tablature Legend" footer text
+    # (present verbatim in raw_tabs on many tabs) already comes
+    # HTML-entity-encoded from their API - e.g. the literal 8 characters
+    # "&lt;&gt;" for its "<>" volume-swell notation, not real "<"/">"
+    # characters. Escaping that as-is double-encodes the leading "&" into
+    # "&amp;", which the PDF's HTML parser then decodes exactly once back
+    # to the literal text "&lt;&gt;" - not the intended "<>" - since entity
+    # decoding doesn't recurse. unescape() first normalizes any such
+    # pre-encoded entities (and no-ops on plain text, since a bare "&" not
+    # part of a recognized entity is left alone), so every tab starts from
+    # the same true-plain-text baseline before we escape it for real.
+    #
     # Escape first, then turn UG's markup into real HTML tags on the
     # now-safe text - html.escape() doesn't touch `[`/`]`/letters, so the
     # UG tag regexes still match correctly afterward, and any stray
-    # `<`/`>`/`&` in the source tab content (e.g. the legend's own literal
-    # "<>" volume-swell notation) is neutralized before we start inserting
-    # real tags of our own.
-    body = html.escape(raw_tabs)
+    # `<`/`>`/`&` in the source tab content is neutralized before we start
+    # inserting real tags of our own.
+    body = html.escape(html.unescape(raw_tabs))
     body = TAB_BLOCK_TAG.sub(r'<span class="tab-block">\1</span>', body)
     body = CHORD_TAG.sub(r"<b>\1</b>", body)
     WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
