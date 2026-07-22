@@ -29,15 +29,19 @@ STATE_DIR = TAB_DIR / ".remarkable-sync-state"
 # pre-escaped like htmlTab was), so it must be html.escape()'d before
 # embedding. Portrait per operator request.
 #
-# white-space/word-break MUST be set on the `pre` selector itself, not
+# white-space/overflow-wrap MUST be set on the `pre` selector itself, not
 # `body`: <pre> has its own UA-stylesheet default of `white-space: pre`,
 # which wins over an inherited value from `body` (a direct rule on the
 # element beats inheritance regardless of stylesheet origin). Verified by
 # rendering: with the rule on `body` only, an oversized line silently
 # overflowed off the page edge and vanished instead of wrapping.
-# word-break: break-all is also required - tab lines are long unbroken runs
-# of dashes/pipes with no whitespace, so `pre-wrap` alone has no wrap point
-# to use and the line still overflows without it.
+# overflow-wrap: anywhere is also required - tab lines are long unbroken
+# runs of dashes/pipes with no whitespace, so `pre-wrap` alone has no wrap
+# point to use and the line still overflows without it. It's a *fallback*
+# though, not the primary wrap mechanism - see the WBR_AFTER_BAR note in
+# convert_to_pdf() for why a plain forced break-all reads badly on tab
+# notation specifically, and what actually supplies the preferred wrap
+# points.
 #
 # @page size is the reMarkable 2's ACTUAL physical screen size, not A4:
 # 1404x1872px at 226 DPI = 157.79mm x 210.39mm (confirmed device spec).
@@ -73,7 +77,7 @@ HTML_TEMPLATE = """<!doctype html>
     font-family: "DejaVu Sans Mono", monospace;
     font-size: 9pt;
     white-space: pre-wrap;
-    word-break: break-all;
+    overflow-wrap: anywhere;
     margin: 0;
   }}
   .tab-block {{
@@ -157,6 +161,18 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
     # `<`/`>`/`&` in the source tab content is neutralized before we start
     # inserting real tags of our own.
     body = html.escape(html.unescape(raw_tabs))
+    # WBR_AFTER_BAR: a `<wbr>` after every "|" gives the renderer a
+    # preferred wrap point at each bar/measure boundary. Without it, an
+    # overlong tab line (e.g. several measures concatenated on one raw_tabs
+    # line) has no wrap opportunity at all - it's one unbroken run of
+    # dashes - so overflow-wrap: anywhere's forced fallback break lands
+    # wherever the character count runs out, typically mid-measure. That
+    # reads as the tab breaking "mid-stanza" and was reported as such.
+    # `<wbr>` is always preferred by the line-breaking algorithm over a
+    # forced break, so this fixes the common case (bar-length segments
+    # that individually fit); overflow-wrap: anywhere remains the fallback
+    # for the rare single measure that's still too wide on its own.
+    body = body.replace("|", "|<wbr>")
     body = TAB_BLOCK_TAG.sub(r'<span class="tab-block">\1</span>', body)
     body = CHORD_TAG.sub(r"<b>\1</b>", body)
     WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
