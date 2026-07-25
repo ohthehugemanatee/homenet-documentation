@@ -137,12 +137,13 @@ class MalformedTabError(Exception):
     """
 
 
-def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
-    data = json.loads(tab_file.read_text())
-    try:
-        raw_tabs = data["tab"]["raw_tabs"]
-    except (KeyError, TypeError) as exc:
-        raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
+def render_body_html(raw_tabs: str) -> str:
+    """Turn UG's plain-text raw_tabs into the HTML fragment HTML_TEMPLATE
+    embeds in its <pre>. Split out from convert_to_pdf so this markup
+    transformation - the part that's had several rendering-fidelity bugs
+    found in it - can be unit-tested directly against tricky real-world
+    input without a full weasyprint render; see tests/test_convert.py.
+    """
     # unescape() before escape(): UG's own "Tablature Legend" footer text
     # (present verbatim in raw_tabs on many tabs) already comes
     # HTML-entity-encoded from their API - e.g. the literal 8 characters
@@ -175,22 +176,60 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
     body = body.replace("|", "|<wbr>")
     body = TAB_BLOCK_TAG.sub(r'<span class="tab-block">\1</span>', body)
     body = CHORD_TAG.sub(r"<b>\1</b>", body)
-    WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
+    return body
+
+
+def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
+    data = json.loads(tab_file.read_text())
+    try:
+        raw_tabs = data["tab"]["raw_tabs"]
+    except (KeyError, TypeError) as exc:
+        raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
+    body = render_body_html(raw_tabs)
+    try:
+        WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
+    except Exception:
+        # weasyprint's own exceptions are normally descriptive, but log
+        # explicitly here (rather than relying solely on run_cycle's outer
+        # log.exception) so a PDF-generation failure is never silently
+        # indistinguishable from an upload failure in the logs.
+        log.error("weasyprint failed to render %s", tab_file.name)
+        raise
 
 
 def upload_to_remarkable(pdf_file: Path) -> None:
-    subprocess.run(
-        ["rmapi", "put", str(pdf_file), REMARKABLE_TARGET_FOLDER],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            ["rmapi", "put", str(pdf_file), REMARKABLE_TARGET_FOLDER],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        # CalledProcessError's own __str__ is just "returned non-zero exit
+        # status N" - it does NOT include stdout/stderr unless read off the
+        # exception explicitly. That's exactly the unhelpful message seen
+        # in the logs ("rmapi put call returned non-zero error code") with
+        # no way to tell WHY (auth expired, folder missing, network error,
+        # ...) without this.
+        log.error(
+            "rmapi put %s failed (exit %s): stdout=%r stderr=%r",
+            pdf_file.name, exc.returncode, exc.stdout, exc.stderr,
+        )
+        raise
 
 
 def sync_one(tab_file: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         pdf_file = Path(tmp) / f"{tab_file.stem}.pdf"
+        log.info("converting %s", tab_file.name)
         convert_to_pdf(tab_file, pdf_file)
+        # Logged before upload so a failure log always shows whether
+        # conversion produced a real, non-empty file - the temp dir is
+        # gone by the time anyone could otherwise check.
+        log.info(
+            "converted %s -> %d bytes", tab_file.name, pdf_file.stat().st_size
+        )
         upload_to_remarkable(pdf_file)
     marker_for(tab_file).touch()
     log.info("synced %s", tab_file.name)
