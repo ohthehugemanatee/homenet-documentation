@@ -116,14 +116,10 @@ CHORD_TAG = re.compile(r"\[ch\](.*?)\[/ch\]", re.DOTALL)
 
 STRING_LINE_RE = re.compile(r"^([A-Za-z0-9#]{1,3})\|")
 
-# Empirically measured: the widest a line can be and still fit within a
-# .tab-block's content area - the @page's content width minus that block's
-# own border-left + padding-left - at the current 9pt font, without
-# wrapping. Verified by rendering "e|" + N dashes + "|" inside the actual
-# styled .tab-block and finding the exact N where it first wraps (73);
-# deliberately NOT reusing the plain page-content-width figure (~76) from
-# the font-size fix, since border/padding eat into it further for content
-# specifically inside a .tab-block.
+# Widest a line fits in a .tab-block without wrapping - tighter than the
+# ~76-char page width since border-left+padding-left eat into it. Measured
+# empirically by rendering "e|"+dashes+"|" and finding the exact N (73)
+# where it first wraps.
 TAB_SYSTEM_MAX_WIDTH = 72
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -150,34 +146,22 @@ class MalformedTabError(Exception):
 
 
 def _reflow_tab_block(tab_block_text: str, max_width: int = TAB_SYSTEM_MAX_WIDTH) -> str:
-    """Re-lay-out a [tab]...[/tab] block's lines into "systems" (groups of
-    whole measures) that each fit within max_width, instead of relying on
-    each of the block's string-lines to wrap independently.
+    """Re-lay-out a [tab]...[/tab] block into "systems" (groups of whole
+    measures) that fit max_width, instead of each string-line wrapping
+    independently - which lands a wrapped continuation right after that
+    ONE string's own line, not grouped with the other strings' matching
+    measure, breaking tab notation's vertical string-to-string alignment
+    (reported: a wrapped arpeggio's leftover measure showed up misaligned
+    between two other strings' lines).
 
-    Independent per-line wrapping (the previous approach, via <wbr> after
-    every "|") is wrong for tab notation specifically: each string's line
-    wraps at its OWN character count, so a wrapped continuation lands
-    right after THAT string's own line - not grouped with the other
-    strings' continuations for the same measures. Reported by the
-    operator: a wrapped arpeggio's last measure showed up as one string's
-    leftover fragment sandwiched between that string's own line and the
-    next string's line, no longer vertically aligned with the other
-    strings' matching measure - which defeats the entire point of tab
-    notation (reading straight down at one horizontal position tells you
-    what every string does at that instant).
+    Splits each string's line into bar-terminated measures, packs whole
+    measures (never splitting one) into width-fitting systems, and
+    re-emits the string's label on every system, same as UG's own site.
 
-    Splits each string's line into individual bar-terminated measures,
-    packs whole measures (never splitting one) into systems that fit
-    max_width, and re-emits the string's label on every system - the same
-    way UG's own site handles an overlong tab line - so each system reads
-    correctly on its own.
-
-    Many real blocks lead with prose before the actual string lines - a
-    chord-name header row, a "(fingerpick arpeggios)" note, etc. (UG
-    includes this INSIDE the [tab]...[/tab] markers, not as separate
-    text). That leading prose is passed through untouched - it isn't
-    alignment-critical the way the string lines are - and only the
-    trailing run of recognizable "<label>|..." lines gets reflowed.
+    Leading prose some blocks have before the string lines (chord-name
+    header, "(fingerpick arpeggios)" notes - UG puts these INSIDE
+    [tab]...[/tab]) passes through untouched; only the string lines
+    reflow.
     """
     lines = [
         line for line in tab_block_text.replace("\r\n", "\n").split("\n") if line.strip()
@@ -259,13 +243,10 @@ def render_body_html(raw_tabs: str) -> str:
     # the same true-plain-text baseline before we escape it for real.
     #
     raw_tabs = html.unescape(raw_tabs)
-    # _reflow_tab_block() needs plain "<label>|<measure>|..." text to find
-    # bar boundaries, so it runs on the unescaped source, before any HTML
-    # markup is introduced. Each [tab]...[/tab] block gets re-laid-out into
-    # width-fitting systems (see that function's docstring for why simple
-    # per-line wrapping doesn't work for tab notation); blocks it declines
-    # to touch (unrecognized shape) pass through unchanged, still covered
-    # by the WBR_AFTER_BAR fallback below.
+    # Reflow each [tab] block's string lines into width-fitting systems
+    # before escaping (needs plain "<label>|<measure>|..." text). Blocks
+    # it declines to touch pass through, still covered by the <wbr>
+    # fallback below.
     raw_tabs = TAB_BLOCK_TAG.sub(
         lambda m: f"[tab]{_reflow_tab_block(m.group(1))}[/tab]", raw_tabs
     )
@@ -275,17 +256,9 @@ def render_body_html(raw_tabs: str) -> str:
     # in the source tab content is neutralized before we start inserting
     # real tags of our own.
     body = html.escape(raw_tabs)
-    # WBR_AFTER_BAR: a `<wbr>` after every "|" gives the renderer a
-    # preferred wrap point at each bar/measure boundary, as a fallback for
-    # any content _reflow_tab_block() declined to reflow (unrecognized
-    # shape) or non-tab prose that happens to contain "|". Without it, an
-    # overlong line has no wrap opportunity at all - it's one unbroken run
-    # of dashes - so overflow-wrap: anywhere's forced fallback break lands
-    # wherever the character count runs out, typically mid-measure.
-    # `<wbr>` is always preferred by the line-breaking algorithm over a
-    # forced break. Harmless (a no-op) on already-reflowed tab-block
-    # content, since that's now built to fit within TAB_SYSTEM_MAX_WIDTH
-    # and shouldn't need to wrap at all.
+    # <wbr> after "|" as a fallback wrap point for anything the reflow
+    # above declined to touch - always preferred over overflow-wrap's
+    # forced break, and a no-op on already-reflowed content.
     body = body.replace("|", "|<wbr>")
     body = TAB_BLOCK_TAG.sub(r'<span class="tab-block">\1</span>', body)
     body = CHORD_TAG.sub(r"<b>\1</b>", body)

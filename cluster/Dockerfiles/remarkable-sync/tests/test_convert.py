@@ -55,14 +55,10 @@ def test_conversion_succeeds(tab_file, tmp_path):
 
 @pytest.mark.parametrize("tab_file", FIXTURE_FILES, ids=lambda p: p.stem)
 def test_no_tab_block_split_across_page(tab_file, tmp_path):
-    """Regression test for #172: a [tab]...[/tab] block - after
-    _reflow_tab_block()'s reflow into width-fitting systems, which is what
-    actually renders - must never be split across a PDF page boundary.
-    weasyprint's default pagination breaks between any two line boxes -
-    including inside a tab-block's own lines - unless break-inside: avoid
-    holds. Compares against the *reflowed* text, not the raw source block,
-    since reflow legitimately repeats each string's label once per system
-    and so no longer matches the source verbatim."""
+    """Regression test for #172, updated for the #177 reflow: a
+    [tab]...[/tab] block's rendered (reflowed) text must never split
+    across a page boundary. Compares against the reflowed text, not the
+    raw source, since reflow repeats each string's label per system."""
     data = json.loads(tab_file.read_text())
     blocks = re.findall(r"\[tab\](.*?)\[/tab\]", data["tab"]["raw_tabs"], re.DOTALL)
     out_pdf = _render(tab_file, tmp_path)
@@ -101,12 +97,9 @@ def test_no_mid_bar_line_wrap(tab_file, tmp_path):
 
 
 def test_reflow_keeps_measures_grouped_across_strings():
-    """Regression test for the operator's "arpeggio line wraps and one
-    string's leftover measure lands between two OTHER strings' lines"
-    report: independent per-line wrapping breaks tab notation's
-    vertical string-to-string alignment. Wrapping must happen between
-    whole measures, with every string's matching measure landing in the
-    same system, labels repeated on each one."""
+    """Regression test for #177: wrapping must happen between whole
+    measures, every string's matching measure landing in the same
+    system, labels repeated on each one - not per-line independently."""
     measure = "-1-2-3-4-5-6-7-8-9-0-1-2-3-4-|"  # 30 chars, forces >1 per system
     block = "\n".join(f"{label}|{measure * 4}" for label in "eBGDAE")
     reflowed = sync._reflow_tab_block(block, max_width=72)
@@ -118,9 +111,8 @@ def test_reflow_keeps_measures_grouped_across_strings():
 
 
 def test_reflow_passes_through_leading_prose_header():
-    """UG includes chord-name/comment header lines INSIDE [tab]...[/tab],
-    before the actual string lines - those must survive untouched, with
-    reflow still applied to the string lines that follow."""
+    """Chord-name/comment header lines UG puts INSIDE [tab]...[/tab]
+    before the string lines must survive untouched."""
     block = "    A    Am7\ne|-1-|-2-|\nB|-1-|-2-|"
     reflowed = sync._reflow_tab_block(block, max_width=72)
     lines = reflowed.split("\n")
@@ -130,9 +122,7 @@ def test_reflow_passes_through_leading_prose_header():
 
 
 def test_reflow_real_arpeggio_block_stays_aligned():
-    """The exact reported case: Somewhere Over The Rainbow's closing
-    arpeggio ("A Am7 B/A A#/A Aadd9...") is wide enough to need wrapping,
-    and its [tab] block leads with a chord-name header line."""
+    """Exact reported case: Somewhere Over The Rainbow's arpeggio block."""
     data = json.loads(
         (FIXTURES_DIR / "somewhereovertherainbow.ultimatetab.json").read_text()
     )
