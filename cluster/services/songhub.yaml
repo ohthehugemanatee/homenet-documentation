@@ -36,12 +36,17 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: songhub
-          # Built from a pinned upstream tag by
-          # .github/workflows/build-songhub-image.yaml — bump both together.
+          # Built by .github/workflows/build-songhub-image.yaml — bump both
+          # together.
+          # TEMPORARY: pinned to a patch build from
+          # ohthehugemanatee/SongHub@claude/ultimate-guitar-search-encoding-40prc8
+          # (fixes Ultimate Guitar search encoding) while that fix is out for
+          # review upstream. Revert to the upstream ghcr.io/ohthehugemanatee/
+          # songhub:<tag> pin once it's merged and released in Cesc1986/SongHub.
           # First deploy: the ghcr.io/ohthehugemanatee/songhub package
           # defaults to private and must be set public (or an
           # imagePullSecret added here) or this pod sits in ImagePullBackOff.
-          image: ghcr.io/ohthehugemanatee/songhub:v1.7
+          image: ghcr.io/ohthehugemanatee/songhub:claude-ultimate-guitar-search-encoding-40prc8
           ports:
             - containerPort: 3005
           env:

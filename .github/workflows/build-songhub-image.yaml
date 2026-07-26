@@ -5,11 +5,19 @@ name: Build SongHub image
 # push to GHCR. No schedule/auto-trigger — bumping songhub_ref is a
 # deliberate, reviewable action, same spirit as the exact image pins used
 # for cluster/services/unifi/mongodb.yaml and mariadb.yaml.
+#
+# songhub_repo defaults to upstream but can be overridden to build a fork
+# branch (e.g. a local patch awaiting upstream merge). Only the default
+# repo gets the `:latest` tag, so a fork build never clobbers it.
 'on':
   workflow_dispatch:
     inputs:
+      songhub_repo:
+        description: 'SongHub GitHub repo to build (owner/repo) — override to build a fork/patch branch'
+        required: true
+        default: Cesc1986/SongHub
       songhub_ref:
-        description: 'Upstream Cesc1986/SongHub git ref to build (tag preferred over branch)'
+        description: 'Git ref to build (tag preferred over branch)'
         required: true
         default: v1.7
 
@@ -26,7 +34,7 @@ jobs:
       - name: Checkout SongHub at pinned ref
         uses: actions/checkout@v4
         with:
-          repository: Cesc1986/SongHub
+          repository: ${{ inputs.songhub_repo }}
           ref: ${{ inputs.songhub_ref }}
 
       - name: Set up Docker Buildx
@@ -39,6 +47,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Branch refs can contain slashes, which aren't valid in a Docker tag.
+      - name: Compute image tags
+        id: tags
+        run: |
+          ref_tag=$(echo '${{ inputs.songhub_ref }}' | tr '/' '-')
+          {
+            echo 'tags<<EOF'
+            echo "ghcr.io/ohthehugemanatee/songhub:${ref_tag}"
+            if [ '${{ inputs.songhub_repo }}' = 'Cesc1986/SongHub' ]; then
+              echo "ghcr.io/ohthehugemanatee/songhub:latest"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       # linux/amd64 only: the cluster's arm64 nodes are tainted
       # control-plane-only, so untolerated workload pods (like this one)
       # only ever schedule on the amd64 nodes. No multi-arch/QEMU needed.
@@ -48,9 +70,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: |
-            ghcr.io/ohthehugemanatee/songhub:${{ inputs.songhub_ref }}
-            ghcr.io/ohthehugemanatee/songhub:latest
+          tags: ${{ steps.tags.outputs.tags }}
 
       # GHCR packages default to private. The cluster (and the songhub
       # test-cluster.yaml CI step) has no imagePullSecret configured, so
