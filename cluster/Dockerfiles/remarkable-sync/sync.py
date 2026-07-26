@@ -9,13 +9,18 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 from weasyprint import HTML as WeasyHTML
 
 TAB_DIR = Path(os.environ.get("TAB_DIR", "/app/saved-tabs"))
+# Now a fallback interval, not the primary sync trigger - see NewTabHandler.
 SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", "1800"))
+WATCH_DEBOUNCE_SECONDS = float(os.environ.get("WATCH_DEBOUNCE_SECONDS", "2"))
 REMARKABLE_TARGET_FOLDER = os.environ.get("REMARKABLE_TARGET_FOLDER", "SongHub")
 HEARTBEAT_FILE = Path(os.environ.get("HEARTBEAT_FILE", "/tmp/heartbeat"))
 STATE_DIR = TAB_DIR / ".remarkable-sync-state"
@@ -345,14 +350,69 @@ def run_cycle() -> None:
     HEARTBEAT_FILE.touch()
 
 
+_run_lock = threading.Lock()
+
+
+def _run_cycle_locked() -> None:
+    # Serializes the watcher-triggered path against the periodic fallback
+    # loop below - without this, both could race into run_cycle() at once
+    # and double-upload a file still mid-sync.
+    with _run_lock:
+        run_cycle()
+
+
+class NewTabHandler(FileSystemEventHandler):
+    """Triggers a sync cycle when a new *.ultimatetab.json appears,
+    instead of waiting for the next periodic cycle. Watches for both
+    creation and move-into-place, since SongHub (or the filesystem) may
+    write to a temp name and rename.
+
+    Debounced: rapid bursts (several tabs downloaded at once) coalesce
+    into one cycle, and the delay gives SongHub's write time to finish -
+    a too-early trigger just hits run_cycle()'s existing "retry next
+    cycle" path on a JSONDecodeError, not a hard failure.
+    """
+
+    def __init__(self, on_new_tab=_run_cycle_locked, debounce_seconds=WATCH_DEBOUNCE_SECONDS):
+        self._on_new_tab = on_new_tab
+        self._debounce_seconds = debounce_seconds
+        self._timer = None
+        self._timer_lock = threading.Lock()
+
+    def _schedule(self, path: str) -> None:
+        if not path.endswith(".ultimatetab.json"):
+            return
+        with self._timer_lock:
+            if self._timer is not None:
+                self._timer.cancel()
+            self._timer = threading.Timer(self._debounce_seconds, self._on_new_tab)
+            self._timer.daemon = True
+            self._timer.start()
+
+    def on_created(self, event):
+        if not event.is_directory:
+            self._schedule(event.src_path)
+
+    def on_moved(self, event):
+        if not event.is_directory:
+            self._schedule(event.dest_path)
+
+
 def main() -> None:
     log.info(
         "starting: TAB_DIR=%s interval=%ss target_folder=%s",
         TAB_DIR, SYNC_INTERVAL_SECONDS, REMARKABLE_TARGET_FOLDER,
     )
-    while True:
-        run_cycle()
-        time.sleep(SYNC_INTERVAL_SECONDS)
+    observer = Observer()
+    observer.schedule(NewTabHandler(), str(TAB_DIR), recursive=False)
+    observer.start()
+    try:
+        while True:
+            _run_cycle_locked()
+            time.sleep(SYNC_INTERVAL_SECONDS)
+    finally:
+        observer.stop()
+        observer.join()
 
 
 if __name__ == "__main__":

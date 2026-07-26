@@ -26,6 +26,10 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 
 ## Operating notes
 
+- **New tabs sync immediately**, via a `watchdog` filesystem watch on
+  `TAB_DIR` (debounced by `WATCH_DEBOUNCE_SECONDS`, default 2s, to coalesce
+  bursts and let SongHub finish writing). `SYNC_INTERVAL_SECONDS` (default
+  1800) is now just a fallback poll in case an event is missed.
 - **Resetting a permanently-failed tab.** A tab whose JSON parses but is
   missing the expected `tab.raw_tabs` field gets a `.failed` marker in
   `.remarkable-sync-state/` (on the shared `songhub-saved-tabs` volume) and

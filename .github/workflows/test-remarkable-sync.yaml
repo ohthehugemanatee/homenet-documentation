@@ -40,7 +40,7 @@ jobs:
             poppler-utils
 
       - name: Install Python dependencies
-        run: pip install weasyprint==69.0 pytest
+        run: pip install weasyprint==69.0 watchdog==6.0.0 pytest
 
       - name: Run conversion tests
         run: pytest cluster/Dockerfiles/remarkable-sync/tests/ -v
