@@ -1,0 +1,46 @@
+name: reMarkable sync tests
+
+'on':
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+
+  convert:
+    name: raw_tabs -> PDF conversion tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Mirrors cluster/Dockerfiles/remarkable-sync/Dockerfile's runtime
+      # deps: weasyprint's native rendering libs + the same monospace font
+      # used for tab alignment, plus poppler-utils (pdftotext) which the
+      # tests use to inspect rendered output - not needed at container
+      # runtime, only here.
+      - name: Install weasyprint's native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libcairo2 \
+            libgdk-pixbuf-2.0-0 \
+            shared-mime-info \
+            fonts-dejavu-core \
+            poppler-utils
+
+      - name: Install Python dependencies
+        run: pip install weasyprint==69.0 pytest
+
+      - name: Run conversion tests
+        run: pytest cluster/Dockerfiles/remarkable-sync/tests/ -v
