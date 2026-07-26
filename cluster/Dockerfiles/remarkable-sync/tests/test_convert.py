@@ -55,16 +55,16 @@ def test_conversion_succeeds(tab_file, tmp_path):
 
 @pytest.mark.parametrize("tab_file", FIXTURE_FILES, ids=lambda p: p.stem)
 def test_no_tab_block_split_across_page(tab_file, tmp_path):
-    """Regression test for #172: a [tab]...[/tab] block must never be
-    split across a PDF page boundary. weasyprint's default pagination
-    breaks between any two line boxes - including inside a tab-block's
-    own lines - unless break-inside: avoid holds."""
+    """Regression test for #172, updated for the #177 reflow: a
+    [tab]...[/tab] block's rendered (reflowed) text must never split
+    across a page boundary. Compares against the reflowed text, not the
+    raw source, since reflow repeats each string's label per system."""
     data = json.loads(tab_file.read_text())
     blocks = re.findall(r"\[tab\](.*?)\[/tab\]", data["tab"]["raw_tabs"], re.DOTALL)
     out_pdf = _render(tab_file, tmp_path)
     pages = [_compact(p) for p in _pdftotext_pages(out_pdf)]
     for i, block in enumerate(blocks):
-        sig = _compact(block)
+        sig = _compact(sync._reflow_tab_block(block))
         if len(sig) < 5:
             continue
         assert any(sig in page for page in pages), (
@@ -94,6 +94,47 @@ def test_no_mid_bar_line_wrap(tab_file, tmp_path):
         assert not re.match(r"^[\-0-9]", nxt_stripped), (
             f"{tab_file.name}: suspected mid-bar wrap: {cur!r} -> {nxt!r}"
         )
+
+
+def test_reflow_keeps_measures_grouped_across_strings():
+    """Regression test for #177: wrapping must happen between whole
+    measures, every string's matching measure landing in the same
+    system, labels repeated on each one - not per-line independently."""
+    measure = "-1-2-3-4-5-6-7-8-9-0-1-2-3-4-|"  # 30 chars, forces >1 per system
+    block = "\n".join(f"{label}|{measure * 4}" for label in "eBGDAE")
+    reflowed = sync._reflow_tab_block(block, max_width=72)
+    systems = reflowed.split("\n\n")
+    assert len(systems) > 1
+    for system in systems:
+        labels_in_system = [line[0] for line in system.split("\n")]
+        assert labels_in_system == list("eBGDAE")
+
+
+def test_reflow_passes_through_leading_prose_header():
+    """Chord-name/comment header lines UG puts INSIDE [tab]...[/tab]
+    before the string lines must survive untouched."""
+    block = "    A    Am7\ne|-1-|-2-|\nB|-1-|-2-|"
+    reflowed = sync._reflow_tab_block(block, max_width=72)
+    lines = reflowed.split("\n")
+    assert lines[0] == "    A    Am7"
+    assert lines[1].startswith("e|")
+    assert lines[2].startswith("B|")
+
+
+def test_reflow_real_arpeggio_block_stays_aligned():
+    """Exact reported case: Somewhere Over The Rainbow's arpeggio block."""
+    data = json.loads(
+        (FIXTURES_DIR / "somewhereovertherainbow.ultimatetab.json").read_text()
+    )
+    blocks = re.findall(r"\[tab\](.*?)\[/tab\]", data["tab"]["raw_tabs"], re.DOTALL)
+    block = next(b for b in blocks if "Aadd9" in b)
+    reflowed = sync.render_body_html(f"[tab]{block}[/tab]")
+    # Isolate the systems (skip the leading chord-name header line).
+    systems = "\n".join(reflowed.split("\n")[2:]).split("\n\n")
+    assert len(systems) > 1, "expected this block to actually need wrapping"
+    for system in systems:
+        labels_in_system = re.findall(r"^([A-Za-z0-9#]{1,3})\|", system, re.MULTILINE)
+        assert labels_in_system == list("eBGDAE")
 
 
 def test_legend_entities_are_not_double_escaped(tmp_path):
