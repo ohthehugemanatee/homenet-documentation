@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir weasyprint==69.0
+RUN pip install --no-cache-dir weasyprint==69.0 watchdog==6.0.0
 
 COPY --from=rmapi-builder /out/rmapi /usr/local/bin/rmapi
 COPY sync.py /app/sync.py
