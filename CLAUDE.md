@@ -19,6 +19,13 @@ Every directory has its own `CLAUDE.md` (with `AGENTS.md` symlink); Claude Code 
 - **Run tests before commit; fix failures, don't commit around them.** Never commit with known-failing tests, never silence a test or add to an exception file to make CI green, never `--no-verify`.
 - **Verify configuration changes in updated project documentation.** When a change touches configuration (K8s manifests, Helm values, Ansible vars/playbooks, CI workflows, docker-compose), cross-check the updated project docs (`*.md` in the affected directory and repo root) for correctness and effect — stale docs that contradict the new config are a bug. If docs need updating, include the doc fix in the same PR.
 
+## Coding behavior
+
+- **Think before coding.** State assumptions explicitly; if multiple interpretations exist, present them instead of picking silently; if something is unclear, stop and ask.
+- **Simplicity first.** Minimum code/config that solves the Issue — no speculative abstractions, no unrequested flexibility or configurability, no error handling for impossible scenarios.
+- **Surgical changes.** Don't "improve" adjacent code, comments, or formatting; match existing style; remove only the imports/vars/functions your change orphaned — mention other dead code, don't delete it (see scope rule above).
+- **Goal-driven execution.** Convert vague asks into verifiable success criteria before starting — this repo's spec-first/test-first rules already do this per Issue; for multi-step tasks, state a short plan with a verify step per line.
+
 ## Repository map
 
 | Path | What lives here | Nearest leaf `CLAUDE.md` |
