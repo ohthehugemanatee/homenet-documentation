@@ -1,0 +1,35 @@
+---
+# Longhorn v1.7.2 Helm values — migrated from raw-manifest install.
+# All non-default settings captured from live cluster 2026-06-15.
+
+global:
+  # Tolerate control-plane taint so user-deployed components
+  # (manager, UI, driver deployer) schedule on master nodes.
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+defaultSettings:
+  backupTarget: nfs://shoebox.vert:/longhorn-backups
+  defaultReplicaCount: 2
+  defaultDataLocality: best-effort
+  defaultDataPath: /var/lib/longhorn/
+  replicaAutoBalance: best-effort
+  replicaSoftAntiAffinity: false
+  storageOverProvisioningPercentage: 100
+  storageMinimalAvailablePercentage: 25
+  storageReservedPercentageForDefaultDisk: 30
+  allowVolumeCreationWithDegradedAvailability: true
+  autoDeletePodWhenVolumeDetachedUnexpectedly: true
+  disableRevisionCounter: true
+  disableSchedulingOnCordonedNode: true
+  detachManuallyAttachedVolumesWhenCordoned: true
+  orphanAutoDeletion: true
+  removeSnapshotsDuringFilesystemTrim: true
+  snapshotDataIntegrity: fast-check
+  concurrentAutomaticEngineUpgradePerNodeLimit: 5
+  allowEmptyDiskSelectorVolume: true
+  # System-managed component toleration (CSI plugin, engine/instance managers).
+  # Uses Longhorn's semicolon-delimited kubectl-taint syntax.
+  taintToleration: node-role.kubernetes.io/control-plane=:NoSchedule
