@@ -77,10 +77,6 @@ widening scope (e.g. handing the token to anything beyond this one use case).
      connection (`.mcp.json`).
    - `K8S_MCP_HOSTNAME` — the kubernetes-mcp-server hostname, used directly in
      `.mcp.json`'s `url`.
-   - `K8S_BEARER_TOKEN` — minted by `mint-remote-debug-token.yaml` (below). No
-     longer consumed by the client — `kubernetes-mcp-server` authenticates to
-     the k8s API with its own in-cluster ServiceAccount token instead. Retained
-     until #145 removes the mint-token flow entirely.
    - `K8S_API_HOSTNAME` — the original tunnel hostname. No longer used by
      default; only needed for the manual forwarder fallback.
 
@@ -151,32 +147,22 @@ unchanged (routing lives entirely in the dashboard, same as the API hostname abo
 should return `403` without Service Token headers; with them, a `200` (or a valid
 MCP response from `/mcp`).
 
-## Minting and rotating the debug token
+## Revoking cluster access
 
-```sh
-ansible-playbook -i cluster/ansible/inventory.yaml cluster/ansible/mint-remote-debug-token.yaml
-# or, for a longer session:
-ansible-playbook -i cluster/ansible/inventory.yaml \
-  -e debug_token_duration=24h cluster/ansible/mint-remote-debug-token.yaml
-```
-
-Copy the printed token into `K8S_BEARER_TOKEN`. There is no automated rotation —
-re-run this playbook (by hand, or via Semaphore from a phone) whenever starting a
-session. This matches the risk already accepted for `SEMAPHORE_ACCESS_KEY_ENCRYPTION`
-on the shoebox host: a short-lived, read-only, no-Secrets credential sitting in a
-visible-to-editors env var is an acceptable exposure window.
-
-**Break-glass revocation** — invalidates every previously minted token instantly
-(there is no `kubectl revoke token`):
+Invalidates every outstanding token for `claude-remote-debug` instantly — including
+whatever `kubernetes-mcp-server`'s pod currently has mounted (there is no `kubectl
+revoke token`). Restart the pod afterward so it picks up a fresh identity bound to
+the recreated ServiceAccount; don't assume the mounted token refreshes automatically
+fast enough for immediate-revocation purposes:
 
 ```sh
 kubectl delete sa claude-remote-debug -n default
 kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
+kubectl rollout restart deployment/kubernetes-mcp-server -n default
 ```
 
 ## Out of scope (by design)
 
-- Automated token rotation.
 - A logging backend for remote debugging — Loki is not deployed; `kubectl logs`
   via the API server is the only log path.
 - Prometheus/Grafana exposure — Grafana already has a public ingress with no
