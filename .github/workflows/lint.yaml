@@ -22,11 +22,18 @@ jobs:
   k8s-manifests:
     name: Kubernetes manifests
     runs-on: ubuntu-latest
+    env:
+      KUBECONFORM_VERSION: v0.7.0
     steps:
       - uses: actions/checkout@v4
+      - name: Cache kubeconform binary
+        id: cache-kubeconform
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/kubeconform
+          key: kubeconform-${{ env.KUBECONFORM_VERSION }}
       - name: Install kubeconform
-        env:
-          KUBECONFORM_VERSION: v0.7.0
+        if: steps.cache-kubeconform.outputs.cache-hit != 'true'
         run: |
           curl -fsSLo /tmp/kubeconform.tar.gz \
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
@@ -45,16 +52,24 @@ jobs:
   kustomize:
     name: Kustomize builds
     runs-on: ubuntu-latest
+    env:
+      KUSTOMIZE_VERSION: v5.4.3
     steps:
       - uses: actions/checkout@v4
+      - name: Cache kustomize binary
+        id: cache-kustomize
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/kustomize
+          key: kustomize-${{ env.KUSTOMIZE_VERSION }}
       - name: Install kustomize
-        env:
-          KUSTOMIZE_VERSION: v5.4.3
+        if: steps.cache-kustomize.outputs.cache-hit != 'true'
         run: |
           curl -fsSLo /tmp/kustomize.tar.gz \
             "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
           tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
-          kustomize version
+      - name: Print kustomize version
+        run: kustomize version
       - name: Build every kustomization
         # ArgoCD runs `kustomize build` at manifest-generation time. The
         # kubeconform job only validates raw YAML and never exercises
@@ -97,16 +112,24 @@ jobs:
   policy:
     name: Kubernetes policy (advisory)
     runs-on: ubuntu-latest
+    env:
+      KUBE_SCORE_VERSION: v1.20.0
     steps:
       - uses: actions/checkout@v4
+      - name: Cache kube-score binary
+        id: cache-kube-score
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/kube-score
+          key: kube-score-${{ env.KUBE_SCORE_VERSION }}
       - name: Install kube-score
-        env:
-          KUBE_SCORE_VERSION: v1.20.0
+        if: steps.cache-kube-score.outputs.cache-hit != 'true'
         run: |
           curl -fsSLo /tmp/kube-score.tar.gz \
             "https://github.com/zegl/kube-score/releases/download/${KUBE_SCORE_VERSION}/kube-score_${KUBE_SCORE_VERSION#v}_linux_amd64.tar.gz"
           tar -xzf /tmp/kube-score.tar.gz -C /usr/local/bin kube-score
-          kube-score version
+      - name: Print kube-score version
+        run: kube-score version
       - name: Run kube-score
         # Advisory only (|| true) — many homelab workloads legitimately skip NetworkPolicy,
         # PodDisruptionBudgets, and strict security contexts. Review output and add
@@ -122,16 +145,24 @@ jobs:
   polaris:
     name: Kubernetes best practices (Polaris, advisory)
     runs-on: ubuntu-latest
+    env:
+      POLARIS_VERSION: 9.3.0
     steps:
       - uses: actions/checkout@v4
+      - name: Cache polaris binary
+        id: cache-polaris
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/polaris
+          key: polaris-${{ env.POLARIS_VERSION }}
       - name: Install polaris
-        env:
-          POLARIS_VERSION: 9.3.0
+        if: steps.cache-polaris.outputs.cache-hit != 'true'
         run: |
           curl -fsSLo /tmp/polaris.tar.gz \
             "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/polaris_linux_amd64.tar.gz"
           tar -xzf /tmp/polaris.tar.gz -C /usr/local/bin polaris
-          polaris version
+      - name: Print polaris version
+        run: polaris version
       - name: Run polaris audit
         # Advisory only (|| true) — homelab workloads legitimately skip many
         # security best practices. Review output and add exemptions in .polaris.yaml
@@ -144,11 +175,18 @@ jobs:
   trivy:
     name: IaC security scan (Trivy)
     runs-on: ubuntu-latest
+    env:
+      TRIVY_VERSION: 0.71.0
     steps:
       - uses: actions/checkout@v4
+      - name: Cache trivy binary
+        id: cache-trivy
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/trivy
+          key: trivy-${{ env.TRIVY_VERSION }}
       - name: Install trivy
-        env:
-          TRIVY_VERSION: 0.71.0
+        if: steps.cache-trivy.outputs.cache-hit != 'true'
         run: |
           TARBALL="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
           curl -fsSLo "/tmp/${TARBALL}" \
@@ -157,7 +195,8 @@ jobs:
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"
           grep "${TARBALL}$" /tmp/trivy.checksums | (cd /tmp && sha256sum -c -)
           tar -xzf "/tmp/${TARBALL}" -C /usr/local/bin trivy
-          trivy --version
+      - name: Print trivy version
+        run: trivy --version
       - name: Scan k8s manifests for misconfigurations
         run: |
           trivy config \
