@@ -21,7 +21,7 @@ New advisory findings need either a justified entry in `.github/agentic-review-e
 ## K8s verification — run before commit when any manifest under `cluster/` changes
 
 ```sh
-kubeconform -summary -strict -ignore-missing-schemas cluster/
+kubeconform -summary -strict -ignore-missing-schemas -cache ~/.cache/kubeconform cluster/
 kube-score score cluster/**/*.yaml
 polaris audit --audit-path cluster/
 hadolint $(git ls-files 'cluster/Dockerfiles/**')   # if any Dockerfile changed

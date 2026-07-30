@@ -2,7 +2,12 @@ name: Ansible tests
 
 'on':
   push:
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: test-ansible-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
