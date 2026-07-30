@@ -2,7 +2,12 @@ name: Lint
 
 'on':
   push:
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -24,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       KUBECONFORM_VERSION: v0.7.0
+      KUBERNETES_VERSION: 1.29.0
     steps:
       - uses: actions/checkout@v4
       - name: Cache kubeconform binary
@@ -38,16 +44,27 @@ jobs:
           curl -fsSLo /tmp/kubeconform.tar.gz \
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
+      - name: Cache kubeconform schemas
+        uses: actions/cache@v4
+        with:
+          path: /tmp/kubeconform-cache
+          key: kubeconform-schemas-${{ env.KUBERNETES_VERSION }}
       - name: Validate manifests
+        # mkdir first: actions/cache only creates the restore path on a hit,
+        # and kubeconform's -cache flag errors if the folder doesn't exist yet.
         # Excludes ansible playbooks and helm values (not K8s manifests).
         # --ignore-missing-schemas skips custom CRDs (cert-manager, MetalLB, Longhorn).
+        # -cache reuses schemas fetched from the remote JSON Schema Store across
+        # runs instead of re-fetching them every time (avoids rate limiting).
         run: |
+          mkdir -p /tmp/kubeconform-cache
           find cluster -name "*.yaml" \
             ! -path "*/ansible/*" \
             ! -path "*/helm/*" \
             | xargs kubeconform \
               --ignore-missing-schemas \
-              --kubernetes-version 1.29.0
+              --kubernetes-version "${KUBERNETES_VERSION}" \
+              --cache /tmp/kubeconform-cache
 
   kustomize:
     name: Kustomize builds
