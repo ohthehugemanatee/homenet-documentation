@@ -111,6 +111,14 @@ jobs:
       - name: Run shellcheck
         run: find cluster shoebox -name "*.sh" -exec shellcheck {} +
 
+  github-scripts:
+    name: GitHub Actions helper scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: node --test ".github/scripts/tests/*.test.js"
+
   ansible:
     name: Ansible playbooks
     runs-on: ubuntu-latest

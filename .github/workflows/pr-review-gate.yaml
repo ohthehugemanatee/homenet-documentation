@@ -33,25 +33,26 @@ jobs:
         with:
           github-token: ${{ github.token }}
           script: |
+            const { resolveMirrorTarget } = require('${{ github.workspace }}/.github/scripts/resolve-review-head-sha.js');
+
             const wf = context.payload.workflow_run;
+            const target = resolveMirrorTarget(wf);
             let headSha, prNumber;
 
-            // PR-event triggered run: pull_requests is populated directly
-            if (wf.pull_requests && wf.pull_requests.length > 0) {
-              headSha = wf.pull_requests[0].head.sha;
-              prNumber = wf.pull_requests[0].number;
-            } else if (wf.event === 'workflow_dispatch' && wf.inputs && wf.inputs.pr_number) {
+            if (target.kind === 'direct') {
+              // PR-event triggered run: mirror onto the SHA this run actually
+              // reviewed (wf.head_sha), not the PR's possibly-newer live head.
+              headSha = target.headSha;
+              prNumber = target.prNumber;
+            } else if (target.kind === 'dispatch-lookup') {
               // Dispatch-triggered run: look up the PR's current HEAD SHA
-              prNumber = parseInt(wf.inputs.pr_number, 10);
+              prNumber = target.prNumber;
               const { data: pr } = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: prNumber,
               });
               headSha = pr.head.sha;
-            } else if (wf.event === 'workflow_dispatch') {
-              core.info('Workflow dispatch run has no pr_number input; skipping check post.');
-              return;
             } else {
               core.info('No PR associated with this workflow run, skipping.');
               return;

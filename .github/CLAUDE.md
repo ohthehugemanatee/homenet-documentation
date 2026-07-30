@@ -5,7 +5,7 @@
 - `workflows/lint.yaml` — `yamllint` + `kubeconform` + `kustomize build` + `ansible-lint` (+ advisory kube-score/polaris/trivy).
 - `workflows/test-ansible.yaml` — three jobs: shoebox validators (`shoebox/tests/*.sh`), monkeyble (`cluster/ansible/tests/monkeyble/run-tests.sh`), molecule (`cluster/ansible/molecule/`).
 - `workflows/test-cluster.yaml` — k3d smoke test: spins up a local cluster and applies manifests.
-- `workflows/pr-review.yaml` + `workflows/pr-review-gate.yaml` — Claude AI review + status-check gate.
+- `workflows/pr-review.yaml` + `workflows/pr-review-gate.yaml` — Claude AI review + status-check gate. The gate's `workflow_run` mirror step delegates SHA/PR selection to `scripts/resolve-review-head-sha.js` (unit-tested in `scripts/tests/`, run by `workflows/lint.yaml`'s `github-scripts` job) so a superseded/cancelled review run can't post its result onto a newer, unreviewed commit.
 - `workflows/pr-size-gate.yaml` — soft (≥200 LOC) and hard (≥400 LOC) PR size limits; `size/override` label bypasses the soft limit.
 - `workflows/autofix.yaml` — fires on `lint.yaml` / `test-cluster.yaml` failure; runs `scripts/autofix.py` (Claude agentic loop: read_file / write_file / run_bash; commits + comments).
 
