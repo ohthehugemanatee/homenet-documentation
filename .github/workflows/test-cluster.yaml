@@ -14,18 +14,28 @@ jobs:
   dry-run:
     name: k3d dry-run
     runs-on: ubuntu-latest
+    env:
+      K3D_VERSION: v5.7.5
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache k3d binary
+        id: cache-k3d
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/k3d
+          key: k3d-${{ env.K3D_VERSION }}
+
       - name: Install k3d
-        env:
-          K3D_VERSION: v5.7.5
+        if: steps.cache-k3d.outputs.cache-hit != 'true'
         run: |
           curl -fsSLo /tmp/k3d \
             "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
           install -m 755 /tmp/k3d /usr/local/bin/k3d
-          k3d version
+
+      - name: Print k3d version
+        run: k3d version
 
       - name: Create k3d cluster
         run: k3d cluster create ci --wait --no-lb
@@ -181,18 +191,29 @@ jobs:
   helm-dry-run:
     name: Helm dry-run
     runs-on: ubuntu-latest
+    env:
+      K3D_VERSION: v5.7.5
+      AM_VERSION: "0.27.0"
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create k3d cluster
-        env:
-          K3D_VERSION: v5.7.5
+      - name: Cache k3d binary
+        id: cache-k3d
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/k3d
+          key: k3d-${{ env.K3D_VERSION }}
+
+      - name: Install k3d
+        if: steps.cache-k3d.outputs.cache-hit != 'true'
         run: |
           curl -fsSLo /tmp/k3d \
             "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
           install -m 755 /tmp/k3d /usr/local/bin/k3d
-          k3d cluster create ci --wait --no-lb
+
+      - name: Create k3d cluster
+        run: k3d cluster create ci --wait --no-lb
 
       - name: Add helm repos
         run: |
@@ -217,9 +238,20 @@ jobs:
             --namespace monitoring \
             -f cluster/helm/kube-prometheus-stack/values.yaml > /dev/null
 
+      - name: Cache amtool binary
+        id: cache-amtool
+        uses: actions/cache@v4
+        with:
+          path: alertmanager-${{ env.AM_VERSION }}.linux-amd64
+          key: amtool-${{ env.AM_VERSION }}
+
+      - name: Download amtool
+        if: steps.cache-amtool.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "https://github.com/prometheus/alertmanager/releases/download/v${AM_VERSION}/alertmanager-${AM_VERSION}.linux-amd64.tar.gz" \
+            | tar xz
+
       - name: Validate Alertmanager config (amtool)
-        env:
-          AM_VERSION: "0.27.0"
         run: |
           # Extract the alertmanager.config block we maintain and lint it
           # (catches Go-template typos in the Grafana deep link, group_by, etc.)
@@ -228,8 +260,6 @@ jobs:
           v = yaml.safe_load(open("cluster/helm/kube-prometheus-stack/values.yaml"))
           open("/tmp/am.yaml", "w").write(yaml.safe_dump(v["alertmanager"]["config"]))
           PY
-          curl -fsSL "https://github.com/prometheus/alertmanager/releases/download/v${AM_VERSION}/alertmanager-${AM_VERSION}.linux-amd64.tar.gz" \
-            | tar xz
           "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
 
       - name: Dry-run alloy
