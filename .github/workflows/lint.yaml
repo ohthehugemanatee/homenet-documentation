@@ -39,11 +39,14 @@ jobs:
           path: /tmp/kubeconform-cache
           key: kubeconform-schemas-${{ env.KUBERNETES_VERSION }}
       - name: Validate manifests
+        # mkdir first: actions/cache only creates the restore path on a hit,
+        # and kubeconform's -cache flag errors if the folder doesn't exist yet.
         # Excludes ansible playbooks and helm values (not K8s manifests).
         # --ignore-missing-schemas skips custom CRDs (cert-manager, MetalLB, Longhorn).
         # -cache reuses schemas fetched from the remote JSON Schema Store across
         # runs instead of re-fetching them every time (avoids rate limiting).
         run: |
+          mkdir -p /tmp/kubeconform-cache
           find cluster -name "*.yaml" \
             ! -path "*/ansible/*" \
             ! -path "*/helm/*" \
