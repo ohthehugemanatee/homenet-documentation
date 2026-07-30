@@ -12,7 +12,7 @@ CI installs the upstream chart and applies the local `values.yaml` / `override.y
 
 ```sh
 helm template <chart> cluster/helm/<chart> -f cluster/helm/<chart>/values.yaml \
-  | kubeconform -strict -ignore-missing-schemas -
+  | kubeconform -strict -ignore-missing-schemas -cache ~/.cache/kubeconform -
 ```
 
 Run this for every touched chart override. For a real upgrade path, extend `.github/workflows/test-cluster.yaml`'s `helm upgrade --install --dry-run` invocation to cover the override.
