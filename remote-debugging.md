@@ -80,6 +80,10 @@ widening scope (e.g. handing the token to anything beyond this one use case).
    - `K8S_API_HOSTNAME` — the original tunnel hostname. No longer used by
      default; only needed for the manual forwarder fallback.
 
+   `K8S_BEARER_TOKEN` is gone — nothing in this repo consumes it anymore. If
+   your Claude Code cloud environment still has it set from before #145, it's
+   safe to delete; it's just ignored otherwise.
+
    **These environment variables are visible to anyone who can edit the Claude Code
    environment configuration — there is no dedicated secrets store.** Every credential
    here is deliberately read-only, has no Secrets access, and is short-lived. Do not
