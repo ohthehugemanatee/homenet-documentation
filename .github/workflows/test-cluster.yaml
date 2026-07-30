@@ -2,7 +2,12 @@ name: Cluster smoke tests
 
 'on':
   push:
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: test-cluster-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
