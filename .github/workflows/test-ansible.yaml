@@ -37,9 +37,15 @@ jobs:
         working-directory: cluster/ansible
         run: pip install -r requirements.txt
 
+      - name: Cache Ansible collections
+        uses: actions/cache@v4
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-${{ hashFiles('cluster/ansible/requirements.yaml') }}
+
       - name: Install Ansible collections
         working-directory: cluster/ansible
-        run: ansible-galaxy collection install --no-cache -r requirements.yaml
+        run: ansible-galaxy collection install -r requirements.yaml
 
       - name: Run Monkeyble scenarios
         working-directory: cluster/ansible
@@ -65,9 +71,15 @@ jobs:
         working-directory: cluster/ansible
         run: pip install -r requirements.txt
 
+      - name: Cache Ansible collections
+        uses: actions/cache@v4
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-${{ hashFiles('cluster/ansible/requirements.yaml') }}
+
       - name: Install Ansible collections
         working-directory: cluster/ansible
-        run: ansible-galaxy collection install --no-cache -r requirements.yaml
+        run: ansible-galaxy collection install -r requirements.yaml
 
       - name: Run Molecule tests
         id: molecule
