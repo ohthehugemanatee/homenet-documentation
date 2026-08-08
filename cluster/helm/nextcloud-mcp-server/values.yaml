@@ -1,0 +1,40 @@
+image:
+  # Pin explicitly; check https://github.com/cbcoutinho/nextcloud-mcp-server/releases
+  # for the current stable tag before bumping.
+  tag: "0.165.0"
+
+nextcloud:
+  host: https://germany.vertesi.com
+
+auth:
+  mode: basic
+  basic:
+    existingSecret: nextcloud-claude-mcp
+    # The existing out-of-band Secret uses these key names, not the chart's
+    # own defaults (usernameKey/passwordKey default to "username"/"password").
+    usernameKey: claude-user
+    passwordKey: claude-pass
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: mcp.germany.vertesi.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - mcp.germany.vertesi.com
+      secretName: mcp-germany-vertesi-com-tls
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
