@@ -55,6 +55,8 @@ spec:
                 key: username
           - name: VPN_PROV
             value: "pia"
+          - name: VPN_CLIENT
+            value: "wireguard"
         volumeMounts:
           - name: nfs-config
             mountPath: "/config"
@@ -69,7 +71,7 @@ spec:
           tcpSocket:
             port: 8112
           periodSeconds: 30
-          failureThreshold: 20  # 10 min grace; VPN TLS negotiation before web UI is reachable
+          failureThreshold: 20  # 10 min grace; first run mints a PIA token and generates wg0.conf before the web UI is reachable
         livenessProbe:
           tcpSocket:
             port: 8112
@@ -81,9 +83,9 @@ spec:
           periodSeconds: 30
           failureThreshold: 3
         securityContext:
-          capabilities:
-            add:
-              - NET_ADMIN
+          # WireGuard: wg-quick sets net.ipv4.conf.all.src_valid_mark in the pod
+          # netns, which needs a rw /proc/sys — privileged supersedes NET_ADMIN.
+          privileged: true
 
 ---
 
