@@ -805,6 +805,24 @@ exceptions:
       after a prior visit. The operator accepts the berlin.vertesi.com zone-wide
       HTTPS-only commitment implied by includeSubdomains + preload.
 
+  - pattern: "delugevpn container runs privileged"
+    files:
+      - cluster/services/delugevpn.yaml
+    reason: >-
+      Advisory, accepted, and required by upstream. binhex/arch-delugevpn's
+      WireGuard client runs wg-quick, whose add_default() sets
+      net.ipv4.conf.all.src_valid_mark; that needs a rw /proc/sys, which only
+      privileged provides (runc leaves /proc masked+read-only otherwise). The
+      upstream README states the requirement as replacing --cap-add=NET_ADMIN
+      with --privileged=true, so NET_ADMIN is dropped rather than kept.
+      A pod-level securityContext.sysctls entry is NOT an alternative:
+      net.ipv4.conf.all.src_valid_mark is not on kubelet's safe-sysctl
+      allowlist, so the pod would be rejected with SysctlForbidden unless the
+      node's kubelet ran with --allowed-unsafe-sysctls. Same accepted-tradeoff
+      class as nodelocaldns; the corresponding trivy rule KSV-0017 is already
+      in .trivyignore. Covers kube-score "The container is privileged" and
+      polaris runAsPrivileged/privilegeEscalationAllowed on this file only.
+
   - pattern: "longhorn PathPrefixStrip on / applies to both hosts including berlin"
     files:
       - cluster/ingress-only/longhorn.yaml
