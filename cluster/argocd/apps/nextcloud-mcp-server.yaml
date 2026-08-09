@@ -12,7 +12,7 @@ spec:
       targetRevision: HEAD
       ref: values
     - chart: nextcloud-mcp-server
-      repoURL: https://cbcoutinho.github.io/nextcloud-mcp-server
+      repoURL: https://cbcoutinho.github.io/helm-charts
       targetRevision: 0.102.7
       helm:
         releaseName: nextcloud-mcp

@@ -150,7 +150,7 @@ jobs:
 
       - name: Add nextcloud-mcp-server helm repo
         run: |
-          helm repo add nextcloud-mcp https://cbcoutinho.github.io/nextcloud-mcp-server
+          helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo update
 
       - name: Create nextcloud-claude-mcp fixture secret
@@ -295,7 +295,7 @@ jobs:
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo add node-feature-discovery \
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
-          helm repo add nextcloud-mcp https://cbcoutinho.github.io/nextcloud-mcp-server
+          helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo update
 
       - name: Dry-run argocd
