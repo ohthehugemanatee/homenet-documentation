@@ -207,6 +207,40 @@ jobs:
             | sort)
           exit "$FAILED"
 
+      - name: Assert delugevpn WireGuard transport/privilege coupling
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          f = "cluster/services/delugevpn.yaml"
+          dep = next((d for d in yaml.safe_load_all(open(f))
+                      if d and d.get("kind") == "Deployment"
+                      and d["metadata"]["name"] == "delugevpn"), None)
+          containers = (((dep or {}).get("spec", {}).get("template", {})
+                         .get("spec", {}).get("containers")) or [])
+          c = next((c for c in containers if c["name"] == "delugevpn"), None)
+          if c is None:
+              print(f"BAD {f}: no 'delugevpn' container in a Deployment named 'delugevpn'")
+              sys.exit(1)
+          env = {e["name"]: e.get("value") for e in c.get("env", [])}
+          sc = c.get("securityContext") or {}
+          failed = 0
+          # binhex's WireGuard client needs a rw /proc/sys so wg-quick can set
+          # net.ipv4.conf.all.src_valid_mark; dropping privileged kills the tunnel
+          # silently (the workload fails closed), so the two must move together.
+          if env.get("VPN_CLIENT") != "wireguard":
+              print(f"BAD {f}: VPN_CLIENT is {env.get('VPN_CLIENT')!r}, expected 'wireguard'")
+              failed = 1
+          if sc.get("privileged") is not True:
+              print(f"BAD {f}: securityContext.privileged must be true for VPN_CLIENT=wireguard")
+              failed = 1
+          if "capabilities" in sc:
+              print(f"BAD {f}: privileged supersedes capabilities; drop the capabilities block")
+              failed = 1
+          if not failed:
+              print(f"OK  {f}: VPN_CLIENT=wireguard with privileged: true")
+          sys.exit(failed)
+          PY
+
       - name: Validate embedded Grafana dashboard JSON
         run: |
           python3 - <<'PY'
