@@ -174,10 +174,15 @@ jobs:
           python3 - <<'PY'
           import sys, yaml
           f = "cluster/services/delugevpn.yaml"
-          dep = next(d for d in yaml.safe_load_all(open(f))
-                     if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "delugevpn")
-          c = next(c for c in dep["spec"]["template"]["spec"]["containers"]
-                   if c["name"] == "delugevpn")
+          dep = next((d for d in yaml.safe_load_all(open(f))
+                      if d and d.get("kind") == "Deployment"
+                      and d["metadata"]["name"] == "delugevpn"), None)
+          containers = (((dep or {}).get("spec", {}).get("template", {})
+                         .get("spec", {}).get("containers")) or [])
+          c = next((c for c in containers if c["name"] == "delugevpn"), None)
+          if c is None:
+              print(f"BAD {f}: no 'delugevpn' container in a Deployment named 'delugevpn'")
+              sys.exit(1)
           env = {e["name"]: e.get("value") for e in c.get("env", [])}
           sc = c.get("securityContext") or {}
           failed = 0
