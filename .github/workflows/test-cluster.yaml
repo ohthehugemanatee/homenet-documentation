@@ -271,11 +271,16 @@ jobs:
           AUTH="$AUTH&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback"
           AUTH="$AUTH&code_challenge=ci0000000000000000000000000000000000000000000"
           AUTH="$AUTH&code_challenge_method=S256&state=ci&scope=openid"
+          # Require the 302 specifically, not just "not 401": the handler's only
+          # success path is RedirectResponse(status_code=302), so 5xx from a
+          # broken discovery would otherwise pass this check silently.
           STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$AUTH")
           echo "oauth/authorize status: $STATUS"
-          if [ "$STATUS" = "401" ]; then
-            echo "FAILED: allowlisted client rejected at /oauth/authorize"
-            echo "        (ALLOWED_MCP_CLIENTS missing or missing its redirect URI)"
+          if [ "$STATUS" != "302" ]; then
+            echo "FAILED: expected 302 redirect to the IdP, got $STATUS"
+            echo "        401 = client_id not in ALLOWED_MCP_CLIENTS, or its"
+            echo "              registered redirect URI does not match"
+            echo "        5xx = OIDC discovery against the IdP is failing"
             exit 1
           fi
           echo "nextcloud-mcp-server MCP client allowlist OK"
