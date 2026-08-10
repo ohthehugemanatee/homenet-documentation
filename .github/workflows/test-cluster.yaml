@@ -186,11 +186,36 @@ jobs:
 
       - name: Install nextcloud-mcp-server (real smoke test)
         run: |
+          # 180s, not 90s: login-flow adds PVC provisioning to the critical path
+          # ahead of the image pull, which the emptyDir BasicAuth install didn't
+          # have to wait for.
           helm upgrade --install nextcloud-mcp \
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-server/values.yaml \
-            --wait --timeout 90s
+            --wait --timeout 180s
+
+      - name: Diagnose nextcloud-mcp-server failure
+        if: failure()
+        run: |
+          # helm --wait only ever reports "context deadline exceeded", which does
+          # not say whether the Pod was Pending on an unbound PVC, crash-looping,
+          # or just slow to pull. Dump the state that distinguishes them.
+          echo "=== pods ==="
+          kubectl -n default get pods -l app.kubernetes.io/name=nextcloud-mcp-server -o wide
+          echo "=== pvc / storageclass ==="
+          kubectl -n default get pvc
+          kubectl get storageclass
+          echo "=== describe ==="
+          kubectl -n default describe pod -l app.kubernetes.io/name=nextcloud-mcp-server
+          echo "=== container logs (current) ==="
+          kubectl -n default logs -l app.kubernetes.io/name=nextcloud-mcp-server \
+            --tail=200 --all-containers || true
+          echo "=== container logs (previous, if it restarted) ==="
+          kubectl -n default logs -l app.kubernetes.io/name=nextcloud-mcp-server \
+            --tail=200 --all-containers --previous || true
+          echo "=== recent events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
 
       - name: Verify nextcloud-mcp-server rollout
         run: |
