@@ -148,6 +148,44 @@ jobs:
           fi
           echo "kubernetes-mcp-server read-only tool surface OK"
 
+      - name: Add nextcloud-mcp-server helm repo
+        run: |
+          helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
+          helm repo update
+
+      - name: Create nextcloud-claude-mcp fixture secret
+        run: |
+          kubectl create secret generic nextcloud-claude-mcp \
+            --from-literal=claude-user=ci-test-user \
+            --from-literal=claude-pass=ci-test-token \
+            -n default
+
+      - name: Install nextcloud-mcp-server (real smoke test)
+        run: |
+          helm upgrade --install nextcloud-mcp \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-server/values.yaml \
+            --wait --timeout 90s
+
+      - name: Verify nextcloud-mcp-server rollout
+        run: |
+          kubectl wait --for=condition=Ready pod \
+            -l app.kubernetes.io/name=nextcloud-mcp-server \
+            -n default --timeout=90s
+
+      - name: Verify nextcloud-mcp-server health endpoint
+        run: |
+          kubectl -n default port-forward svc/nextcloud-mcp-nextcloud-mcp-server 8000:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8000/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/health/live
+          echo "nextcloud-mcp-server health/live OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -257,6 +295,7 @@ jobs:
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo add node-feature-discovery \
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
+          helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo update
 
       - name: Dry-run argocd
@@ -333,3 +372,10 @@ jobs:
             oci://ghcr.io/containers/charts/kubernetes-mcp-server --version 0.1.0 \
             --namespace default \
             -f cluster/helm/kubernetes-mcp-server/values.yaml > /dev/null
+
+      - name: Dry-run nextcloud-mcp-server
+        run: |
+          helm template nextcloud-mcp \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-server/values.yaml > /dev/null
