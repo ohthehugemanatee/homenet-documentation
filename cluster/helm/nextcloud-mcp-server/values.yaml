@@ -26,18 +26,15 @@ auth:
     #     --from-literal=client_secret=<CHANGEME_oidc_client_secret> \
     #     -n default
     existingSecret: nextcloud-mcp-oauth
-    # Must be set even though it names the same Secret: the chart gates the
-    # OIDC client env vars on `or .clientId .oidcExistingSecret` — plain
-    # `existingSecret` does NOT satisfy it. Without this the server silently
-    # drops NEXTCLOUD_OIDC_CLIENT_ID/_SECRET and falls back to Dynamic Client
-    # Registration, which the oidc app garbage-collects after an hour and
-    # permanently breaks the connector.
+    # Same Secret, but required: the chart gates the OIDC client env vars on
+    # `or .clientId .oidcExistingSecret` — `existingSecret` does NOT satisfy it.
+    # Without this the server drops NEXTCLOUD_OIDC_CLIENT_ID/_SECRET and falls
+    # back to DCR, which the oidc app deletes hourly, breaking the connector.
     oidcExistingSecret: nextcloud-mcp-oauth
 
 dataStorage:
-  # login-flow turns this on implicitly; declared explicitly so the volume is
-  # visible here. Holds tokens.db — the per-user Nextcloud app passwords,
-  # encrypted with token_encryption_key — so it must survive restarts.
+  # login-flow enables this implicitly; explicit so the volume is visible. Holds
+  # tokens.db — per-user app passwords, encrypted with token_encryption_key.
   enabled: true
   storageClass: longhorn
   size: 1Gi
