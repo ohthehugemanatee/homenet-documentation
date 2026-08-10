@@ -46,6 +46,11 @@ Generate `token_encryption_key` with
 `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`;
 `client_id` / `client_secret` come from the OIDC client registered below.
 
+Three settings the chart has no values for ride in `extraEnv`: `ALLOWED_MCP_CLIENTS`
+(which MCP clients may use the OAuth flow — see below), `NEXTCLOUD_RESOURCE_URI` (token
+audience; the server warns when it is left implicit) and `CORS_ALLOW_ORIGINS` (narrowed
+from the default `*`, which would let any origin send credentialed requests).
+
 ## OAuth setup (one-time, operator-run)
 
 1. Apps → enable the **OpenID Connect provider** (`oidc`) app — Nextcloud is its own
@@ -62,11 +67,30 @@ Generate `token_encryption_key` with
    caused on purpose.
 5. claude.ai → Settings → Connectors → remove and re-add the connector for
    `https://mcp.germany.vertesi.com/mcp`; an existing one caches the old failed
-   discovery and won't retry.
+   discovery and won't retry. Enter **Client ID `claude-ai`** and leave the **client
+   secret blank** — see below.
 
 **Verify:** `curl -s -o /dev/null -w '%{http_code}' https://mcp.germany.vertesi.com/.well-known/oauth-authorization-server`
 should return `200`. `404` means the OAuth facade isn't mounted; `5xx` means it is, but
 OIDC discovery is failing — usually the `oidc` app isn't enabled.
+
+### The two client IDs are not the same thing
+
+Easy to conflate, and conflating them fails with `401 Unknown client_id`:
+
+| | Identifies | Configured by |
+|---|---|---|
+| Nextcloud OIDC client | MCP server → Nextcloud | Secret `nextcloud-mcp-oauth`, registered in step 2 |
+| MCP client (`claude-ai`) | claude.ai → MCP server | `ALLOWED_MCP_CLIENTS` in `values.yaml` |
+
+The claude.ai UI asks for the **second** one. It is a name we choose, not a credential —
+neither the Nextcloud client ID nor a Nextcloud username, and there is no secret to
+enter, because MCP clients are public clients proven by PKCE. Nextcloud's `oidc` app
+doesn't support Dynamic Client Registration, so `POST /oauth/register` returns 400 and
+claude.ai falls back to asking; the allowlist is what makes that answer work.
+
+Your Nextcloud app password is never entered anywhere — Login Flow v2 provisions one per
+user through the browser redirect on first connector use.
 
 Rollback is `values.yaml` back to `auth.mode: basic`, so keep the now-unused
 `nextcloud-claude-mcp` Secret until this is confirmed working.

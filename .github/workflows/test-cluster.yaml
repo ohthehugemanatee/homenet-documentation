@@ -261,6 +261,30 @@ jobs:
           fi
           echo "nextcloud-mcp-server OAuth routes registered OK"
 
+          # Mounting the routes is not enough: the server keeps a separate
+          # allowlist of MCP clients (ALLOWED_MCP_CLIENTS) and fail-closes with
+          # 401 "Unknown client_id" when it is unset, which is what blocked the
+          # claude.ai connector. Assert an allowlisted client gets past client
+          # validation — a redirect to the IdP, not a 401.
+          AUTH="http://127.0.0.1:8000/oauth/authorize?response_type=code"
+          AUTH="$AUTH&client_id=claude-ai"
+          AUTH="$AUTH&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback"
+          AUTH="$AUTH&code_challenge=ci0000000000000000000000000000000000000000000"
+          AUTH="$AUTH&code_challenge_method=S256&state=ci&scope=openid"
+          # Require the 302 specifically, not just "not 401": the handler's only
+          # success path is RedirectResponse(status_code=302), so 5xx from a
+          # broken discovery would otherwise pass this check silently.
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$AUTH")
+          echo "oauth/authorize status: $STATUS"
+          if [ "$STATUS" != "302" ]; then
+            echo "FAILED: expected 302 redirect to the IdP, got $STATUS"
+            echo "        401 = client_id not in ALLOWED_MCP_CLIENTS, or its"
+            echo "              registered redirect URI does not match"
+            echo "        5xx = OIDC discovery against the IdP is failing"
+            exit 1
+          fi
+          echo "nextcloud-mcp-server MCP client allowlist OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
