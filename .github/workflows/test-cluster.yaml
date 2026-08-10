@@ -153,20 +153,81 @@ jobs:
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo update
 
-      - name: Create nextcloud-claude-mcp fixture secret
+      - name: Create nextcloud-mcp-oauth fixture secret
         run: |
-          kubectl create secret generic nextcloud-claude-mcp \
-            --from-literal=claude-user=ci-test-user \
-            --from-literal=claude-pass=ci-test-token \
+          # Must be a real Fernet key or the server raises on startup.
+          # Fernet.generate_key() is just urlsafe-base64 of 32 random bytes, so
+          # stdlib produces a valid one without installing cryptography.
+          FERNET_KEY=$(python3 -c \
+            'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+          kubectl create secret generic nextcloud-mcp-oauth \
+            --from-literal=token_encryption_key="$FERNET_KEY" \
+            --from-literal=client_id=ci-test-client \
+            --from-literal=client_secret=ci-test-secret \
             -n default
+
+      - name: Create longhorn StorageClass alias
+        run: |
+          # login-flow puts the token DB on a storageClass longhorn PVC, which
+          # k3d has no provisioner for. Alias it onto k3d's local-path so the
+          # smoke test exercises the real PVC path.
+          kubectl apply -f - <<'EOF'
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: longhorn
+          provisioner: rancher.io/local-path
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+          EOF
+
+      - name: Deploy OIDC discovery stub
+        run: |
+          # login-flow does OIDC discovery at startup and treats 4xx as a config
+          # error (no retry), so the Pod cannot boot without an IdP — and CI must
+          # not reach production Nextcloud for one. Discovery is the only hard
+          # startup dependency (JWKS is fetched lazily), so a static document is
+          # enough. issuer matches the stub URL to select integrated mode;
+          # registration_endpoint is omitted to keep CI off the DCR path.
+          JSON='{"issuer":"http://oidc-stub.default.svc",
+          "authorization_endpoint":"http://oidc-stub.default.svc/authorize",
+          "token_endpoint":"http://oidc-stub.default.svc/token",
+          "userinfo_endpoint":"http://oidc-stub.default.svc/userinfo",
+          "jwks_uri":"http://oidc-stub.default.svc/jwks",
+          "code_challenge_methods_supported":["S256"]}'
+          # base64 so the JSON's quotes survive the nested sh -c unmangled.
+          B64=$(printf '%s' "$JSON" | tr -d '\n' | base64 -w0)
+          kubectl create deployment oidc-stub -n default --image=python:3.12-alpine -- \
+            sh -c "mkdir -p /w/.well-known && echo $B64 | base64 -d > /w/.well-known/openid-configuration && cd /w && exec python3 -m http.server 80"
+          kubectl expose deployment oidc-stub -n default --port=80 --target-port=80
+          kubectl rollout status deployment/oidc-stub -n default --timeout=120s
 
       - name: Install nextcloud-mcp-server (real smoke test)
         run: |
+          # nextcloud.host overridden to the stub: CI must not depend on
+          # production Nextcloud. Everything else comes from the real values
+          # file. 180s because PVC provisioning now precedes the image pull.
           helm upgrade --install nextcloud-mcp \
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-server/values.yaml \
-            --wait --timeout 90s
+            --set nextcloud.host=http://oidc-stub.default.svc \
+            --wait --timeout 180s
+
+      - name: Diagnose nextcloud-mcp-server failure
+        if: failure()
+        run: |
+          # helm --wait only reports "context deadline exceeded"; dump what
+          # distinguishes unbound PVC / crash-loop / slow pull. describe covers
+          # pod, volume and PVC state; --previous catches a crash-loop's cause.
+          SEL="-l app.kubernetes.io/name=nextcloud-mcp-server"
+          kubectl -n default describe pod $SEL
+          echo "=== logs ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers || true
+          echo "=== logs (previous) ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers --previous || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
 
       - name: Verify nextcloud-mcp-server rollout
         run: |
@@ -174,7 +235,7 @@ jobs:
             -l app.kubernetes.io/name=nextcloud-mcp-server \
             -n default --timeout=90s
 
-      - name: Verify nextcloud-mcp-server health endpoint
+      - name: Verify nextcloud-mcp-server health and OAuth routes
         run: |
           kubectl -n default port-forward svc/nextcloud-mcp-nextcloud-mcp-server 8000:8000 &
           PF_PID=$!
@@ -185,6 +246,20 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/health/live
           echo "nextcloud-mcp-server health/live OK"
+
+          # Guards the reported bug: auth.mode basic registers no OAuth routes,
+          # so claude.ai's Connectors UI 404s on discovery and cannot connect.
+          # Asserts registered, not 200 — the handler's response depends on the
+          # stubbed IdP. The end-to-end 200 is the Verify: in nextcloud-mcp.md.
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8000/.well-known/oauth-authorization-server)
+          echo "oauth-authorization-server status: $STATUS"
+          if [ "$STATUS" = "404" ]; then
+            echo "FAILED: /.well-known/oauth-authorization-server is not registered"
+            echo "        (expected the OAuth facade from auth.mode: login-flow)"
+            exit 1
+          fi
+          echo "nextcloud-mcp-server OAuth routes registered OK"
 
       - name: Server-side dry-run — all manifests
         run: |
