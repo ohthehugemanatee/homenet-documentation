@@ -32,6 +32,28 @@ auth:
     # back to DCR, which the oidc app deletes hourly, breaking the connector.
     oidcExistingSecret: nextcloud-mcp-oauth
 
+# The chart exposes no values for these three, so they go through extraEnv.
+extraEnv:
+  # Which MCP clients may use the server's OAuth flow — a separate allowlist
+  # from the Nextcloud OIDC client above, and unrelated to it. Unset means
+  # fail-closed: every /oauth/authorize is 401 "Unknown client_id". The
+  # client_id is ours to choose and is typed into claude.ai; the `|redirect_uri`
+  # half is required, because a bare id registers localhost redirects only and
+  # claude.ai's callback would then fail redirect-URI validation. No secret:
+  # MCP clients are public clients, proven by PKCE (S256).
+  - name: ALLOWED_MCP_CLIENTS
+    value: "claude-ai|https://claude.ai/api/mcp/auth_callback"
+  # Audience for issued tokens (ADR-005). Defaults to nextcloud.host, but the
+  # server warns on startup that it wants this explicit.
+  - name: NEXTCLOUD_RESOURCE_URI
+    value: https://germany.vertesi.com
+  # Narrow from the default "*", which pairs with allow_credentials to let any
+  # origin send credentialed requests to a browser-reachable server. Must stay
+  # non-empty — the app falls back to ["*"] on an empty value. Add the Nextcloud
+  # origin here too if the Astrolabe browser app is ever pointed at this server.
+  - name: CORS_ALLOW_ORIGINS
+    value: https://claude.ai
+
 dataStorage:
   # login-flow enables this implicitly; explicit so the volume is visible. Holds
   # tokens.db — per-user app passwords, encrypted with token_encryption_key.
