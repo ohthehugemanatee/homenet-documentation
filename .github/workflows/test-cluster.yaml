@@ -153,12 +153,36 @@ jobs:
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo update
 
-      - name: Create nextcloud-claude-mcp fixture secret
+      - name: Create nextcloud-mcp-oauth fixture secret
         run: |
-          kubectl create secret generic nextcloud-claude-mcp \
-            --from-literal=claude-user=ci-test-user \
-            --from-literal=claude-pass=ci-test-token \
+          # TOKEN_ENCRYPTION_KEY must be a real Fernet key or the server raises
+          # on startup, so generate one rather than hardcoding a fake literal.
+          # Fernet.generate_key() is exactly urlsafe-base64 of 32 random bytes,
+          # so stdlib produces a valid key without installing cryptography.
+          # The OIDC client creds are fixtures — nothing in CI reaches an IdP.
+          FERNET_KEY=$(python3 -c \
+            'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+          kubectl create secret generic nextcloud-mcp-oauth \
+            --from-literal=token_encryption_key="$FERNET_KEY" \
+            --from-literal=client_id=ci-test-client \
+            --from-literal=client_secret=ci-test-secret \
             -n default
+
+      - name: Create longhorn StorageClass alias
+        run: |
+          # login-flow mode puts the token DB on a PVC bound to storageClass
+          # longhorn, which k3d has no provisioner for. Alias the name onto
+          # k3d's built-in local-path so the smoke test exercises the real
+          # values file instead of a --set override that skips the PVC path.
+          kubectl apply -f - <<'EOF'
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: longhorn
+          provisioner: rancher.io/local-path
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+          EOF
 
       - name: Install nextcloud-mcp-server (real smoke test)
         run: |
@@ -185,6 +209,36 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/health/live
           echo "nextcloud-mcp-server health/live OK"
+
+      - name: Verify nextcloud-mcp-server registers OAuth routes
+        run: |
+          kubectl -n default port-forward svc/nextcloud-mcp-nextcloud-mcp-server 8000:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8000/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          # The regression this guards: in auth.mode basic the server registers
+          # no OAuth routes at all, so claude.ai's Connectors UI — which always
+          # attempts MCP OAuth discovery — gets a 404 and cannot connect.
+          #
+          # Assert the route is *registered*, not that it returns 200: the
+          # handler does live OIDC discovery against NEXTCLOUD_HOST (the real
+          # germany.vertesi.com), so a 200 would make CI depend on production
+          # Nextcloud's oidc app being enabled and reachable from the runner.
+          # 404-vs-not-404 is exactly the mounted/not-mounted distinction.
+          # The end-to-end 200 check is the operator Verify: in nextcloud-mcp.md.
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8000/.well-known/oauth-authorization-server)
+          echo "oauth-authorization-server status: $STATUS"
+          if [ "$STATUS" = "404" ]; then
+            echo "FAILED: /.well-known/oauth-authorization-server is not registered"
+            echo "        (expected the OAuth facade from auth.mode: login-flow)"
+            exit 1
+          fi
+          echo "nextcloud-mcp-server OAuth routes registered OK"
 
       - name: Server-side dry-run — all manifests
         run: |

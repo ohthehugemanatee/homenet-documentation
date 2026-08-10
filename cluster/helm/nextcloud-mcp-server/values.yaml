@@ -5,15 +5,42 @@ image:
 
 nextcloud:
   host: https://germany.vertesi.com
+  # Both default correctly from ingress.hosts[0] and nextcloud.host, but they
+  # are the OAuth identity — pinned so an unrelated ingress edit can't silently
+  # move the redirect URI or the token issuer.
+  mcpServerUrl: https://mcp.germany.vertesi.com
+  publicIssuerUrl: https://germany.vertesi.com
 
 auth:
-  mode: basic
-  basic:
-    existingSecret: nextcloud-claude-mcp
-    # The existing out-of-band Secret uses these key names, not the chart's
-    # own defaults (usernameKey/passwordKey default to "username"/"password").
-    usernameKey: claude-user
-    passwordKey: claude-pass
+  # Login Flow v2: Nextcloud's own OpenID Connect provider (oidc) app is the
+  # IdP. Mounts the OAuth 2.1 facade claude.ai's Connectors UI requires —
+  # auth.mode: basic registers no OAuth routes at all, so Connectors 404.
+  # The chart derives --oauth and MCP_DEPLOYMENT_MODE=login_flow from this.
+  mode: login-flow
+  loginFlow:
+    # CHANGEME: created out-of-band, never committed. See nextcloud-mcp.md for
+    # how to register the OIDC client in Nextcloud and create this secret:
+    #   kubectl create secret generic nextcloud-mcp-oauth \
+    #     --from-literal=token_encryption_key=<CHANGEME_fernet_key> \
+    #     --from-literal=client_id=<CHANGEME_oidc_client_id> \
+    #     --from-literal=client_secret=<CHANGEME_oidc_client_secret> \
+    #     -n default
+    existingSecret: nextcloud-mcp-oauth
+    # Must be set even though it names the same Secret: the chart gates the
+    # OIDC client env vars on `or .clientId .oidcExistingSecret` — plain
+    # `existingSecret` does NOT satisfy it. Without this the server silently
+    # drops NEXTCLOUD_OIDC_CLIENT_ID/_SECRET and falls back to Dynamic Client
+    # Registration, which the oidc app garbage-collects after an hour and
+    # permanently breaks the connector.
+    oidcExistingSecret: nextcloud-mcp-oauth
+
+dataStorage:
+  # login-flow turns this on implicitly; declared explicitly so the volume is
+  # visible here. Holds tokens.db — the per-user Nextcloud app passwords,
+  # encrypted with token_encryption_key — so it must survive restarts.
+  enabled: true
+  storageClass: longhorn
+  size: 1Gi
 
 ingress:
   enabled: true
