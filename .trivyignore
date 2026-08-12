@@ -16,6 +16,10 @@ KSV-0014
 # KSV-0009, KSV-0017: nodelocaldns requires hostNetwork to bind to the node loopback
 # for DNS interception, and privileged to manage iptables rules. This is the only
 # supported deployment method for node-local DNS caching.
+# KSV-0017 also covers delugevpn (cluster/services/delugevpn.yaml): the binhex
+# WireGuard client runs wg-quick, which sets net.ipv4.conf.all.src_valid_mark in the
+# pod netns and so needs a rw /proc/sys. privileged is the upstream-documented
+# requirement (binhex/arch-delugevpn#wireguard); NET_ADMIN alone is not enough.
 KSV-0009
 KSV-0017
 

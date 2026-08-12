@@ -1,0 +1,86 @@
+image:
+  # Pin explicitly; check https://github.com/cbcoutinho/nextcloud-mcp-server/releases
+  # for the current stable tag before bumping.
+  tag: "0.165.0"
+
+nextcloud:
+  host: https://germany.vertesi.com
+  # Both default correctly from ingress.hosts[0] and nextcloud.host, but they
+  # are the OAuth identity — pinned so an unrelated ingress edit can't silently
+  # move the redirect URI or the token issuer.
+  mcpServerUrl: https://mcp.germany.vertesi.com
+  publicIssuerUrl: https://germany.vertesi.com
+
+auth:
+  # Login Flow v2: Nextcloud's own OpenID Connect provider (oidc) app is the
+  # IdP. Mounts the OAuth 2.1 facade claude.ai's Connectors UI requires —
+  # auth.mode: basic registers no OAuth routes at all, so Connectors 404.
+  # The chart derives --oauth and MCP_DEPLOYMENT_MODE=login_flow from this.
+  mode: login-flow
+  loginFlow:
+    # CHANGEME: created out-of-band, never committed. See nextcloud-mcp.md for
+    # how to register the OIDC client in Nextcloud and create this secret:
+    #   kubectl create secret generic nextcloud-mcp-oauth \
+    #     --from-literal=token_encryption_key=<CHANGEME_fernet_key> \
+    #     --from-literal=client_id=<CHANGEME_oidc_client_id> \
+    #     --from-literal=client_secret=<CHANGEME_oidc_client_secret> \
+    #     -n default
+    existingSecret: nextcloud-mcp-oauth
+    # Same Secret, but required: the chart gates the OIDC client env vars on
+    # `or .clientId .oidcExistingSecret` — `existingSecret` does NOT satisfy it.
+    # Without this the server drops NEXTCLOUD_OIDC_CLIENT_ID/_SECRET and falls
+    # back to DCR, which the oidc app deletes hourly, breaking the connector.
+    oidcExistingSecret: nextcloud-mcp-oauth
+
+# The chart exposes no values for these three, so they go through extraEnv.
+extraEnv:
+  # Which MCP clients may use the server's OAuth flow — a separate allowlist
+  # from the Nextcloud OIDC client above, and unrelated to it. Unset means
+  # fail-closed: every /oauth/authorize is 401 "Unknown client_id". The
+  # client_id is ours to choose and is typed into claude.ai; the `|redirect_uri`
+  # half is required, because a bare id registers localhost redirects only and
+  # claude.ai's callback would then fail redirect-URI validation. No secret:
+  # MCP clients are public clients, proven by PKCE (S256).
+  - name: ALLOWED_MCP_CLIENTS
+    value: "claude-ai|https://claude.ai/api/mcp/auth_callback"
+  # Audience for issued tokens (ADR-005). Defaults to nextcloud.host, but the
+  # server warns on startup that it wants this explicit.
+  - name: NEXTCLOUD_RESOURCE_URI
+    value: https://germany.vertesi.com
+  # Narrow from the default "*", which pairs with allow_credentials to let any
+  # origin send credentialed requests to a browser-reachable server. Must stay
+  # non-empty — the app falls back to ["*"] on an empty value. Add the Nextcloud
+  # origin here too if the Astrolabe browser app is ever pointed at this server.
+  - name: CORS_ALLOW_ORIGINS
+    value: https://claude.ai
+
+dataStorage:
+  # login-flow enables this implicitly; explicit so the volume is visible. Holds
+  # tokens.db — per-user app passwords, encrypted with token_encryption_key.
+  enabled: true
+  storageClass: longhorn
+  size: 1Gi
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: mcp.germany.vertesi.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - mcp.germany.vertesi.com
+      secretName: mcp-germany-vertesi-com-tls
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi

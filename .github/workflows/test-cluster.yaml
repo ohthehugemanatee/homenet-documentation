@@ -148,6 +148,143 @@ jobs:
           fi
           echo "kubernetes-mcp-server read-only tool surface OK"
 
+      - name: Add nextcloud-mcp-server helm repo
+        run: |
+          helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
+          helm repo update
+
+      - name: Create nextcloud-mcp-oauth fixture secret
+        run: |
+          # Must be a real Fernet key or the server raises on startup.
+          # Fernet.generate_key() is just urlsafe-base64 of 32 random bytes, so
+          # stdlib produces a valid one without installing cryptography.
+          FERNET_KEY=$(python3 -c \
+            'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+          kubectl create secret generic nextcloud-mcp-oauth \
+            --from-literal=token_encryption_key="$FERNET_KEY" \
+            --from-literal=client_id=ci-test-client \
+            --from-literal=client_secret=ci-test-secret \
+            -n default
+
+      - name: Create longhorn StorageClass alias
+        run: |
+          # login-flow puts the token DB on a storageClass longhorn PVC, which
+          # k3d has no provisioner for. Alias it onto k3d's local-path so the
+          # smoke test exercises the real PVC path.
+          kubectl apply -f - <<'EOF'
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: longhorn
+          provisioner: rancher.io/local-path
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+          EOF
+
+      - name: Deploy OIDC discovery stub
+        run: |
+          # login-flow does OIDC discovery at startup and treats 4xx as a config
+          # error (no retry), so the Pod cannot boot without an IdP — and CI must
+          # not reach production Nextcloud for one. Discovery is the only hard
+          # startup dependency (JWKS is fetched lazily), so a static document is
+          # enough. issuer matches the stub URL to select integrated mode;
+          # registration_endpoint is omitted to keep CI off the DCR path.
+          JSON='{"issuer":"http://oidc-stub.default.svc",
+          "authorization_endpoint":"http://oidc-stub.default.svc/authorize",
+          "token_endpoint":"http://oidc-stub.default.svc/token",
+          "userinfo_endpoint":"http://oidc-stub.default.svc/userinfo",
+          "jwks_uri":"http://oidc-stub.default.svc/jwks",
+          "code_challenge_methods_supported":["S256"]}'
+          # base64 so the JSON's quotes survive the nested sh -c unmangled.
+          B64=$(printf '%s' "$JSON" | tr -d '\n' | base64 -w0)
+          kubectl create deployment oidc-stub -n default --image=python:3.12-alpine -- \
+            sh -c "mkdir -p /w/.well-known && echo $B64 | base64 -d > /w/.well-known/openid-configuration && cd /w && exec python3 -m http.server 80"
+          kubectl expose deployment oidc-stub -n default --port=80 --target-port=80
+          kubectl rollout status deployment/oidc-stub -n default --timeout=120s
+
+      - name: Install nextcloud-mcp-server (real smoke test)
+        run: |
+          # nextcloud.host overridden to the stub: CI must not depend on
+          # production Nextcloud. Everything else comes from the real values
+          # file. 180s because PVC provisioning now precedes the image pull.
+          helm upgrade --install nextcloud-mcp \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-server/values.yaml \
+            --set nextcloud.host=http://oidc-stub.default.svc \
+            --wait --timeout 180s
+
+      - name: Diagnose nextcloud-mcp-server failure
+        if: failure()
+        run: |
+          # helm --wait only reports "context deadline exceeded"; dump what
+          # distinguishes unbound PVC / crash-loop / slow pull. describe covers
+          # pod, volume and PVC state; --previous catches a crash-loop's cause.
+          SEL="-l app.kubernetes.io/name=nextcloud-mcp-server"
+          kubectl -n default describe pod $SEL
+          echo "=== logs ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers || true
+          echo "=== logs (previous) ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers --previous || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify nextcloud-mcp-server rollout
+        run: |
+          kubectl wait --for=condition=Ready pod \
+            -l app.kubernetes.io/name=nextcloud-mcp-server \
+            -n default --timeout=90s
+
+      - name: Verify nextcloud-mcp-server health and OAuth routes
+        run: |
+          kubectl -n default port-forward svc/nextcloud-mcp-nextcloud-mcp-server 8000:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8000/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/health/live
+          echo "nextcloud-mcp-server health/live OK"
+
+          # Guards the reported bug: auth.mode basic registers no OAuth routes,
+          # so claude.ai's Connectors UI 404s on discovery and cannot connect.
+          # Asserts registered, not 200 — the handler's response depends on the
+          # stubbed IdP. The end-to-end 200 is the Verify: in nextcloud-mcp.md.
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8000/.well-known/oauth-authorization-server)
+          echo "oauth-authorization-server status: $STATUS"
+          if [ "$STATUS" = "404" ]; then
+            echo "FAILED: /.well-known/oauth-authorization-server is not registered"
+            echo "        (expected the OAuth facade from auth.mode: login-flow)"
+            exit 1
+          fi
+          echo "nextcloud-mcp-server OAuth routes registered OK"
+
+          # Mounting the routes is not enough: the server keeps a separate
+          # allowlist of MCP clients (ALLOWED_MCP_CLIENTS) and fail-closes with
+          # 401 "Unknown client_id" when it is unset, which is what blocked the
+          # claude.ai connector. Assert an allowlisted client gets past client
+          # validation — a redirect to the IdP, not a 401.
+          AUTH="http://127.0.0.1:8000/oauth/authorize?response_type=code"
+          AUTH="$AUTH&client_id=claude-ai"
+          AUTH="$AUTH&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback"
+          AUTH="$AUTH&code_challenge=ci0000000000000000000000000000000000000000000"
+          AUTH="$AUTH&code_challenge_method=S256&state=ci&scope=openid"
+          # Require the 302 specifically, not just "not 401": the handler's only
+          # success path is RedirectResponse(status_code=302), so 5xx from a
+          # broken discovery would otherwise pass this check silently.
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$AUTH")
+          echo "oauth/authorize status: $STATUS"
+          if [ "$STATUS" != "302" ]; then
+            echo "FAILED: expected 302 redirect to the IdP, got $STATUS"
+            echo "        401 = client_id not in ALLOWED_MCP_CLIENTS, or its"
+            echo "              registered redirect URI does not match"
+            echo "        5xx = OIDC discovery against the IdP is failing"
+            exit 1
+          fi
+          echo "nextcloud-mcp-server MCP client allowlist OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -168,6 +305,40 @@ jobs:
             ! -name "probe-alerts.yaml" \
             | sort)
           exit "$FAILED"
+
+      - name: Assert delugevpn WireGuard transport/privilege coupling
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          f = "cluster/services/delugevpn.yaml"
+          dep = next((d for d in yaml.safe_load_all(open(f))
+                      if d and d.get("kind") == "Deployment"
+                      and d["metadata"]["name"] == "delugevpn"), None)
+          containers = (((dep or {}).get("spec", {}).get("template", {})
+                         .get("spec", {}).get("containers")) or [])
+          c = next((c for c in containers if c["name"] == "delugevpn"), None)
+          if c is None:
+              print(f"BAD {f}: no 'delugevpn' container in a Deployment named 'delugevpn'")
+              sys.exit(1)
+          env = {e["name"]: e.get("value") for e in c.get("env", [])}
+          sc = c.get("securityContext") or {}
+          failed = 0
+          # binhex's WireGuard client needs a rw /proc/sys so wg-quick can set
+          # net.ipv4.conf.all.src_valid_mark; dropping privileged kills the tunnel
+          # silently (the workload fails closed), so the two must move together.
+          if env.get("VPN_CLIENT") != "wireguard":
+              print(f"BAD {f}: VPN_CLIENT is {env.get('VPN_CLIENT')!r}, expected 'wireguard'")
+              failed = 1
+          if sc.get("privileged") is not True:
+              print(f"BAD {f}: securityContext.privileged must be true for VPN_CLIENT=wireguard")
+              failed = 1
+          if "capabilities" in sc:
+              print(f"BAD {f}: privileged supersedes capabilities; drop the capabilities block")
+              failed = 1
+          if not failed:
+              print(f"OK  {f}: VPN_CLIENT=wireguard with privileged: true")
+          sys.exit(failed)
+          PY
 
       - name: Validate embedded Grafana dashboard JSON
         run: |
@@ -223,6 +394,7 @@ jobs:
             https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
           helm repo add node-feature-discovery \
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
+          helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo update
 
       - name: Dry-run argocd
@@ -299,3 +471,10 @@ jobs:
             oci://ghcr.io/containers/charts/kubernetes-mcp-server --version 0.1.0 \
             --namespace default \
             -f cluster/helm/kubernetes-mcp-server/values.yaml > /dev/null
+
+      - name: Dry-run nextcloud-mcp-server
+        run: |
+          helm template nextcloud-mcp \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-server/values.yaml > /dev/null
