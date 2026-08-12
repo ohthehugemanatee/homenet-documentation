@@ -24,7 +24,7 @@ spec:
           claimName: unifi-configs
       containers:
       - name: unifi-controller
-        image: lscr.io/linuxserver/unifi-network-application:latest
+        image: lscr.io/linuxserver/unifi-network-application:10.4.57-ls140
         imagePullPolicy: IfNotPresent
         env:
         - name: TZ

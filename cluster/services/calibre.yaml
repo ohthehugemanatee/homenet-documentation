@@ -25,7 +25,7 @@ spec:
             claimName: media
       containers:
         - name: calibre
-          image: lscr.io/linuxserver/calibre:latest
+          image: lscr.io/linuxserver/calibre:v9.11.0-ls414
           ports:
             - containerPort: 8080   # KasmVNC GUI
             - containerPort: 8081   # Content / OPDS server
@@ -149,7 +149,7 @@ spec:
             claimName: app-configs
       containers:
         - name: calibre-web
-          image: lscr.io/linuxserver/calibre-web:latest
+          image: lscr.io/linuxserver/calibre-web:0.6.26-ls393
           ports:
             - containerPort: 8083
           env:
