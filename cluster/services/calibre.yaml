@@ -26,6 +26,12 @@ spec:
       containers:
         - name: calibre
           image: lscr.io/linuxserver/calibre:v9.11.0-ls414
+          resources:
+            requests:
+              memory: 1Gi
+            limits:
+              memory: 2Gi
+              gpu.intel.com/i915: "1"
           ports:
             - containerPort: 8080   # KasmVNC GUI
             - containerPort: 8081   # Content / OPDS server
@@ -36,6 +42,8 @@ spec:
               value: "1000"
             - name: TZ
               value: "Europe/Berlin"
+            - name: AUTO_GPU
+              value: "true"
           volumeMounts:
             - name: nfs-config
               mountPath: /config
