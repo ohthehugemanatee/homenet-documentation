@@ -4,6 +4,17 @@
 exposes Nextcloud (notes, calendar, contacts, files, etc.) as MCP tools so Claude
 clients can act on the live Nextcloud instance rather than just read docs about it.
 
+Two releases of the same chart run side by side in `default`, differing only in how the
+client authenticates:
+
+| Endpoint | Release | `auth.mode` | For |
+|---|---|---|---|
+| `mcp.germany.vertesi.com` | `nextcloud-mcp` | `login-flow` | claude.ai Connectors — OAuth 2.1 + PKCE browser flow |
+| `mcp2.germany.vertesi.com` | `nextcloud-mcp-basic` | `multi-user-basic` | headless/CLI clients that can set `Authorization: Basic` |
+
+Both are per-user: neither serves every client as one shared account. Pick by what the
+client can do, not by trust level.
+
 ## Architecture
 
 ```
@@ -17,14 +28,26 @@ nextcloud-mcp Deployment (cluster/helm/nextcloud-mcp-server/values.yaml)
   │  data: per-user Nextcloud app password, from Login Flow v2
   ▼
 germany.vertesi.com (cluster/services/nextcloud.yaml)
+
+
+Headless MCP clients (CLI, scripts)
+  │  outbound HTTPS, Authorization: Basic <user:app-password>
+  ▼
+Ingress mcp2.germany.vertesi.com (Traefik, letsencrypt-prod)
+  ▼
+nextcloud-mcp-basic Deployment (cluster/helm/nextcloud-mcp-basic/values.yaml)
+  │  auth: pass-through — credentials forwarded verbatim to Nextcloud
+  │  data: none (stateless)
+  ▼
+germany.vertesi.com (cluster/services/nextcloud.yaml)
 ```
 
-Single replica: `login_flow` keeps provisioning sessions in memory. Unlike the BasicAuth
-deployment this replaced it is **not** stateless — the token DB (`/app/data/tokens.db`,
-1Gi Longhorn PVC) holds each user's app password encrypted with `token_encryption_key`;
-rotating that key without wiping the DB fails startup with `fernet.InvalidToken`.
+Single replica on `nextcloud-mcp`: `login_flow` keeps provisioning sessions in memory. It
+is **not** stateless — the token DB (`/app/data/tokens.db`, 1Gi Longhorn PVC) holds each
+user's app password encrypted with `token_encryption_key`; rotating that key without
+wiping the DB fails startup with `fernet.InvalidToken`.
 
-## Configuration
+## Configuration — `mcp` (login-flow)
 
 Values override: [`cluster/helm/nextcloud-mcp-server/values.yaml`](cluster/helm/nextcloud-mcp-server/values.yaml).
 `auth.mode: login-flow` — the chart derives `--oauth` and `MCP_DEPLOYMENT_MODE=login_flow`
@@ -92,8 +115,52 @@ claude.ai falls back to asking; the allowlist is what makes that answer work.
 Your Nextcloud app password is never entered anywhere — Login Flow v2 provisions one per
 user through the browser redirect on first connector use.
 
-Rollback is `values.yaml` back to `auth.mode: basic`, so keep the now-unused
-`nextcloud-claude-mcp` Secret until this is confirmed working.
+## Configuration — `mcp2` (multi-user basic)
+
+Values override: [`cluster/helm/nextcloud-mcp-basic/values.yaml`](cluster/helm/nextcloud-mcp-basic/values.yaml).
+`auth.mode: multi-user-basic` — the chart derives `MCP_DEPLOYMENT_MODE=multi_user_basic`.
+The client sends `Authorization: Basic` on every request; the server forwards those
+credentials to Nextcloud and does nothing else with them.
+
+Nothing to create out-of-band: `auth.multiUserBasic.enableOfflineAccess: false` keeps the
+release stateless, so there is no token DB, no PVC, no `token_encryption_key`, and no
+second OIDC client to register. Turning offline access on would pull in the entire
+login-flow footprint above, key-rotation trap included.
+
+**Use an app password per client, not your account password.** Nextcloud → Settings →
+Security → Devices & Sessions → *Create new app password*. Same revocation surface as the
+login-flow endpoint; the difference is that you provision it yourself instead of the
+browser redirect doing it for you.
+
+No OAuth facade is mounted in this mode. Pointing claude.ai's Connectors UI at `mcp2`
+404s on `/.well-known/oauth-authorization-server` — expected, not a bug; that is what
+`mcp` is for.
+
+### `mcp2` does not challenge at the edge
+
+Upstream's `BasicAuthMiddleware` *extracts* an `Authorization: Basic` header when one is
+present and then continues the request chain unconditionally — it never returns `401` and
+never sends `WWW-Authenticate`. Consequences, all of them by upstream design:
+
+- An unauthenticated `GET /mcp` returns `406`, from content negotiation, not from auth.
+- The MCP handshake is reachable anonymously: `initialize` and `tools/list` answer without
+  credentials, so the **tool surface is publicly enumerable** on this host.
+- Credentials are enforced **per operation**, when a tool builds its Nextcloud client. No
+  Nextcloud data is reachable without them, and Nextcloud itself owns brute-force
+  throttling since every credential is checked there.
+
+So the exposure is tool-surface disclosure, not data. If that is not acceptable, the fix is
+to drop `ingress.enabled` and reach the Service in-cluster, not to expect a `401`.
+
+One out-of-band step: a Cloudflare tunnel hostname route for `mcp2.germany.vertesi.com`
+must exist before cert-manager can pass the HTTP-01 challenge and before the host is
+reachable from outside. In-cluster DNS needs nothing —
+[`cluster/services/external-dns.yaml`](cluster/services/external-dns.yaml) runs
+`--source=ingress` against the Pi-hole provider and picks the host up from the Ingress.
+
+The now-unused `nextcloud-claude-mcp` Secret (single shared account, `auth.mode: basic`)
+is what `mcp2` supersedes — headless clients that used to share that account get their own
+credentials here. Keep the Secret only as long as you want the old single-account rollback.
 
 ## GitOps
 
@@ -104,13 +171,33 @@ manual sync matches `kubernetes-mcp-server`'s tier: single-pod utility, not comp
 stateful infra, but still worth watching the first sync of a version bump rather than
 letting `automated`/`selfHeal` apply it unattended.
 
+[`cluster/argocd/apps/nextcloud-mcp-basic.yaml`](cluster/argocd/apps/nextcloud-mcp-basic.yaml)
+is auto-sync (`prune` + `selfHeal`, with the finalizer). The tier differs because the
+release does: no PVC, no Secret, no provisioning state, so a bad sync costs a pod restart
+rather than a token DB. Deleting the Application cascade-deletes its resources — which is
+the intent for something rebuildable from `values.yaml` alone.
+
 ## Verify
 
 ```sh
-curl -s -o /dev/null -w '%{http_code}' https://mcp.germany.vertesi.com/health/live
+curl -s -o /dev/null -w '%{http_code}' https://mcp.germany.vertesi.com/health/live   # 200
+curl -s -o /dev/null -w '%{http_code}' https://mcp2.germany.vertesi.com/health/live  # 200
 ```
 
-should return `200`.
+`mcp2`'s `/health/live` reports `{"status":"alive","mode":"basic"}`. That `basic` is the
+auth *family*, not the deployment mode — `single_user_basic` and `multi_user_basic` both
+report it, and it is not evidence of a fallback to the single shared account. The
+deployment mode is the `MCP_DEPLOYMENT_MODE` env var, which CI asserts is
+`multi_user_basic`:
 
-First connector use redirects to Nextcloud's login to grant an app password — per user,
-and revocable from Nextcloud → Settings → Security → Devices & Sessions.
+```sh
+kubectl -n default get deploy nextcloud-mcp-basic-nextcloud-mcp-server \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="MCP_DEPLOYMENT_MODE")].value}'
+```
+
+Do **not** verify `mcp2` by expecting a `401` from an unauthenticated request — per the
+section above, it does not issue one. Verify it by calling a tool with
+`-u '<user>:<app-password>'` and getting a real result back.
+
+First connector use on `mcp` redirects to Nextcloud's login to grant an app password — per
+user, and revocable from Nextcloud → Settings → Security → Devices & Sessions.
