@@ -285,6 +285,112 @@ jobs:
           fi
           echo "nextcloud-mcp-server MCP client allowlist OK"
 
+      - name: Install nextcloud-mcp-basic (real smoke test)
+        run: |
+          # Second release of the same chart, auth.mode multi-user-basic. Shares
+          # the oidc-stub host so CI never reaches production Nextcloud. 120s,
+          # not 180s: this release is stateless, so no PVC provisioning precedes
+          # the image pull. No fixture secret — offline access is off.
+          helm upgrade --install nextcloud-mcp-basic \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-basic/values.yaml \
+            --set nextcloud.host=http://oidc-stub.default.svc \
+            --wait --timeout 120s
+
+      - name: Diagnose nextcloud-mcp-basic failure
+        if: failure()
+        run: |
+          # Selects on instance, not name: app.kubernetes.io/name is
+          # nextcloud-mcp-server for both releases now.
+          SEL="-l app.kubernetes.io/instance=nextcloud-mcp-basic"
+          kubectl -n default describe pod $SEL
+          echo "=== logs ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers || true
+          echo "=== logs (previous) ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers --previous || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify nextcloud-mcp-basic rollout
+        run: |
+          kubectl wait --for=condition=Ready pod \
+            -l app.kubernetes.io/instance=nextcloud-mcp-basic \
+            -n default --timeout=90s
+
+      - name: Verify nextcloud-mcp-basic deployment mode
+        run: |
+          # The values file selecting the wrong mode is silent otherwise: a
+          # fallback to auth.mode basic would still boot and still pass the
+          # health check, but would serve every client as one shared account.
+          MODE=$(kubectl -n default get deploy nextcloud-mcp-basic-nextcloud-mcp-server \
+            -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="MCP_DEPLOYMENT_MODE")].value}')
+          echo "MCP_DEPLOYMENT_MODE: $MODE"
+          if [ "$MODE" != "multi_user_basic" ]; then
+            echo "FAILED: expected multi_user_basic, got '$MODE'"
+            exit 1
+          fi
+
+          # Statelessness is what justifies this release's auto-sync tier and
+          # its lack of a token_encryption_key. enableOfflineAccess or
+          # dataStorage creeping back on would produce a PVC here.
+          PVCS=$(kubectl -n default get pvc \
+            -l app.kubernetes.io/instance=nextcloud-mcp-basic \
+            -o name)
+          if [ -n "$PVCS" ]; then
+            echo "FAILED: expected no PVC, got: $PVCS"
+            exit 1
+          fi
+          echo "nextcloud-mcp-basic mode and statelessness OK"
+
+      - name: Verify nextcloud-mcp-basic credential handling
+        run: |
+          # 8001 so this cannot collide with the login-flow release's forward.
+          kubectl -n default port-forward \
+            svc/nextcloud-mcp-basic-nextcloud-mcp-server 8001:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8001/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8001/health/live
+          echo
+          echo "nextcloud-mcp-basic health/live OK"
+
+          # This mode does not challenge at the edge. BasicAuthMiddleware only
+          # extracts an Authorization header when one is present and always
+          # continues the chain — no 401, no WWW-Authenticate — so the MCP
+          # handshake is reachable without credentials and enforcement happens
+          # per-operation, when a tool builds its Nextcloud client. A bare
+          # GET /mcp is 406 (content negotiation) and proves nothing either
+          # way. Printed for the record; see nextcloud-mcp.md.
+          echo "=== unauthenticated tools/list (informational) ==="
+          curl -s -X POST http://127.0.0.1:8001/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+            -w '\nHTTP %{http_code}\n' | head -20
+
+          # The gate: an unauthenticated tool call must never come back as a
+          # JSON-RPC success. This is a floor, not proof of enforcement — a
+          # transport-level rejection (missing session, unknown tool) also
+          # errors and passes. It cannot pass on the failure that matters,
+          # which is an anonymous caller getting a real Nextcloud result.
+          BODY=$(curl -s -X POST http://127.0.0.1:8001/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nc_notes_search_notes","arguments":{"query":"ci"}}}')
+          echo "=== unauthenticated tools/call ==="
+          printf '%s\n' "$BODY" | head -20
+          if printf '%s' "$BODY" | grep -q '"result"' \
+             && ! printf '%s' "$BODY" | grep -q '"error"'; then
+            echo "FAILED: unauthenticated tool call returned a JSON-RPC result"
+            echo "        an anonymous caller reached Nextcloud through this pod"
+            exit 1
+          fi
+          echo "nextcloud-mcp-basic credential handling OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -478,3 +584,10 @@ jobs:
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-server/values.yaml > /dev/null
+
+      - name: Dry-run nextcloud-mcp-basic
+        run: |
+          helm template nextcloud-mcp-basic \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-basic/values.yaml > /dev/null

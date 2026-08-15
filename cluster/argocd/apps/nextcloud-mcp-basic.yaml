@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nextcloud-mcp-basic
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.pushover: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      ref: values
+    - chart: nextcloud-mcp-server
+      repoURL: https://cbcoutinho.github.io/helm-charts
+      targetRevision: 0.102.7
+      helm:
+        releaseName: nextcloud-mcp-basic
+        valueFiles:
+          - $values/cluster/helm/nextcloud-mcp-basic/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
