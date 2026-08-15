@@ -20,6 +20,10 @@ permissions:
 
 jobs:
   review:
+    # This job's own check run IS the branch-protection gate. A pull_request-triggered
+    # job emits a check bound to the SHA it ran on, so nothing needs to mirror the
+    # result onto the PR head. The name must stay exactly as branch protection has it.
+    name: AI review required
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

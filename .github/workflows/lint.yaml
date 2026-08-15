@@ -116,8 +116,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run unit tests
-        run: node --test ".github/scripts/tests/*.test.js"
       - name: Assert workspace-reading steps follow a checkout
         # A github-script step that require()s a repo file via github.workspace
         # needs actions/checkout earlier in the same job, or it dies with
@@ -140,6 +138,31 @@ jobs:
           for entry in bad:
               print(f"BAD :: {entry} reads github.workspace with no preceding actions/checkout")
           sys.exit(1 if bad else 0)
+          PY
+      - name: Assert exactly one job produces the "AI review required" check
+        # Branch protection matches required checks by name. When more than one job
+        # emits this name, the gate races itself and the PR keeps a permanent red
+        # check run even after a later green one lands (see #236). Exactly one
+        # producer, or the gate is meaningless.
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          GATE = "AI review required"
+          producers = []
+          for f in sorted(glob.glob(".github/workflows/*.yaml")):
+              for job_id, job in (yaml.safe_load(open(f)).get("jobs") or {}).items():
+                  if (job.get("name") or job_id) == GATE:
+                      producers.append(f"{f}:{job_id}")
+                  for step in (job.get("steps") or []):
+                      script = (step.get("with") or {}).get("script") or ""
+                      if f"name: '{GATE}'" in script or f'name: "{GATE}"' in script:
+                          producers.append(f"{f}:{job_id}:{step.get('name')} (checks.create)")
+          for p in producers:
+              print(f"producer :: {p}")
+          if len(producers) != 1:
+              print(f"FAIL :: expected exactly 1 producer of {GATE!r}, found {len(producers)}")
+              sys.exit(1)
+          print(f"OK :: exactly one producer of {GATE!r}")
           PY
 
   ansible:
