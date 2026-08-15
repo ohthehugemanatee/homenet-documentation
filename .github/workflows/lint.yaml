@@ -144,6 +144,9 @@ jobs:
         # emits this name, the gate races itself and the PR keeps a permanent red
         # check run even after a later green one lands (see #236). Exactly one
         # producer, or the gate is meaningless.
+        #
+        # Literal-string match only: a github-script step that builds the check name
+        # by concatenation would evade this. Nothing in the tree does that today.
         run: |
           python3 - <<'PY'
           import glob, sys, yaml
