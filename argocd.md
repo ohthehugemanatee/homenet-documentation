@@ -10,7 +10,7 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 
 | Category | Sync | Self-heal | Prune | Apps |
 |---|---|---|---|---|
-| Media | auto | yes | yes | plex, radarr, sonarr, ombi, jackett, nzbget, delugevpn, calibre |
+| Media | auto | yes | yes | plex, radarr, sonarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
 | Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade |
 | Stateful | manual | no | no | nextcloud, collabora |
 | Infrastructure | manual | no | no | metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
