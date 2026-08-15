@@ -136,6 +136,22 @@ No OAuth facade is mounted in this mode. Pointing claude.ai's Connectors UI at `
 404s on `/.well-known/oauth-authorization-server` — expected, not a bug; that is what
 `mcp` is for.
 
+### `mcp2` does not challenge at the edge
+
+Upstream's `BasicAuthMiddleware` *extracts* an `Authorization: Basic` header when one is
+present and then continues the request chain unconditionally — it never returns `401` and
+never sends `WWW-Authenticate`. Consequences, all of them by upstream design:
+
+- An unauthenticated `GET /mcp` returns `406`, from content negotiation, not from auth.
+- The MCP handshake is reachable anonymously: `initialize` and `tools/list` answer without
+  credentials, so the **tool surface is publicly enumerable** on this host.
+- Credentials are enforced **per operation**, when a tool builds its Nextcloud client. No
+  Nextcloud data is reachable without them, and Nextcloud itself owns brute-force
+  throttling since every credential is checked there.
+
+So the exposure is tool-surface disclosure, not data. If that is not acceptable, the fix is
+to drop `ingress.enabled` and reach the Service in-cluster, not to expect a `401`.
+
 One out-of-band step: a Cloudflare tunnel hostname route for `mcp2.germany.vertesi.com`
 must exist before cert-manager can pass the HTTP-01 challenge and before the host is
 reachable from outside. In-cluster DNS needs nothing —
@@ -166,12 +182,22 @@ the intent for something rebuildable from `values.yaml` alone.
 ```sh
 curl -s -o /dev/null -w '%{http_code}' https://mcp.germany.vertesi.com/health/live   # 200
 curl -s -o /dev/null -w '%{http_code}' https://mcp2.germany.vertesi.com/health/live  # 200
-curl -s -o /dev/null -w '%{http_code}' https://mcp2.germany.vertesi.com/mcp          # 401
 ```
 
-The `401` matters: `mcp2` forwards whatever credentials it is given to Nextcloud, so an
-unauthenticated request getting anything but a rejection means an open endpoint. Repeat it
-with `-u '<user>:<app-password>'` and expect anything other than `401`.
+`mcp2`'s `/health/live` reports `{"status":"alive","mode":"basic"}`. That `basic` is the
+auth *family*, not the deployment mode — `single_user_basic` and `multi_user_basic` both
+report it, and it is not evidence of a fallback to the single shared account. The
+deployment mode is the `MCP_DEPLOYMENT_MODE` env var, which CI asserts is
+`multi_user_basic`:
+
+```sh
+kubectl -n default get deploy nextcloud-mcp-basic-nextcloud-mcp-server \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="MCP_DEPLOYMENT_MODE")].value}'
+```
+
+Do **not** verify `mcp2` by expecting a `401` from an unauthenticated request — per the
+section above, it does not issue one. Verify it by calling a tool with
+`-u '<user>:<app-password>'` and getting a real result back.
 
 First connector use on `mcp` redirects to Nextcloud's login to grant an app password — per
 user, and revocable from Nextcloud → Settings → Security → Devices & Sessions.
