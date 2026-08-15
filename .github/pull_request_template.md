@@ -29,3 +29,8 @@
 > **Feedback loop:** If you find a recurring AI mistake not already in
 > [`.github/agentic-review-exceptions.yaml`](.github/agentic-review-exceptions.yaml),
 > document it there with rationale so future reviewers and the AI reviewer won't repeat it.
+>
+> **AI review gate:** the `AI review required` check fails when the reviewer reports a
+> `HIGH` finding at `High` or `Medium` confidence. If it's a genuine false positive, add the
+> `review/override` label to unblock this PR, then add the pattern to the exceptions file above
+> so it doesn't recur.
