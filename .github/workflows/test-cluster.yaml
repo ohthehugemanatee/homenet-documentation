@@ -391,6 +391,66 @@ jobs:
           fi
           echo "nextcloud-mcp-basic credential handling OK"
 
+      - name: Verify nextcloud-mcp-basic tool surface
+        run: |
+          # mcp.extraArgs restricts this release to webdav/notes/deck. Nothing
+          # else surfaces the setting: a dropped or misspelled --enable-app
+          # still boots, still passes health/live, and quietly re-registers all
+          # twelve apps. Only tools/list can tell the difference.
+          kubectl -n default port-forward \
+            svc/nextcloud-mcp-basic-nextcloud-mcp-server 8002:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8002/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
+          INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
+          INIT_PAYLOAD+='"clientInfo":{"name":"test-cluster-ci","version":"0.0.0"}}}'
+
+          INIT_HEADERS=$(mktemp)
+          curl -sS -D "$INIT_HEADERS" -X POST http://127.0.0.1:8002/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d "$INIT_PAYLOAD" >/dev/null
+
+          # Streamable-HTTP assigns a session that later requests must echo.
+          SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$INIT_HEADERS" | tr -d '\r' | cut -d' ' -f2-)
+          SESSION_HEADER=()
+          [ -n "$SESSION_ID" ] && SESSION_HEADER=(-H "Mcp-Session-Id: $SESSION_ID")
+
+          curl -sS -X POST http://127.0.0.1:8002/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >/dev/null
+
+          TOOLS=$(curl -sS -X POST http://127.0.0.1:8002/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+          echo "== tools/list response body =="; echo "$TOOLS" | head -5
+
+          # One tool per enabled app: absent means --enable-app dropped an app
+          # this endpoint is for.
+          for TOOL in nc_webdav_list_directory nc_notes_search_notes deck_get_boards; do
+            echo "$TOOLS" | grep -q "\"$TOOL\"" \
+              || { echo "FAILED: $TOOL missing — an enabled app did not register"; exit 1; }
+          done
+
+          # One tool per app that must stay off. Present means the flag was
+          # dropped entirely and all twelve apps came back.
+          for TOOL in nc_calendar_list_calendars nc_contacts_list_addressbooks nc_tables_list_tables; do
+            if echo "$TOOLS" | grep -q "\"$TOOL\""; then
+              echo "FAILED: $TOOL is registered — app selection is not in effect"
+              exit 1
+            fi
+          done
+          echo "nextcloud-mcp-basic tool surface OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0

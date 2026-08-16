@@ -1,7 +1,9 @@
 image:
   # Same pin as cluster/helm/nextcloud-mcp-server/values.yaml — two releases of
-  # one chart; bump both together so the two endpoints never diverge in tool
-  # surface. Check https://github.com/cbcoutinho/nextcloud-mcp-server/releases.
+  # one chart; bump both together so the two endpoints never diverge in which
+  # tools *exist*. Which of them this endpoint registers is mcp.extraArgs
+  # below, and that divergence is deliberate.
+  # Check https://github.com/cbcoutinho/nextcloud-mcp-server/releases.
   tag: "0.165.0"
 
 nextcloud:
@@ -30,6 +32,22 @@ auth:
 # the sibling values file enables it and the asymmetry is deliberate.
 dataStorage:
   enabled: false
+
+mcp:
+  # Restrict the tool surface to the three apps this endpoint is for. Unset,
+  # --enable-app defaults to all twelve of the server's AVAILABLE_APPS
+  # (calendar, contacts, tables, talk, mail, news, cookbook, collectives,
+  # sharing on top of these). Repeat the flag per app — it is CLI-only, there
+  # is no env var, and the chart has no values for it, so it rides in
+  # extraArgs. Files are `webdav` upstream; file *sharing* is the separate
+  # `sharing` app and stays off.
+  extraArgs:
+    - --enable-app
+    - webdav
+    - --enable-app
+    - notes
+    - --enable-app
+    - deck
 
 # ALLOWED_MCP_CLIENTS and NEXTCLOUD_RESOURCE_URI are deliberately absent here:
 # both govern the OAuth flow, which this mode does not mount. Don't add them

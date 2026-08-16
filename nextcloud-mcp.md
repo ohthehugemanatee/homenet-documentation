@@ -7,10 +7,10 @@ clients can act on the live Nextcloud instance rather than just read docs about 
 Two releases of the same chart run side by side in `default`, differing only in how the
 client authenticates:
 
-| Endpoint | Release | `auth.mode` | For |
-|---|---|---|---|
-| `mcp.germany.vertesi.com` | `nextcloud-mcp` | `login-flow` | claude.ai Connectors — OAuth 2.1 + PKCE browser flow |
-| `mcp2.germany.vertesi.com` | `nextcloud-mcp-basic` | `multi-user-basic` | headless/CLI clients that can set `Authorization: Basic` |
+| Endpoint | Release | `auth.mode` | Apps | For |
+|---|---|---|---|---|
+| `mcp.germany.vertesi.com` | `nextcloud-mcp` | `login-flow` | all | claude.ai Connectors — OAuth 2.1 + PKCE browser flow |
+| `mcp2.germany.vertesi.com` | `nextcloud-mcp-basic` | `multi-user-basic` | files, notes, deck | headless/CLI clients that can set `Authorization: Basic` |
 
 Both are per-user: neither serves every client as one shared account. Pick by what the
 client can do, not by trust level.
@@ -127,6 +127,22 @@ release stateless, so there is no token DB, no PVC, no `token_encryption_key`, a
 second OIDC client to register. Turning offline access on would pull in the entire
 login-flow footprint above, key-rotation trap included.
 
+### Tool surface is restricted to files, notes and deck
+
+`mcp.extraArgs` passes `--enable-app webdav --enable-app notes --enable-app deck`, so this
+release registers only those three apps' tools. Left unset, the flag defaults to all twelve
+apps the server knows (`notes`, `tables`, `webdav`, `sharing`, `calendar`, `collectives`,
+`contacts`, `cookbook`, `deck`, `news`, `mail`, `talk`) — the default is *all*, not *none*,
+so an accidentally dropped flag widens the surface silently. It is CLI-only: no env var, no
+chart value, which is why it rides in `extraArgs`.
+
+Files are `webdav` upstream. File *sharing* is the separate `sharing` app and is **not**
+enabled — `nc_webdav_*` reads, writes and moves files; it does not create share links.
+
+The login-flow endpoint `mcp` is unrestricted and keeps all twelve apps. The two endpoints
+now differ in tool surface as well as auth, so the image-tag comment about keeping them
+from diverging applies to the version pin, not to this flag.
+
 **Use an app password per client, not your account password.** Nextcloud → Settings →
 Security → Devices & Sessions → *Create new app password*. Same revocation surface as the
 login-flow endpoint; the difference is that you provision it yourself instead of the
@@ -144,7 +160,8 @@ never sends `WWW-Authenticate`. Consequences, all of them by upstream design:
 
 - An unauthenticated `GET /mcp` returns `406`, from content negotiation, not from auth.
 - The MCP handshake is reachable anonymously: `initialize` and `tools/list` answer without
-  credentials, so the **tool surface is publicly enumerable** on this host.
+  credentials, so the **tool surface is publicly enumerable** on this host — the three
+  apps below, not all twelve, but still enumerable.
 - Credentials are enforced **per operation**, when a tool builds its Nextcloud client. No
   Nextcloud data is reachable without them, and Nextcloud itself owns brute-force
   throttling since every credential is checked there.
