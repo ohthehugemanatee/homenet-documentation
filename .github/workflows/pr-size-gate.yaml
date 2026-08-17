@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   size-check:
-    name: PR size check
+    # Deliberately NOT named "PR size check": the check run created below is the
+    # gate, and a job with the same name would be a second producer of it (#245).
+    name: PR size gate
     runs-on: ubuntu-latest
     steps:
       - name: Check PR size
@@ -42,16 +44,44 @@ jobs:
               summary = `${loc} lines changed (${pr.additions}+ / ${pr.deletions}−).`;
             }
 
-            await github.rest.checks.create({
+            // Update the existing check run rather than adding another. This
+            // workflow also fires on labeled/unlabeled, so it can run several times
+            // against one head SHA -- and a completed check run is never retracted.
+            // Creating each time left the stale failure from the pre-label run sitting
+            // on the SHA next to the post-label success, which no re-run could clear
+            // (GitHub replays the original event payload on a re-run). See #245.
+            const existing = await github.rest.checks.listForRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              name: 'PR size check',
-              head_sha: pr.head.sha,
-              status: 'completed',
-              conclusion,
-              output: { title, summary }
+              ref: pr.head.sha,
+              check_name: 'PR size check',
             });
 
-            if (conclusion !== 'success') {
-              core.setFailed(title);
+            const payload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              status: 'completed',
+              conclusion,
+              output: { title, summary },
+            };
+
+            if (existing.data.total_count > 0) {
+              await github.rest.checks.update({
+                ...payload,
+                check_run_id: existing.data.check_runs[0].id,
+              });
+              core.info(`Updated existing check run: ${title}`);
+            } else {
+              await github.rest.checks.create({
+                ...payload,
+                name: 'PR size check',
+                head_sha: pr.head.sha,
+              });
+              core.info(`Created check run: ${title}`);
             }
+
+            // Deliberately no core.setFailed: the check run above IS the gate, and
+            // failing the job would post a second red check under the job's own name
+            // -- reintroducing the rollup-red problem this change removes. A crash
+            // before the check is written leaves the required check missing, which
+            // branch protection holds as pending, so this still fails closed.

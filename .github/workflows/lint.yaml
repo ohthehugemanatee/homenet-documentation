@@ -116,6 +116,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: python3 -m unittest discover -s .github/scripts/tests -v
       - name: Assert workspace-reading steps follow a checkout
         # A github-script step that require()s a repo file via github.workspace
         # needs actions/checkout earlier in the same job, or it dies with
@@ -139,33 +141,52 @@ jobs:
               print(f"BAD :: {entry} reads github.workspace with no preceding actions/checkout")
           sys.exit(1 if bad else 0)
           PY
-      - name: Assert exactly one job produces the "AI review required" check
-        # Branch protection matches required checks by name. When more than one job
-        # emits this name, the gate races itself and the PR keeps a permanent red
-        # check run even after a later green one lands (see #236). Exactly one
-        # producer, or the gate is meaningless.
+      - name: Assert no check name has more than one producer
+        # Branch protection matches required checks by name. When two producers share
+        # a name, the gate races itself and the PR keeps a permanent red check run even
+        # after a later green one lands -- and a re-run cannot clear it, because GitHub
+        # replays the original event payload (see #236, #245).
         #
-        # Literal-string match only: a github-script step that builds the check name
-        # by concatenation would evade this. Nothing in the tree does that today.
+        # A producer is either a job whose effective name is the check name, or a
+        # checks.create/checks.update call using it. Literal-string match only: a
+        # github-script step that builds the name by concatenation would evade this.
+        # Nothing in the tree does that today.
         run: |
           python3 - <<'PY'
-          import glob, sys, yaml
-          GATE = "AI review required"
-          producers = []
+          import glob, re, sys, yaml
+          from collections import defaultdict
+
+          def triggers_on_pull_request(doc):
+              # PyYAML reads an unquoted `on:` key as the boolean True, so accept
+              # both spellings -- some workflows here quote it, some don't.
+              triggers = doc.get("on", doc.get(True)) or {}
+              return isinstance(triggers, dict) and "pull_request" in triggers
+
+          producers = defaultdict(list)
           for f in sorted(glob.glob(".github/workflows/*.yaml")):
-              for job_id, job in (yaml.safe_load(open(f)).get("jobs") or {}).items():
-                  if (job.get("name") or job_id) == GATE:
-                      producers.append(f"{f}:{job_id}")
+              doc = yaml.safe_load(open(f)) or {}
+              # Only pull_request workflows can post competing check runs onto a PR
+              # head SHA. workflow_dispatch-only workflows never race on one.
+              if not triggers_on_pull_request(doc):
+                  continue
+              for job_id, job in (doc.get("jobs") or {}).items():
+                  producers[job.get("name") or job_id].append(f"{f}:{job_id} (job)")
                   for step in (job.get("steps") or []):
                       script = (step.get("with") or {}).get("script") or ""
-                      if f"name: '{GATE}'" in script or f'name: "{GATE}"' in script:
-                          producers.append(f"{f}:{job_id}:{step.get('name')} (checks.create)")
-          for p in producers:
-              print(f"producer :: {p}")
-          if len(producers) != 1:
-              print(f"FAIL :: expected exactly 1 producer of {GATE!r}, found {len(producers)}")
+                      # \b keeps `check_name:` out -- that is listForRef looking a
+                      # check up, not a step creating one.
+                      for name in re.findall(r"""\bname:\s*['"]([^'"]+)['"]""", script):
+                          producers[name].append(
+                              f"{f}:{job_id}:{step.get('name')} (checks API)")
+
+          bad = {n: p for n, p in producers.items() if len(p) > 1}
+          for name, entries in sorted(bad.items()):
+              print(f"FAIL :: check name {name!r} has {len(entries)} producers:")
+              for e in entries:
+                  print(f"          {e}")
+          if bad:
               sys.exit(1)
-          print(f"OK :: exactly one producer of {GATE!r}")
+          print(f"OK :: all {len(producers)} PR check names have exactly one producer")
           PY
 
   ansible:

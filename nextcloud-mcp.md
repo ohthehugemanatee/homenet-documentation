@@ -169,11 +169,9 @@ never sends `WWW-Authenticate`. Consequences, all of them by upstream design:
 So the exposure is tool-surface disclosure, not data. If that is not acceptable, the fix is
 to drop `ingress.enabled` and reach the Service in-cluster, not to expect a `401`.
 
-One out-of-band step: a Cloudflare tunnel hostname route for `mcp2.germany.vertesi.com`
-must exist before cert-manager can pass the HTTP-01 challenge and before the host is
-reachable from outside. In-cluster DNS needs nothing —
-[`cluster/services/external-dns.yaml`](cluster/services/external-dns.yaml) runs
-`--source=ingress` against the Pi-hole provider and picks the host up from the Ingress.
+No DNS step: `*.germany.vertesi.com` already resolves to the home IP that
+[`cluster/services/cloudflare-ddns.yaml`](cluster/services/cloudflare-ddns.yaml) keeps
+current, and HTTP-01 reaches Traefik over the port-forward that already serves `mcp`.
 
 The now-unused `nextcloud-claude-mcp` Secret (single shared account, `auth.mode: basic`)
 is what `mcp2` supersedes — headless clients that used to share that account get their own
