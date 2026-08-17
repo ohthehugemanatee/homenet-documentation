@@ -47,7 +47,7 @@ spec:
         nvme: "1"
       containers:
         - name: nextcloud
-          image: lscr.io/linuxserver/nextcloud:previous-32.0.11-ls101
+          image: lscr.io/linuxserver/nextcloud:previous-version-33.0.8
           imagePullPolicy: IfNotPresent
           resources:
             requests:
