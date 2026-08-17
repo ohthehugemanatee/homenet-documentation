@@ -40,20 +40,95 @@ jobs:
       - name: Create k3d cluster
         run: k3d cluster create ci --wait --no-lb
 
-      - name: Install cert-manager CRDs via helm
+      - name: Resolve pinned cert-manager chart version
         run: |
+          # Read the pin out of the Application rather than repeating it here, so
+          # CI cannot silently exercise a different chart than ArgoCD deploys.
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/cert-manager.yaml"))
+          ver = next(s["targetRevision"] for s in app["spec"]["sources"]
+                     if s.get("chart") == "cert-manager")
+          print(f"CM_VERSION={ver}")
+          PY
+
+      - name: Install cert-manager via helm (version and values from git)
+        run: |
+          echo "cert-manager chart version: ${CM_VERSION}"
           helm repo add jetstack https://charts.jetstack.io
           helm repo update
           helm install cert-manager jetstack/cert-manager \
             --namespace cert-manager \
             --create-namespace \
-            --set crds.enabled=true \
+            --version "${CM_VERSION}" \
+            --values cluster/helm/cert-manager/values.yaml \
             --wait
 
       - name: Wait for cert-manager webhook
         run: |
           kubectl rollout status deployment/cert-manager-webhook \
             -n cert-manager --timeout=120s
+
+      - name: Assert cert-manager stays on the manual-sync infra tier
+        run: |
+          # cert-manager is Tier C in #206: manually gated indefinitely. Auto-sync
+          # would let an unattended chart bump replace the component every TLS
+          # certificate in the cluster depends on, and a finalizer would let an
+          # Application delete cascade into the CRDs.
+          python3 - <<'PY'
+          import re, sys, yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/cert-manager.yaml"))
+          errs = []
+          if "automated" in app["spec"].get("syncPolicy", {}):
+              errs.append("syncPolicy.automated is set; cert-manager must stay manual-sync")
+          if app["metadata"].get("finalizers"):
+              errs.append("finalizer present; an Application delete would cascade to the CRDs")
+          anns = app["metadata"].get("annotations", {})
+          if "notifications.argoproj.io/subscribe.on-out-of-sync.pushover" not in anns:
+              errs.append("missing on-out-of-sync Pushover annotation required of manual-sync apps")
+          chart = next((s for s in app["spec"]["sources"] if s.get("chart") == "cert-manager"), None)
+          if chart is None:
+              errs.append("no cert-manager chart source found")
+          elif not re.fullmatch(r"v\d+\.\d+\.\d+", str(chart.get("targetRevision", ""))):
+              errs.append(f"chart version {chart.get('targetRevision')!r} is not an exact pin")
+          if "ServerSideApply=true" not in app["spec"]["syncPolicy"].get("syncOptions", []):
+              errs.append("ServerSideApply=true required; cert-manager CRDs exceed the client-side apply limit")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Verify cert-manager issues a certificate under our values
+        run: |
+          # Proves the values file yields a cert-manager that actually works, not
+          # just one that reaches Ready. A self-signed issuer keeps this off the
+          # network — the ACME path needs real DNS and cannot run in k3d.
+          kubectl apply -f - <<'EOF'
+          apiVersion: cert-manager.io/v1
+          kind: ClusterIssuer
+          metadata:
+            name: ci-selfsigned
+          spec:
+            selfSigned: {}
+          ---
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            name: ci-smoke
+            namespace: default
+          spec:
+            secretName: ci-smoke-tls
+            dnsNames:
+              - ci-smoke.example.com
+            issuerRef:
+              name: ci-selfsigned
+              kind: ClusterIssuer
+          EOF
+          kubectl wait --for=condition=Ready certificate/ci-smoke \
+            -n default --timeout=120s
+          kubectl -n default get secret ci-smoke-tls -o name
+          kubectl delete certificate/ci-smoke -n default
+          kubectl delete clusterissuer/ci-selfsigned
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
@@ -561,6 +636,7 @@ jobs:
           helm repo add node-feature-discovery \
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
+          helm repo add jetstack https://charts.jetstack.io
           helm repo update
 
       - name: Dry-run argocd
@@ -651,3 +727,20 @@ jobs:
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-basic/values.yaml > /dev/null
+
+      - name: Resolve pinned cert-manager chart version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/cert-manager.yaml"))
+          ver = next(s["targetRevision"] for s in app["spec"]["sources"]
+                     if s.get("chart") == "cert-manager")
+          print(f"CM_VERSION={ver}")
+          PY
+
+      - name: Dry-run cert-manager
+        run: |
+          helm template cert-manager \
+            jetstack/cert-manager --version "${CM_VERSION}" \
+            --namespace cert-manager \
+            -f cluster/helm/cert-manager/values.yaml > /dev/null

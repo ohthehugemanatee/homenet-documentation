@@ -1,0 +1,51 @@
+---
+# Values override for the upstream cert-manager chart (https://charts.jetstack.io).
+#
+# The chart version is pinned in cluster/argocd/apps/cert-manager.yaml, not here.
+# CI reads that Application's targetRevision to decide which chart to install, so
+# the version CI exercises and the version ArgoCD deploys cannot drift apart.
+# Check https://github.com/cert-manager/cert-manager/releases before bumping, and
+# read every intervening release note — cert-manager does not support skipping
+# minor versions in place. See cert-manager.md for the upgrade procedure.
+
+# The chart owns the CRDs. `keep: true` leaves them behind if the release is ever
+# removed: deleting cert-manager's CRDs deletes every Certificate, Order,
+# Challenge and ClusterIssuer in the cluster along with them. That is exactly the
+# teardown cert-manager.md describes for a multi-major jump, and it must stay a
+# deliberate operator action rather than something a stray sync can do. The
+# Application is manual-sync and carries no finalizer for the same reason.
+crds:
+  enabled: true
+  keep: true
+
+# The vendored manifest this replaces ran with `resources: {}`. There is no
+# LimitRange in the cert-manager namespace (cluster/default-limits-requests.yaml
+# is applied elsewhere), so unset really did mean unbounded.
+#
+# Memory is bounded; CPU deliberately is not. The webhook sits in the admission
+# path for every Certificate/Issuer write, so a CPU limit there buys nothing and
+# risks throttling API server calls into timeouts.
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+cainjector:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    # Generous on purpose: cainjector caches Secrets and ConfigMaps cluster-wide
+    # and is the component that OOMs first when it is trimmed too close.
+    limits:
+      memory: 256Mi
