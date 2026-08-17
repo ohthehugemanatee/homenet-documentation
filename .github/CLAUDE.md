@@ -6,6 +6,8 @@
 - `workflows/test-ansible.yaml` — three jobs: shoebox validators (`shoebox/tests/*.sh`), monkeyble (`cluster/ansible/tests/monkeyble/run-tests.sh`), molecule (`cluster/ansible/molecule/`).
 - `workflows/test-cluster.yaml` — k3d smoke test: spins up a local cluster and applies manifests.
 - `workflows/pr-review.yaml` — Claude AI review. Its `review` job is named `AI review required`, and that job's own check run **is** the branch-protection gate: a `pull_request`-triggered job emits a check bound to the SHA it ran on, so nothing needs to mirror a result onto the PR head. Triggers are `[opened, synchronize]` — every event that can produce a new head SHA; `reopened`/`ready_for_review` don't change the SHA, so the existing check still applies. If a run is cancelled by `cancel-in-progress` while the PR head is unchanged, re-run the workflow from the Actions tab to unblock.
+
+  The gate is **substantive**: the reviewer returns structured findings via a forced `report_review` tool call, and `scripts/review_verdict.py` decides. A finding blocks merge when it is `HIGH` **and** confidence is `High` or `Medium` — that policy is two constants at the top of that module, unit-tested in `scripts/tests/test_review_verdict.py`. The rule **fails closed**: an unparseable severity, a missing field, or a response truncated by `max_tokens` blocks rather than passes, so a malformed reply can never look like a clean review. `review/override` on the PR waives a blocking finding (the review is still posted); recurring false positives belong in `agentic-review-exceptions.yaml` instead.
 - `workflows/pr-size-gate.yaml` — soft (≥200 LOC) and hard (≥400 LOC) PR size limits; `size/override` label bypasses the soft limit.
 - `workflows/autofix.yaml` — fires on `lint.yaml` / `test-cluster.yaml` failure; runs `scripts/autofix.py` (Claude agentic loop: read_file / write_file / run_bash; commits + comments).
 
@@ -26,7 +28,7 @@
 
 ## Exception files
 
-- `agentic-review-exceptions.yaml` documents dismissed AI-review findings. Update intentionally when adding/removing a known finding; **never** as a way to silence a real failure.
+- `agentic-review-exceptions.yaml` documents dismissed AI-review findings. Update intentionally when adding/removing a known finding; **never** as a way to silence a real failure. Since the AI review gate blocks on HIGH findings, this file is the durable fix for a recurring false positive — `review/override` is the one-off escape hatch, not a substitute.
 
 ## PR template
 
