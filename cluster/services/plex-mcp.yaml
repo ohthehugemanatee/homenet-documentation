@@ -1,16 +1,12 @@
 ---
-# MCP endpoint over Plex, Radarr and Sonarr for Claude clients. Upstream is
-# niavasha/plex-mcp-server (MIT); plex-mcp.md covers the credential setup and
-# why this Service has no Ingress.
+# MCP endpoint over Plex, Radarr and Sonarr. See plex-mcp.md.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: plex-mcp
   namespace: default
 spec:
-  # Single replica, and not for storage: HTTP sessions live in an in-process
-  # store keyed by mcp-session-id, so a second replica would answer some of a
-  # client's follow-up requests with "session not found or expired".
+  # Sessions are in-process; a second replica breaks client session affinity.
   replicas: 1
   selector:
     matchLabels:
@@ -23,19 +19,13 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: plex-mcp
-          # Upstream ships a Dockerfile but publishes no image, so this one is
-          # built from it by .github/workflows/build-plex-mcp-image.yaml — bump
-          # both together. First deploy: the GHCR package defaults to private
-          # and must be set public, or this pod sits in ImagePullBackOff.
-          # IfNotPresent: immutable release tag, side-loaded into k3d by CI.
+          # Built by .github/workflows/build-plex-mcp-image.yaml — bump both together.
           image: ghcr.io/ohthehugemanatee/plex-mcp-server:v1.4.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 3000
           env:
-            # Service DNS, not the ingress hostnames: this pod has no reason to
-            # leave the cluster to reach pods beside it.
             - name: PLEX_URL
               value: http://plex.default.svc.cluster.local:32400
             - name: SONARR_URL
@@ -45,13 +35,7 @@ spec:
             - name: PLEX_TOKEN
               valueFrom:
                 secretKeyRef:
-                  # CHANGEME: created out-of-band, never committed. plex-mcp.md
-                  # says where each value comes from:
-                  #   kubectl create secret generic plex-mcp-credentials \
-                  #     --from-literal=plex-token=<plex-token> \
-                  #     --from-literal=sonarr-api-key=<sonarr-api-key> \
-                  #     --from-literal=radarr-api-key=<radarr-api-key> \
-                  #     -n default
+                  # CHANGEME: created out-of-band, never committed. See plex-mcp.md.
                   name: plex-mcp-credentials
                   key: plex-token
             - name: SONARR_API_KEY
@@ -66,7 +50,7 @@ spec:
                   key: radarr-api-key
           securityContext:
             runAsNonRoot: true
-            # `node`, the unprivileged user upstream's Dockerfile switches to.
+            # `node`, the user upstream's Dockerfile switches to.
             runAsUser: 1000
             runAsGroup: 1000
             allowPrivilegeEscalation: false
@@ -81,9 +65,6 @@ spec:
               memory: 128Mi
             limits:
               memory: 256Mi
-          # /health is upstream's only health surface, and honest only about
-          # the process: a missing PLEX_TOKEN — which throws per session, not
-          # at boot — passes every probe here and fails every initialize.
           startupProbe:
             httpGet:
               path: /health
@@ -113,11 +94,7 @@ metadata:
   labels:
     run: plex-mcp
 spec:
-  # ClusterIP, deliberately. No Ingress: plex-mcp-server v1.4.1 authenticates
-  # nothing (no token, no origin check), and its Radarr/Sonarr write tools are
-  # not behind PLEX_ENABLE_MUTATIVE_OPS — that gates the Plex ones only. An
-  # Ingress here would publish an anonymous "queue any download" API. Reach it
-  # with kubectl port-forward; authenticated exposure is its own Issue.
+  # ClusterIP with no Ingress is deliberate — upstream has no auth. See plex-mcp.md.
   ports:
     - port: 3000
       protocol: TCP

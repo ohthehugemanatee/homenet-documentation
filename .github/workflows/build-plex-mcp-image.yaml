@@ -1,12 +1,7 @@
 name: Build plex-mcp-server image
 
-# Manual only: niavasha/plex-mcp-server publishes to npm and nothing else — its
-# publish.yml pushes no container image — so we build its own Dockerfile from a
-# pinned upstream tag and push to GHCR. No schedule/auto-trigger; bumping
-# plex_mcp_ref is a deliberate, reviewable action, same spirit as
-# build-songhub-image.yaml. Bump cluster/services/plex-mcp.yaml to match, and
-# set the GHCR package public on the first push — the cluster has no
-# imagePullSecret, so a private package is an ImagePullBackOff.
+# Upstream publishes to npm only, so we build its Dockerfile ourselves. Manual
+# dispatch; see plex-mcp.md for the version-bump procedure.
 'on':
   workflow_dispatch:
     inputs:
@@ -47,9 +42,6 @@ jobs:
         run: |
           echo "ref_tag=$(echo '${{ inputs.plex_mcp_ref }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
 
-      # linux/amd64 only: the cluster's arm64 nodes are tainted
-      # control-plane-only, so untolerated workload pods (like this one) only
-      # ever schedule on the amd64 nodes. No multi-arch/QEMU needed.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:

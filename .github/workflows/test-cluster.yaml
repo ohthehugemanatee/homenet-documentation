@@ -528,10 +528,8 @@ jobs:
 
       - name: Build plex-mcp image from pinned upstream ref
         run: |
-          # Build the same Dockerfile build-plex-mcp-image.yaml pushes to GHCR
-          # and side-load it, so this test never waits on a GHCR push — and
-          # take the ref from the manifest, so it never tests a tag the
-          # manifest doesn't run.
+          # Same Dockerfile build-plex-mcp-image.yaml pushes, side-loaded so
+          # this test needs no GHCR push. Tag comes from the manifest.
           IMAGE=$(python3 - <<'PY'
           import yaml
           for doc in yaml.safe_load_all(open("cluster/services/plex-mcp.yaml")):
@@ -546,10 +544,6 @@ jobs:
 
       - name: Deploy plex-mcp (real smoke test)
         run: |
-          # PLEX_TOKEN is required: createServer() throws without it, once per
-          # session, so an absent token fails every initialize while /health
-          # still answers ok. The Arr keys only have to exist — tools/list
-          # serves static schemas and contacts neither service.
           kubectl create secret generic plex-mcp-credentials \
             --from-literal=plex-token=ci-test-token \
             --from-literal=sonarr-api-key=ci-test-sonarr-key \
@@ -569,10 +563,8 @@ jobs:
 
       - name: Verify plex-mcp upstream wiring
         run: |
-          # tools/list cannot catch this: the Arr tools come from static
-          # schemas and register whether or not the URLs point anywhere. A
-          # dropped or wrong URL only surfaces on a real tool call, against
-          # services CI does not have.
+          # tools/list cannot catch this: the Arr tools register from static
+          # schemas whether or not the URLs point anywhere.
           ENV_PATH=.spec.template.spec.containers[0].env
           for PAIR in "PLEX_URL=http://plex.default.svc.cluster.local:32400" \
                       "SONARR_URL=http://sonarr.default.svc.cluster.local:8989" \
@@ -582,7 +574,6 @@ jobs:
             echo "${PAIR%%=*}: $GOT"
             [ "$GOT" = "${PAIR#*=}" ] || { echo "FAILED: expected ${PAIR#*=}"; exit 1; }
           done
-          # Every credential comes from the Secret, never a literal.
           for NAME in PLEX_TOKEN SONARR_API_KEY RADARR_API_KEY; do
             GOT=$(kubectl -n default get deploy plex-mcp -o \
               jsonpath="{$ENV_PATH[?(@.name=='$NAME')].valueFrom.secretKeyRef.name}")
@@ -631,10 +622,8 @@ jobs:
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
           echo "== tools/list response body =="; echo "$TOOLS" | head -5
 
-          # Radarr and Sonarr are the point of this workload, not a bonus. One
-          # read, one write and the search trigger per service: an image built
-          # before the Arr merge, or a future upstream that gates these on
-          # reachable services, still boots and still passes /health.
+          # One read, one write and the search trigger per service, plus a Plex
+          # tool: an Arr-only build would pass the Arr checks alone.
           for TOOL in sonarr_get_series sonarr_add_series sonarr_trigger_search \
                       radarr_get_movies radarr_add_movie radarr_trigger_search \
                       get_libraries; do

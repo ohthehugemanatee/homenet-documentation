@@ -1074,14 +1074,11 @@ exceptions:
     files:
       - cluster/services/plex-mcp.yaml
     reason: >-
-      Advisory, accepted, each one deliberate. imagePullPolicy is IfNotPresent
-      because the tag is an immutable upstream release that test-cluster.yaml
-      side-loads into k3d, which an Always policy would send to a registry for.
-      runAsUser/Group 1000 is `node`, the user upstream's own Dockerfile
-      switches to; raising it above 10000 would break file ownership under
-      readOnlyRootFilesystem. readiness and liveness share /health because it
-      is the only health surface v1.4.1 serves, and cluster/services/CLAUDE.md
-      requires both probes.
+      Advisory, accepted. IfNotPresent because the immutable release tag is
+      side-loaded into k3d by CI; uid/gid 1000 is `node`, upstream's own user,
+      and raising it breaks file ownership under readOnlyRootFilesystem; both
+      probes share /health because it is the only one v1.4.1 serves and
+      cluster/services/CLAUDE.md requires both.
 
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"

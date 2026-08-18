@@ -3,9 +3,6 @@ kind: Application
 metadata:
   name: plex-mcp
   namespace: argocd
-  # Auto-sync tier: stateless single pod, no PVC and no provisioning state, so
-  # a bad sync costs a pod restart. The finalizer is what makes deleting this
-  # Application the documented rollback for #249.
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
