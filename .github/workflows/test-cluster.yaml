@@ -526,6 +526,112 @@ jobs:
           done
           echo "nextcloud-mcp-basic tool surface OK"
 
+      - name: Build plex-mcp image from pinned upstream ref
+        run: |
+          # Same Dockerfile build-plex-mcp-image.yaml pushes, side-loaded so
+          # this test needs no GHCR push. Tag comes from the manifest.
+          IMAGE=$(python3 - <<'PY'
+          import yaml
+          for doc in yaml.safe_load_all(open("cluster/services/plex-mcp.yaml")):
+              if doc and doc["kind"] == "Deployment":
+                  print(doc["spec"]["template"]["spec"]["containers"][0]["image"])
+          PY
+          )
+          echo "building $IMAGE"
+          docker build -t "$IMAGE" \
+            "https://github.com/niavasha/plex-mcp-server.git#${IMAGE##*:}"
+          k3d image import "$IMAGE" -c ci
+
+      - name: Deploy plex-mcp (real smoke test)
+        run: |
+          kubectl create secret generic plex-mcp-credentials \
+            --from-literal=plex-token=ci-test-token \
+            --from-literal=sonarr-api-key=ci-test-sonarr-key \
+            --from-literal=radarr-api-key=ci-test-radarr-key \
+            -n default
+          kubectl apply -f cluster/services/plex-mcp.yaml
+          kubectl -n default rollout status deployment/plex-mcp --timeout=180s
+
+      - name: Diagnose plex-mcp failure
+        if: failure()
+        run: |
+          kubectl -n default describe pod -l run=plex-mcp
+          echo "=== logs ==="
+          kubectl -n default logs -l run=plex-mcp --tail=200 || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify plex-mcp upstream wiring
+        run: |
+          # tools/list cannot catch this: the Arr tools register from static
+          # schemas whether or not the URLs point anywhere.
+          ENV_PATH=.spec.template.spec.containers[0].env
+          for PAIR in "PLEX_URL=http://plex.default.svc.cluster.local:32400" \
+                      "SONARR_URL=http://sonarr.default.svc.cluster.local:8989" \
+                      "RADARR_URL=http://radarr.default.svc.cluster.local:7878"; do
+            GOT=$(kubectl -n default get deploy plex-mcp -o \
+              jsonpath="{$ENV_PATH[?(@.name=='${PAIR%%=*}')].value}")
+            echo "${PAIR%%=*}: $GOT"
+            [ "$GOT" = "${PAIR#*=}" ] || { echo "FAILED: expected ${PAIR#*=}"; exit 1; }
+          done
+          for NAME in PLEX_TOKEN SONARR_API_KEY RADARR_API_KEY; do
+            GOT=$(kubectl -n default get deploy plex-mcp -o \
+              jsonpath="{$ENV_PATH[?(@.name=='$NAME')].valueFrom.secretKeyRef.name}")
+            echo "$NAME: from secret '$GOT'"
+            [ -n "$GOT" ] || { echo "FAILED: $NAME is not sourced from a Secret"; exit 1; }
+          done
+
+      - name: Verify plex-mcp health and Arr tool surface
+        run: |
+          # 8003: 8000-8002 belong to the two nextcloud-mcp forwards above.
+          kubectl -n default port-forward svc/plex-mcp 8003:3000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8003/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8003/health
+          echo
+
+          INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
+          INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
+          INIT_PAYLOAD+='"clientInfo":{"name":"test-cluster-ci","version":"0.0.0"}}}'
+
+          INIT_HEADERS=$(mktemp)
+          curl -sS -D "$INIT_HEADERS" -X POST http://127.0.0.1:8003/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d "$INIT_PAYLOAD" >/dev/null
+
+          # Streamable HTTP assigns a session that later requests must echo.
+          SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$INIT_HEADERS" | tr -d '\r' | cut -d' ' -f2-)
+          SESSION_HEADER=()
+          [ -n "$SESSION_ID" ] && SESSION_HEADER=(-H "Mcp-Session-Id: $SESSION_ID")
+
+          curl -sS -X POST http://127.0.0.1:8003/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >/dev/null
+
+          TOOLS=$(curl -sS -X POST http://127.0.0.1:8003/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+          echo "== tools/list response body =="; echo "$TOOLS" | head -5
+
+          # One read, one write and the search trigger per service, plus a Plex
+          # tool: an Arr-only build would pass the Arr checks alone.
+          for TOOL in sonarr_get_series sonarr_add_series sonarr_trigger_search \
+                      radarr_get_movies radarr_add_movie radarr_trigger_search \
+                      get_libraries; do
+            echo "$TOOLS" | grep -q "\"$TOOL\"" \
+              || { echo "FAILED: $TOOL missing from tools/list"; exit 1; }
+          done
+          echo "plex-mcp health and tool surface OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0

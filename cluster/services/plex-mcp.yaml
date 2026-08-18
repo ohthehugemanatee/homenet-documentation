@@ -1,0 +1,103 @@
+---
+# MCP endpoint over Plex, Radarr and Sonarr. See plex-mcp.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex-mcp
+  namespace: default
+spec:
+  # Sessions are in-process; a second replica breaks client session affinity.
+  replicas: 1
+  selector:
+    matchLabels:
+      run: plex-mcp
+  template:
+    metadata:
+      labels:
+        run: plex-mcp
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: plex-mcp
+          # Built by .github/workflows/build-plex-mcp-image.yaml — bump both together.
+          image: ghcr.io/ohthehugemanatee/plex-mcp-server:v1.4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: PLEX_URL
+              value: http://plex.default.svc.cluster.local:32400
+            - name: SONARR_URL
+              value: http://sonarr.default.svc.cluster.local:8989
+            - name: RADARR_URL
+              value: http://radarr.default.svc.cluster.local:7878
+            - name: PLEX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  # CHANGEME: created out-of-band, never committed. See plex-mcp.md.
+                  name: plex-mcp-credentials
+                  key: plex-token
+            - name: SONARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plex-mcp-credentials
+                  key: sonarr-api-key
+            - name: RADARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: plex-mcp-credentials
+                  key: radarr-api-key
+          securityContext:
+            runAsNonRoot: true
+            # `node`, the user upstream's Dockerfile switches to.
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12   # 60s; node boot is fast, image pull is not
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex-mcp
+  namespace: default
+  labels:
+    run: plex-mcp
+spec:
+  # ClusterIP with no Ingress is deliberate — upstream has no auth. See plex-mcp.md.
+  ports:
+    - port: 3000
+      protocol: TCP
+      name: http
+  selector:
+    run: plex-mcp
