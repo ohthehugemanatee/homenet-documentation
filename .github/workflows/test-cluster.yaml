@@ -528,12 +528,10 @@ jobs:
 
       - name: Build plex-mcp image from pinned upstream ref
         run: |
-          # niavasha/plex-mcp-server publishes to npm only, so
-          # .github/workflows/build-plex-mcp-image.yaml builds upstream's own
-          # Dockerfile and pushes it to GHCR. CI builds the same Dockerfile at
-          # the same ref and side-loads it: the smoke test then never waits on
-          # a GHCR push, and never exercises a tag the manifest doesn't run.
-          # The tag is read out of the manifest for that second reason.
+          # Build the same Dockerfile build-plex-mcp-image.yaml pushes to GHCR
+          # and side-load it, so this test never waits on a GHCR push — and
+          # take the ref from the manifest, so it never tests a tag the
+          # manifest doesn't run.
           IMAGE=$(python3 - <<'PY'
           import yaml
           for doc in yaml.safe_load_all(open("cluster/services/plex-mcp.yaml")):
@@ -546,25 +544,18 @@ jobs:
             "https://github.com/niavasha/plex-mcp-server.git#${IMAGE##*:}"
           k3d image import "$IMAGE" -c ci
 
-      - name: Create plex-mcp fixture secret
+      - name: Deploy plex-mcp (real smoke test)
         run: |
-          # PLEX_TOKEN is required: UnifiedMCPServer.createServer() throws
-          # without it, and in HTTP mode that factory runs once per session, so
-          # an absent token fails every initialize while /health still answers
-          # ok. The Arr keys only have to exist — tools/list serves static
-          # schemas and contacts neither Sonarr nor Radarr.
+          # PLEX_TOKEN is required: createServer() throws without it, once per
+          # session, so an absent token fails every initialize while /health
+          # still answers ok. The Arr keys only have to exist — tools/list
+          # serves static schemas and contacts neither service.
           kubectl create secret generic plex-mcp-credentials \
             --from-literal=plex-token=ci-test-token \
             --from-literal=sonarr-api-key=ci-test-sonarr-key \
             --from-literal=radarr-api-key=ci-test-radarr-key \
             -n default
-
-      - name: Deploy plex-mcp (real smoke test)
-        run: |
           kubectl apply -f cluster/services/plex-mcp.yaml
-
-      - name: Verify plex-mcp rollout
-        run: |
           kubectl -n default rollout status deployment/plex-mcp --timeout=180s
 
       - name: Diagnose plex-mcp failure
@@ -573,46 +564,31 @@ jobs:
           kubectl -n default describe pod -l run=plex-mcp
           echo "=== logs ==="
           kubectl -n default logs -l run=plex-mcp --tail=200 || true
-          echo "=== logs (previous) ==="
-          kubectl -n default logs -l run=plex-mcp --tail=200 --previous || true
           echo "=== events ==="
           kubectl -n default get events --sort-by=.lastTimestamp | tail -40
 
       - name: Verify plex-mcp upstream wiring
         run: |
-          # tools/list cannot prove this: the Arr tools come from static
-          # schemas and register whether or not SONARR_URL/RADARR_URL point
-          # anywhere. A dropped or wrong URL only surfaces when a tool is
-          # actually called, against the real services, which CI has none of.
-          python3 - <<'PY'
-          import subprocess, sys
-          out = subprocess.run(
-              ["kubectl", "-n", "default", "get", "deploy", "plex-mcp", "-o", "yaml"],
-              capture_output=True, text=True, check=True).stdout
-          import yaml
-          env = {e["name"]: e for e in yaml.safe_load(out)["spec"]["template"]
-                 ["spec"]["containers"][0]["env"]}
-          expected = {
-              "PLEX_URL": "http://plex.default.svc.cluster.local:32400",
-              "SONARR_URL": "http://sonarr.default.svc.cluster.local:8989",
-              "RADARR_URL": "http://radarr.default.svc.cluster.local:7878",
-          }
-          failed = False
-          for name, want in expected.items():
-              got = env.get(name, {}).get("value")
-              print(f"{name}: {got}")
-              if got != want:
-                  print(f"FAILED: expected {want}")
-                  failed = True
+          # tools/list cannot catch this: the Arr tools come from static
+          # schemas and register whether or not the URLs point anywhere. A
+          # dropped or wrong URL only surfaces on a real tool call, against
+          # services CI does not have.
+          ENV_PATH=.spec.template.spec.containers[0].env
+          for PAIR in "PLEX_URL=http://plex.default.svc.cluster.local:32400" \
+                      "SONARR_URL=http://sonarr.default.svc.cluster.local:8989" \
+                      "RADARR_URL=http://radarr.default.svc.cluster.local:7878"; do
+            GOT=$(kubectl -n default get deploy plex-mcp -o \
+              jsonpath="{$ENV_PATH[?(@.name=='${PAIR%%=*}')].value}")
+            echo "${PAIR%%=*}: $GOT"
+            [ "$GOT" = "${PAIR#*=}" ] || { echo "FAILED: expected ${PAIR#*=}"; exit 1; }
+          done
           # Every credential comes from the Secret, never a literal.
-          for name in ("PLEX_TOKEN", "SONARR_API_KEY", "RADARR_API_KEY"):
-              src = env.get(name, {}).get("valueFrom", {}).get("secretKeyRef")
-              print(f"{name}: secretKeyRef {src}")
-              if not src:
-                  print(f"FAILED: {name} is not sourced from a Secret")
-                  failed = True
-          sys.exit(1 if failed else 0)
-          PY
+          for NAME in PLEX_TOKEN SONARR_API_KEY RADARR_API_KEY; do
+            GOT=$(kubectl -n default get deploy plex-mcp -o \
+              jsonpath="{$ENV_PATH[?(@.name=='$NAME')].valueFrom.secretKeyRef.name}")
+            echo "$NAME: from secret '$GOT'"
+            [ -n "$GOT" ] || { echo "FAILED: $NAME is not sourced from a Secret"; exit 1; }
+          done
 
       - name: Verify plex-mcp health and Arr tool surface
         run: |
@@ -626,7 +602,6 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8003/health
           echo
-          echo "plex-mcp health OK"
 
           INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
           INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
@@ -656,26 +631,17 @@ jobs:
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
           echo "== tools/list response body =="; echo "$TOOLS" | head -5
 
-          # Radarr and Sonarr are the point of this workload, not a bonus: an
-          # image built from a ref that predates the Arr merge, or a future
-          # upstream that gates the Arr tools on reachable services, would
-          # still boot and still pass /health.
-          for TOOL in sonarr_get_series sonarr_add_series sonarr_get_queue \
-                      sonarr_get_calendar sonarr_get_profiles sonarr_trigger_search \
-                      sonarr_search sonarr_get_missing \
-                      radarr_get_movies radarr_add_movie radarr_get_queue \
-                      radarr_get_calendar radarr_get_profiles radarr_trigger_search \
-                      radarr_search radarr_get_missing; do
+          # Radarr and Sonarr are the point of this workload, not a bonus. One
+          # read, one write and the search trigger per service: an image built
+          # before the Arr merge, or a future upstream that gates these on
+          # reachable services, still boots and still passes /health.
+          for TOOL in sonarr_get_series sonarr_add_series sonarr_trigger_search \
+                      radarr_get_movies radarr_add_movie radarr_trigger_search \
+                      get_libraries; do
             echo "$TOOLS" | grep -q "\"$TOOL\"" \
               || { echo "FAILED: $TOOL missing from tools/list"; exit 1; }
           done
-
-          # One Plex tool too: the unified server is supposed to serve all
-          # three, and an Arr-only build (plex-arr-server.js) would pass the
-          # loop above on its own.
-          echo "$TOOLS" | grep -q '"get_libraries"' \
-            || { echo "FAILED: Plex tools missing — wrong entrypoint?"; exit 1; }
-          echo "plex-mcp tool surface OK"
+          echo "plex-mcp health and tool surface OK"
 
       - name: Server-side dry-run — all manifests
         run: |

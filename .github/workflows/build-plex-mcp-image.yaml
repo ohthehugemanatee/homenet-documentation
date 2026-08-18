@@ -1,0 +1,61 @@
+name: Build plex-mcp-server image
+
+# Manual only: niavasha/plex-mcp-server publishes to npm and nothing else — its
+# publish.yml pushes no container image — so we build its own Dockerfile from a
+# pinned upstream tag and push to GHCR. No schedule/auto-trigger; bumping
+# plex_mcp_ref is a deliberate, reviewable action, same spirit as
+# build-songhub-image.yaml. Bump cluster/services/plex-mcp.yaml to match, and
+# set the GHCR package public on the first push — the cluster has no
+# imagePullSecret, so a private package is an ImagePullBackOff.
+'on':
+  workflow_dispatch:
+    inputs:
+      plex_mcp_ref:
+        description: 'niavasha/plex-mcp-server git ref to build (tag preferred over branch)'
+        required: true
+        default: v1.4.1
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout plex-mcp-server at pinned ref
+        uses: actions/checkout@v4
+        with:
+          repository: niavasha/plex-mcp-server
+          ref: ${{ inputs.plex_mcp_ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Branch refs can contain slashes, which aren't valid in a Docker tag.
+      - name: Compute image tag
+        id: tag
+        run: |
+          echo "ref_tag=$(echo '${{ inputs.plex_mcp_ref }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
+      # linux/amd64 only: the cluster's arm64 nodes are tainted
+      # control-plane-only, so untolerated workload pods (like this one) only
+      # ever schedule on the amd64 nodes. No multi-arch/QEMU needed.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/ohthehugemanatee/plex-mcp-server:${{ steps.tag.outputs.ref_tag }}
+            ghcr.io/ohthehugemanatee/plex-mcp-server:latest

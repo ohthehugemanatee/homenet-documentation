@@ -1070,6 +1070,19 @@ exceptions:
       SongHub's own SONGHUB_LOGIN_*/SONGHUB_ADMIN_* env vars additionally
       gate the app's login regardless of network reachability.
 
+  - pattern: "plex-mcp kube-score advisory findings (pull policy, low uid/gid, shared health probe)"
+    files:
+      - cluster/services/plex-mcp.yaml
+    reason: >-
+      Advisory, accepted, each one deliberate. imagePullPolicy is IfNotPresent
+      because the tag is an immutable upstream release that test-cluster.yaml
+      side-loads into k3d, which an Always policy would send to a registry for.
+      runAsUser/Group 1000 is `node`, the user upstream's own Dockerfile
+      switches to; raising it above 10000 would break file ownership under
+      readOnlyRootFilesystem. readiness and liveness share /health because it
+      is the only health surface v1.4.1 serves, and cluster/services/CLAUDE.md
+      requires both probes.
+
 factual_corrections:
   - claim: "Cleanup play won't run if any_errors_fatal hits"
     correction: >-

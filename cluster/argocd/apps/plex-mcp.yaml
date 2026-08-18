@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plex-mcp
+  namespace: argocd
+  # Auto-sync tier: stateless single pod, no PVC and no provisioning state, so
+  # a bad sync costs a pod restart. The finalizer is what makes deleting this
+  # Application the documented rollback for #249.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.pushover: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+    targetRevision: HEAD
+    path: cluster/services
+    directory:
+      include: plex-mcp.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
