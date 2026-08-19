@@ -549,6 +549,11 @@ jobs:
             --from-literal=sonarr-api-key=ci-test-sonarr-key \
             --from-literal=radarr-api-key=ci-test-radarr-key \
             -n default
+          # {SHA} htpasswd: no apache2-utils needed.
+          kubectl create secret generic plex-mcp-basicauth \
+            --from-literal=users="ci-user:{SHA}$(printf ci-password \
+              | openssl sha1 -binary | base64)" \
+            -n default
           kubectl apply -f cluster/services/plex-mcp.yaml
           kubectl -n default rollout status deployment/plex-mcp --timeout=180s
 
@@ -631,6 +636,40 @@ jobs:
               || { echo "FAILED: $TOOL missing from tools/list"; exit 1; }
           done
           echo "plex-mcp health and tool surface OK"
+
+      - name: Verify plex-mcp ingress requires basic auth
+        run: |
+          kubectl -n kube-system rollout status deploy/traefik --timeout=180s
+          kubectl -n kube-system port-forward svc/traefik 8004:80 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          HOST=$(kubectl -n default get ingress plex-mcp \
+            -o jsonpath='{.spec.rules[0].host}')
+          for i in $(seq 1 15); do
+            curl -s -o /dev/null -H "Host: $HOST" http://127.0.0.1:8004/health && break
+            sleep 2
+          done
+
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Host: $HOST" http://127.0.0.1:8004/health)
+          echo "unauthenticated: $CODE"
+          [ "$CODE" = "401" ] || { echo "FAILED: expected 401, got $CODE"; exit 1; }
+
+          # 200, not just "not 401": proves the request reached the pod.
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -u ci-user:ci-password \
+            -H "Host: $HOST" http://127.0.0.1:8004/health)
+          echo "authenticated: $CODE"
+          [ "$CODE" = "200" ] || { echo "FAILED: expected 200, got $CODE"; exit 1; }
+
+          # Spends the bucket, so it runs last. Burst is 30.
+          SEEN=$(for i in $(seq 1 80); do
+            curl -s -o /dev/null -w '%{http_code}\n' \
+              -H "Host: $HOST" http://127.0.0.1:8004/health
+          done | sort | uniq -c)
+          echo "$SEEN"
+          echo "$SEEN" | grep -q ' 429$' \
+            || { echo "FAILED: no 429 after 80 requests — rate limit not applied"; exit 1; }
+          echo "plex-mcp ingress auth and rate limit OK"
 
       - name: Server-side dry-run — all manifests
         run: |
