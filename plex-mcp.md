@@ -44,8 +44,9 @@ v1.4.1 authenticates nothing — `src/shared/transport.ts` has no token, origin 
 check — and `PLEX_ENABLE_MUTATIVE_OPS` (unset here) gates only the *Plex* write tools:
 `radarr_add_movie`, `sonarr_add_series` and both `*_trigger_search` stay callable. So the
 Traefik `basicAuth` middleware in front of the Ingress is the only thing between the
-public hostname and a "queue any download" API. Pick the password accordingly; there is
-no rate limiting at the edge.
+public hostname and a "queue any download" API. Pick the password accordingly. A
+`rateLimit` middleware (60/min per source IP, burst 30) runs ahead of it as a
+brute-force brake — it is a speed bump, not a second gate.
 
 ```sh
 htpasswd -nbB <user> <CHANGEME_password> \

@@ -103,6 +103,21 @@ spec:
 
 ---
 
+# Per-source-IP, and listed before basicAuth below so brute-force attempts are
+# throttled before they reach the password check. See plex-mcp.md.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: plex-mcp-ratelimit
+  namespace: default
+spec:
+  rateLimit:
+    average: 60
+    period: 1m
+    burst: 30
+
+---
+
 # Upstream authenticates nothing, so this middleware is the only gate in front
 # of the Arr write tools. See plex-mcp.md.
 apiVersion: traefik.io/v1alpha1
@@ -125,7 +140,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     traefik.ingress.kubernetes.io/redirect-entry-point: https
-    traefik.ingress.kubernetes.io/router.middlewares: default-plex-mcp-basicauth@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: default-plex-mcp-ratelimit@kubernetescrd,default-plex-mcp-basicauth@kubernetescrd
 spec:
   rules:
     - host: plex-mcp.germany.vertesi.com

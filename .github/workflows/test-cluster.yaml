@@ -663,7 +663,19 @@ jobs:
             -H "Host: $HOST" http://127.0.0.1:8004/health)
           echo "authenticated: $CODE"
           [ "$CODE" = "200" ] || { echo "FAILED: expected 200, got $CODE"; exit 1; }
-          echo "plex-mcp ingress auth OK"
+
+          # Last, because it spends the bucket: burst is 30, so 80 rapid
+          # requests must start being refused. Rate limiting runs ahead of
+          # basicAuth, which is what makes it a brute-force brake rather than
+          # decoration.
+          SEEN=$(for i in $(seq 1 80); do
+            curl -s -o /dev/null -w '%{http_code}\n' \
+              -H "Host: $HOST" http://127.0.0.1:8004/health
+          done | sort | uniq -c)
+          echo "$SEEN"
+          echo "$SEEN" | grep -q ' 429$' \
+            || { echo "FAILED: no 429 after 80 requests — rate limit not applied"; exit 1; }
+          echo "plex-mcp ingress auth and rate limit OK"
 
       - name: Server-side dry-run — all manifests
         run: |
