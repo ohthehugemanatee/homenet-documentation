@@ -94,10 +94,51 @@ metadata:
   labels:
     run: plex-mcp
 spec:
-  # ClusterIP with no Ingress is deliberate — upstream has no auth. See plex-mcp.md.
   ports:
     - port: 3000
       protocol: TCP
       name: http
   selector:
     run: plex-mcp
+
+---
+
+# Upstream authenticates nothing, so this middleware is the only gate in front
+# of the Arr write tools. See plex-mcp.md.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: plex-mcp-basicauth
+  namespace: default
+spec:
+  basicAuth:
+    # CHANGEME: created out-of-band, never committed. See plex-mcp.md.
+    secret: plex-mcp-basicauth
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plex-mcp
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    traefik.ingress.kubernetes.io/router.middlewares: default-plex-mcp-basicauth@kubernetescrd
+spec:
+  rules:
+    - host: plex-mcp.germany.vertesi.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: plex-mcp
+                port:
+                  number: 3000
+  tls:
+    - hosts:
+        - plex-mcp.germany.vertesi.com
+      secretName: plex-mcp-germany-vertesi-com-tls

@@ -23,21 +23,46 @@ from the URL. API keys: each app's Settings → General → API Key.
 ## Connecting a client
 
 ```sh
+claude mcp add --transport http plex https://plex-mcp.germany.vertesi.com/mcp \
+  --header "Authorization: Basic $(printf '<user>:<password>' | base64)"
+```
+
+In-cluster, unauthenticated, when the edge is not what you're testing:
+
+```sh
 kubectl -n default port-forward svc/plex-mcp 3000:3000
-claude mcp add --transport http plex http://127.0.0.1:3000/mcp
+claude mcp add --transport http plex-local http://127.0.0.1:3000/mcp
 ```
 
 `GET /health` proves only that the process is up: `PLEX_TOKEN` is read per *session*, not
 at boot, so a wrong token passes every probe and fails every `initialize`. Verify by
 listing tools.
 
-## No Ingress, on purpose
+## Basic auth is the whole gate
 
 v1.4.1 authenticates nothing — `src/shared/transport.ts` has no token, origin or host
 check — and `PLEX_ENABLE_MUTATIVE_OPS` (unset here) gates only the *Plex* write tools:
-`radarr_add_movie`, `sonarr_add_series` and both `*_trigger_search` are callable
-regardless. A public hostname would be an anonymous "queue any download" API, so this is
-ClusterIP-only until an auth layer lands.
+`radarr_add_movie`, `sonarr_add_series` and both `*_trigger_search` stay callable. So the
+Traefik `basicAuth` middleware in front of the Ingress is the only thing between the
+public hostname and a "queue any download" API. Pick the password accordingly; there is
+no rate limiting at the edge.
+
+```sh
+htpasswd -nbB <user> <CHANGEME_password> \
+  | kubectl create secret generic plex-mcp-basicauth --from-file=users=/dev/stdin -n default
+```
+
+Removing the `router.middlewares` annotation, or renaming that Secret, silently removes
+the gate — `test-cluster.yaml` asserts a `401` through Traefik for exactly that reason.
+
+The claude.ai Connectors UI cannot send an `Authorization: Basic` header, so this
+endpoint serves clients that can (Claude Code, scripts) — the same split as
+`mcp2.germany.vertesi.com` in [nextcloud-mcp.md](nextcloud-mcp.md).
+
+No DNS step: `*.germany.vertesi.com` already resolves to the home IP that
+[`cluster/services/cloudflare-ddns.yaml`](cluster/services/cloudflare-ddns.yaml) keeps
+current. cert-manager's HTTP-01 solver gets its own Ingress for the challenge path, so
+the middleware does not block issuance.
 
 ## Bumping the version
 
