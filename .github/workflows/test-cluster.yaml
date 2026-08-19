@@ -549,7 +549,7 @@ jobs:
             --from-literal=sonarr-api-key=ci-test-sonarr-key \
             --from-literal=radarr-api-key=ci-test-radarr-key \
             -n default
-          # Traefik's basicAuth accepts {SHA} htpasswd lines, so no apache2-utils.
+          # {SHA} htpasswd: no apache2-utils needed.
           kubectl create secret generic plex-mcp-basicauth \
             --from-literal=users="ci-user:{SHA}$(printf ci-password \
               | openssl sha1 -binary | base64)" \
@@ -639,9 +639,6 @@ jobs:
 
       - name: Verify plex-mcp ingress requires basic auth
         run: |
-          # The app authenticates nothing, so this middleware is the entire
-          # gate — a dropped annotation or a renamed Secret opens the Arr write
-          # tools to anyone. Only a request through Traefik can tell.
           kubectl -n kube-system rollout status deploy/traefik --timeout=180s
           kubectl -n kube-system port-forward svc/traefik 8004:80 &
           PF_PID=$!
@@ -658,16 +655,13 @@ jobs:
           echo "unauthenticated: $CODE"
           [ "$CODE" = "401" ] || { echo "FAILED: expected 401, got $CODE"; exit 1; }
 
-          # Not just "not 401": 200 proves the request also reached the pod.
+          # 200, not just "not 401": proves the request reached the pod.
           CODE=$(curl -s -o /dev/null -w '%{http_code}' -u ci-user:ci-password \
             -H "Host: $HOST" http://127.0.0.1:8004/health)
           echo "authenticated: $CODE"
           [ "$CODE" = "200" ] || { echo "FAILED: expected 200, got $CODE"; exit 1; }
 
-          # Last, because it spends the bucket: burst is 30, so 80 rapid
-          # requests must start being refused. Rate limiting runs ahead of
-          # basicAuth, which is what makes it a brute-force brake rather than
-          # decoration.
+          # Spends the bucket, so it runs last. Burst is 30.
           SEEN=$(for i in $(seq 1 80); do
             curl -s -o /dev/null -w '%{http_code}\n' \
               -H "Host: $HOST" http://127.0.0.1:8004/health

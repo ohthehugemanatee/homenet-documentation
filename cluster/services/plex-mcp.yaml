@@ -103,8 +103,8 @@ spec:
 
 ---
 
-# Per-source-IP, and listed before basicAuth below so brute-force attempts are
-# throttled before they reach the password check. See plex-mcp.md.
+# Ordered before basicAuth in the Ingress annotation: throttle before the
+# password check, not after.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -118,8 +118,6 @@ spec:
 
 ---
 
-# Upstream authenticates nothing, so this middleware is the only gate in front
-# of the Arr write tools. See plex-mcp.md.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -127,7 +125,7 @@ metadata:
   namespace: default
 spec:
   basicAuth:
-    # CHANGEME: created out-of-band, never committed. See plex-mcp.md.
+    # CHANGEME: created out-of-band. See plex-mcp.md.
     secret: plex-mcp-basicauth
 
 ---
