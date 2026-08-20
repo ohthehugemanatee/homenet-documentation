@@ -6,88 +6,99 @@ Everything you need is contained in the nextcloud-alpha.yaml file. There are per
 
 When you're done with the upgrade just kubectl delete the entire nextcloud-alpha.yaml file until next time.
 
-## Upgrade risk tiers
+## Storage placement
 
-Every workload sits in one of four upgrade-risk tiers (full model in #206). The tier decides
-whether an image bump needs a backup/validate/rollback pipeline, and whether Renovate may
-automerge it. This section records the audit behind the media-app classification (#208).
+**Normative, all apps:**
 
-| App | State it holds | Where that state lives | Tier |
-|---|---|---|---|
-| `jackett` | Indexer definitions, tracker credentials, API key | NFS `app-configs`, `subPath: jackett` | A — pending SQLite check |
-| `nzbget` | `nzbget.conf`, Usenet credentials; queue is transient | NFS `app-configs`, `subPath: nzbget` | A — pending SQLite check |
-| `delugevpn` | `core.conf`, `state/` torrent list + resume data, generated `wg0.conf` | NFS `app-configs`, `subPath: delugevpn` | A — pending SQLite check |
-| `calibre` / `calibre-web` | Library `metadata.db`; calibre-web `app.db` (users, shelves, read progress) | NFS `app-configs`, `subPath: calibre` / `calibre-web` | **not A** — SQLite, not regenerable |
-| `its-mytabs` | Curated tab library + YouTube timing sync points | Longhorn, 2Gi at `/app/data` | B, snapshot-only |
-| `songhub` | Saved `*.ultimatetab.json`, `.synced` / `.remarkable-sync-state` markers | Longhorn, 5Gi at `/app/saved-tabs` | B, snapshot-only |
+- **Longhorn** — all application config and databases. One volume per app, holding the whole
+  `/config`.
+- **NFS (shoebox)** — bulk media and file storage only, plus the Longhorn backup target.
+- An app with no durable state gets no volume at all.
 
-Regenerating jackett's API key breaks sonarr and radarr, which store it. Deluge and nzbget
-recover by re-adding downloads. Losing songhub's `.synced` markers re-uploads every tab to
-reMarkable — annoying, not costly. `its-mytabs` and `songhub` have no native backup or export
-facility, so Tier B is by #206's rule; both are single-writer, so a whole-volume Velero
-snapshot is enough and no bespoke dump hook is needed. That makes them the cheapest pilots
-for the Tier B plumbing.
+The reason is correctness, not tidiness. SQLite in WAL mode does not work over a network
+filesystem: the `-shm` file needs real shared memory, and NFS advisory locking is not reliable
+enough for the rollback journal either. The failure mode is a corrupt database on concurrent
+access or an unclean pod termination — not rare on a cluster that restarts pods for every
+image bump.
 
-### Absence of a Longhorn PVC does not mean stateless
+Keeping a database and its WAL on one Longhorn volume also makes a snapshot atomic over both,
+which is what lets the whole upgrade-rollback mechanism below work without app-specific code.
+A secondary benefit: apps stop depending on shoebox to start. Today, if shoebox or its export
+is down, every app in the table below fails to mount and will not boot.
 
-#206 originally read "no Longhorn PVC" as "no state worth protecting". It isn't. All four
-Tier A candidates mount `/config` from the `app-configs` PVC — a static NFS PV with no CSI
-driver (`../storage/pv-shoebox-config.yaml` → `shoebox:/export/configs/config`, empty
-`storageClassName`, `Retain`) — under a per-app `subPath`. None uses `emptyDir` or `hostPath`,
-so config does survive a pod replace. It is simply on NFS instead of Longhorn.
+Most apps already follow the pattern — `ombi` holds its whole `/config` on Longhorn,
+`radarr`/`sonarr` mount `<app>-db` at `/db`, `plex` overlays `plex-live-db` on its
+`Plug-in Support/Databases` path, and `mariadb` mounts Longhorn at `/config/databases`. Whole
+`/config` on Longhorn, as `ombi` does, is the shape to copy: no overlay mount and no app-side
+path configuration.
 
-`calibre` is where that distinction stops holding. `calibre-web` sets
-`CALIBRE_PATH=/calibre-library/Calibre Library` against `subPath: calibre` — the same
-directory calibre itself mounts at `/config` — so the library `metadata.db` sits with the
-config, not with the book files under `/books`. That is the SQLite-database class that pulled
-`plex/sonarr/radarr/ombi` out of Tier A in the earlier pass, reached the same way.
+Outstanding exceptions, tracked in #241:
 
-### SQLite on NFS
+| App | State | Status |
+|---|---|---|
+| `jackett` | SQLite + indexer definitions, tracker credentials, API key | on NFS, migrate |
+| `nzbget` | SQLite + `nzbget.conf`, Usenet credentials | on NFS, migrate |
+| `delugevpn` | SQLite + `core.conf`, `state/`, generated `wg0.conf` | on NFS, migrate |
+| `calibre` | Library `metadata.db` (SQLite) | on NFS, migrate |
+| `calibre-web` | JSON config only, no database | reads calibre's library |
+| `redis` | none — `--appendonly no --save ""`, pure LRU cache | vestigial NFS mount, drop |
 
-SQLite in WAL mode does not work over a network filesystem: the `-shm` file needs real shared
-memory, and NFS advisory locking is not reliable enough for the rollback journal either. The
-failure mode is a corrupt database on concurrent access or an unclean pod termination — not
-rare on a cluster that restarts pods for every image bump. This is a live correctness hazard,
-independent of the upgrade-tier question.
+`calibre` and `calibre-web` are separate StatefulSets that both mount `subPath: calibre`, so
+two pods on two nodes currently read and write one SQLite file over NFS — the worst case in
+the audit. They collapse into a single pod with two containers sharing one Longhorn RWO
+volume.
 
-Ten manifests mount `app-configs`: `jackett, nzbget, delugevpn, calibre, plex, radarr, sonarr,
-mariadb, nextcloud, redis`. Most already carve their database out onto Longhorn:
+Regenerating jackett's API key breaks sonarr and radarr, which store it.
 
-| App | Longhorn carve-out |
-|---|---|
-| `ombi` | whole `/config` on Longhorn; no NFS config at all |
-| `radarr`, `sonarr` | `<app>-db` 3Gi at `/db`, config stays on NFS |
-| `plex` | `plex-live-db` 20Gi overlaid on the `Plug-in Support/Databases` path |
-| `mariadb` | Longhorn at `/config/databases`, config on NFS |
-| `redis` | none needed — `--appendonly no --save ""`, pure LRU cache, writes nothing |
+## Upgrade backup and rollback
 
-That leaves `jackett, nzbget, delugevpn, calibre, calibre-web` as the only apps with
-potentially SQLite-backed state and no Longhorn carve-out. `ombi` is the pattern to copy —
-whole `/config` on a Longhorn PVC is simpler than an overlay and needs no app-side path
-config. Moving them also closes a gap in #206's own design: Tier A2 fixes rollback as a Velero
-Longhorn-snapshot `Restore` CR, which structurally cannot reach a static NFS PV with no CSI
-driver. Once the databases are on Longhorn, one snapshot mechanism covers every tier.
+One mechanism covers every app: an ArgoCD `PreSync` hook scales the workload to 0, snapshots
+its Longhorn volume, and lets the sync proceed; `PostSync` validates; `SyncFail` restores the
+snapshot. Since the upgrade restarts the pod anyway, the added downtime is close to zero.
 
-`calibre` is the exception. `calibre` and `calibre-web` are separate StatefulSets sharing one
-directory, which a Longhorn RWO volume cannot serve. Longhorn RWX would, but it fronts the
-volume with a share-manager NFS export — reintroducing the hazard being removed. Collapsing
-the two into one pod with two containers is the likely answer, and needs its own spec.
+**There is no app-layer dump/restore step, and none is needed.** A Longhorn snapshot is
+crash-consistent — equivalent to pulling the power cord — and SQLite, InnoDB and journaled
+MongoDB are all explicitly built to survive exactly that. They replay or roll back their
+journal on next open. Scaling to 0 before the snapshot goes further and makes it
+clean-shutdown-consistent, and it does so with no app-specific code: no Servarr backup API, no
+Plex internal backup trigger, no Ombi export.
 
-### Pending operator confirmation
+What a snapshot does not give you is loud failure on a database that is already corrupt — a
+block snapshot preserves corruption faithfully, where a logical dump would error out. A
+`PRAGMA integrity_check` in the `PostSync` validation covers that far more cheaply than a dump
+pipeline. Dumps also give portability across schema versions and storage backends, which
+matters for migrations but not for upgrade rollback.
 
-Classification above was derived from the manifests; the cluster was not reachable when it was
-written. Two claims are still inferred:
+So apps split into two classes, not four tiers:
 
-- Which apps actually hold SQLite, and which are in WAL mode. On shoebox:
-  `find /export/configs/config -maxdepth 3 \( -name '*.db' -o -name '*-wal' -o -name '*-shm' \) -ls`.
-  `metadata.db` and `app.db` are visible in the calibre manifests; jackett's config reads as
-  JSON, nzbget's as plain text, deluge's as a pickled `state/`. Any app the `find` confirms
-  holds SQLite moves out of Tier A alongside calibre.
-- Whether `/export/configs` is inside any Duplicacy backup set. The in-cluster Duplicacy pod
-  mounts only `shoebox-storage` (`/export/storage`), and its schedule and sources live in its
-  web UI, not in git. If the config export is unbacked, so is every app in the table above.
+| Class | Apps | Why |
+|---|---|---|
+| **Single-volume** | everything except nextcloud | One Longhorn volume holds all state; one atomic snapshot is a complete restore point |
+| **Cross-system** | `nextcloud` + `mariadb` | Files on NFS, database in mariadb — two storage systems, no atomic cross-snapshot |
 
-### Renovate note (#20)
+Nextcloud is the only genuine exception, and it is why the manual A/B procedure above still
+exists. `unifi-mongodb` is single-volume and journaled, so it needs no bespoke handling.
+
+## Backup chain
+
+Three links, each doing a different job:
+
+1. **Longhorn snapshot** — fast local rollback, seconds to restore. Lives inside the volume's
+   own replicas.
+2. **Longhorn backup target on shoebox NFS** — survives loss of a node. Currently scheduled in
+   the Longhorn UI; moving that schedule into code is tracked in #209.
+3. **Duplicacy** — offsite and versioned. Its NFS mount is the root of shoebox's storage
+   device, so it covers everything there including the Longhorn backup target and
+   `/export/configs`. Only shoebox's own system config is outside it.
+
+**A Longhorn snapshot is not a backup.** Snapshots sit on the same replicas as the volume, so
+a dead node takes its snapshots with it. Only link 2 is a backup, and it inherits offsite
+coverage from link 3 for free.
+
+In a full rebuild the order is: restore shoebox from Duplicacy, bring up k3s and Longhorn,
+point it at the backup target, restore volumes. Longhorn restore depends on shoebox being up.
+
+## Renovate note (#20)
 
 `songhub.yaml` is pinned to a temporary fork build
 (`ghcr.io/ohthehugemanatee/songhub:claude-ultimate-guitar-search-encoding-40prc8`) pending an
