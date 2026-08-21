@@ -21,7 +21,7 @@ k3s nodes:
 | nuc1 | amd64 | i3-1115G4 mini-pc |
 | nuc2 | amd64 | i3-10110U CPU mini-pc |
 
-All services run on kubernetes, with the yaml files listed in the `cluster/` subdirectory. [ArgoCD](argocd.md) continuously reconciles the cluster against this repo (GitOps), with drift alerts via Pushover and a mobile-friendly UI at `argocd.berlin.vertesi.com`. [nextcloud-mcp-server](nextcloud-mcp.md) exposes Nextcloud to Claude clients via MCP.
+All services run on kubernetes, with the yaml files listed in the `cluster/` subdirectory. [ArgoCD](argocd.md) continuously reconciles the cluster against this repo (GitOps), with drift alerts via Pushover and a mobile-friendly UI at `argocd.berlin.vertesi.com`. [nextcloud-mcp-server](nextcloud-mcp.md) exposes Nextcloud to Claude clients via MCP. [plex-mcp](plex-mcp.md) does the same for Plex, Radarr and Sonarr.
 
 Per-directory `CLAUDE.md` (with `AGENTS.md` symlink) files document the conventions for agents working in each subtree.
 

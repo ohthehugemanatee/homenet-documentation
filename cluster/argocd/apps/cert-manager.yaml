@@ -1,0 +1,39 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  # Manual-sync tier: no finalizer. Deleting this Application must never
+  # cascade-delete cert-manager — every TLS certificate in the cluster depends
+  # on it. Tier C in #206.
+  annotations:
+    notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      ref: values
+    - chart: cert-manager
+      repoURL: https://charts.jetstack.io
+      # Renovate reads this pin. Tier C is PR-only — never auto-merged — and a
+      # bump additionally needs a manual ArgoCD Sync before it reaches the
+      # cluster. Bumping more than one minor at a time is not supported in
+      # place; see cert-manager.md.
+      targetRevision: v1.20.0
+      helm:
+        valueFiles:
+          - $values/cluster/helm/cert-manager/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  # No syncPolicy.automated: infrastructure stays operator-gated. Drift raises
+  # an on-out-of-sync Pushover alert and waits.
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      # cert-manager's CRDs exceed the annotation size limit that client-side
+      # apply writes into kubectl.kubernetes.io/last-applied-configuration, so
+      # a client-side sync fails on them outright.
+      - ServerSideApply=true

@@ -20,6 +20,10 @@ permissions:
 
 jobs:
   review:
+    # This job's own check run IS the branch-protection gate. A pull_request-triggered
+    # job emits a check bound to the SHA it ran on, so nothing needs to mirror the
+    # result onto the PR head. The name must stay exactly as branch protection has it.
+    name: AI review required
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +88,11 @@ jobs:
           import urllib.request
           import urllib.error
 
+          # The block/pass rule lives in a module so it can be unit-tested;
+          # see .github/scripts/tests/test_review_verdict.py.
+          sys.path.insert(0, '.github/scripts')
+          from review_verdict import decide_verdict, render_findings
+
           with open('/tmp/pr.diff') as f:
               diff = f.read()
 
@@ -138,9 +147,16 @@ jobs:
           trunc_note = '\n\n*(diff truncated due to size)*' if truncated else ''
           prompt = (
               'Review this infrastructure pull request using the following process.'
-              ' Steps 1, 2, and 4 are internal reasoning — do NOT include them in your response.'
-              ' Your visible output must contain only: the AI-Specific Validation (step 3),'
-              ' the Security & Privacy Review (step 3b), the Final Review (step 5), and the completed Verification Checklist.\n\n'
+              ' Report your result by calling the `report_review` tool — that is your only output.\n\n'
+              'Put the human-readable review in `review_markdown`: the AI-Specific Validation (step 3),'
+              ' the Security & Privacy Review (step 3b), the Final Review (step 5), and the completed'
+              ' Verification Checklist. Steps 1, 2, and 4 are internal reasoning — leave them out.\n\n'
+              'Put every concrete issue in `findings`, one entry each. `findings` drives the merge gate:'
+              ' a HIGH finding with High or Medium confidence blocks the PR. Reserve HIGH for problems that'
+              ' should genuinely stop a merge — a real security hole, data loss, or a break in cluster'
+              ' behaviour. Style preferences, speculative concerns, and anything already listed under'
+              ' known exceptions are not findings at all. An empty `findings` list is the correct and'
+              ' expected result for a clean PR.\n\n'
               '**Review Process (steps 1, 2, 4 are internal only):**\n\n'
               '1. **Initial Analysis** *(internal)* — Review for security vulnerabilities, reliability and idempotency,'
               ' configuration quality, operational concerns, and documentation gaps.\n\n'
@@ -197,9 +213,44 @@ jobs:
 
           print(f'Prompt length: {len(prompt)} chars')
 
+          # Structured output rather than parsing severities out of prose: the
+          # prompt itself contains the literal string "HIGH/MEDIUM/LOW", so any
+          # regex over the response text is unreliable. tool_choice forces the
+          # call, so the reply is a tool_use block, never free text.
+          report_tool = {
+              'name': 'report_review',
+              'description': 'Report the result of the infrastructure review.',
+              'input_schema': {
+                  'type': 'object',
+                  'properties': {
+                      'findings': {
+                          'type': 'array',
+                          'description': 'Concrete issues found. Empty for a clean PR.',
+                          'items': {
+                              'type': 'object',
+                              'properties': {
+                                  'severity': {'type': 'string', 'enum': ['HIGH', 'MEDIUM', 'LOW']},
+                                  'confidence': {'type': 'string', 'enum': ['High', 'Medium', 'Low']},
+                                  'title': {'type': 'string', 'description': 'One line.'},
+                                  'detail': {'type': 'string', 'description': 'What is wrong and where.'},
+                              },
+                              'required': ['severity', 'confidence', 'title', 'detail'],
+                          },
+                      },
+                      'review_markdown': {
+                          'type': 'string',
+                          'description': 'The full human-readable review body.',
+                      },
+                  },
+                  'required': ['findings', 'review_markdown'],
+              },
+          }
+
           payload = json.dumps({
               'model': 'claude-opus-4-7',
-              'max_tokens': 4096,
+              'max_tokens': 8192,
+              'tools': [report_tool],
+              'tool_choice': {'type': 'tool', 'name': 'report_review'},
               'messages': [{'role': 'user', 'content': prompt}]
           }).encode()
 
@@ -227,28 +278,72 @@ jobs:
               print(f"API returned error: {result.get('error')}")
               sys.exit(1)
 
-          text_blocks = [
-              b['text'] for b in result.get('content', [])
-              if isinstance(b, dict) and b.get('type') == 'text'
-          ]
-          if not text_blocks:
-              print('No text content in response')
+          # A truncated tool call means the findings list is incomplete, so a
+          # clean-looking result would be a lie. Treat it as the reviewer failing
+          # to run, not as a pass.
+          if result.get('stop_reason') == 'max_tokens':
+              print('Response hit the token limit: findings may be incomplete, refusing to rule.')
               sys.exit(1)
 
-          review = text_blocks[0]
-          if result.get('stop_reason') == 'max_tokens':
-              review += '\n\n*(review truncated: response hit token limit)*'
+          tool_uses = [
+              b for b in result.get('content', [])
+              if isinstance(b, dict) and b.get('type') == 'tool_use'
+              and b.get('name') == 'report_review'
+          ]
+          if not tool_uses:
+              print(f"No report_review tool call in response (stop_reason={result.get('stop_reason')})")
+              sys.exit(1)
 
-          body = '## AI Infrastructure Review\n\n' + review + '\n\n---\n*Automated review by Claude*'
+          tool_input = tool_uses[0].get('input') or {}
+          findings = tool_input.get('findings')
+          review = tool_input.get('review_markdown') or '*(reviewer returned no review body)*'
+
+          blocking, reason = decide_verdict(findings)
+          print(reason)
+
+          # Escape hatch for a false-positive HIGH, mirroring pr-size-gate's
+          # size/override. The review is still posted; only the gate is waived.
+          overridden = False
+          if blocking:
+              try:
+                  labels = subprocess.run(
+                      ['gh', 'pr', 'view', pr_number, '--repo', repo,
+                       '--json', 'labels', '--jq', '[.labels[].name]'],
+                      capture_output=True, text=True, timeout=30, check=True
+                  ).stdout
+                  overridden = 'review/override' in json.loads(labels or '[]')
+              except Exception as e:
+                  # Fail closed: if we cannot read the labels we cannot honour
+                  # an override, so the blocking finding stands.
+                  print(f'Warning: could not read PR labels, override not applied: {e}')
+
+          if blocking and overridden:
+              banner = (f'> **Gate overridden.** {reason}\n>\n'
+                        '> The `review/override` label is present, so this does not block merge.')
+          elif blocking:
+              banner = (f'> **This review blocks merge.** {reason}\n>\n'
+                        '> Fix the finding, or add the `review/override` label if it is a false positive.'
+                        ' Recurring false positives belong in `.github/agentic-review-exceptions.yaml`.')
+          else:
+              banner = f'> {reason}'
+
+          body = ('## AI Infrastructure Review\n\n'
+                  + banner + '\n\n'
+                  + review
+                  + '\n\n### Findings\n\n' + render_findings(findings)
+                  + '\n\n---\n*Automated review by Claude*')
 
           with open('/tmp/review.md', 'w') as f:
               f.write(body)
 
           subprocess.run(
-              ['gh', 'pr', 'comment', os.environ['PR_NUMBER'],
+              ['gh', 'pr', 'comment', pr_number,
                '--body-file', '/tmp/review.md',
-               '--repo', os.environ['REPO']],
+               '--repo', repo],
               check=True
           )
           print('Review posted successfully')
+
+          if blocking and not overridden:
+              sys.exit(1)
           PYEOF

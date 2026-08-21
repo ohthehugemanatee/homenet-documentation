@@ -40,20 +40,95 @@ jobs:
       - name: Create k3d cluster
         run: k3d cluster create ci --wait --no-lb
 
-      - name: Install cert-manager CRDs via helm
+      - name: Resolve pinned cert-manager chart version
         run: |
+          # Read the pin out of the Application rather than repeating it here, so
+          # CI cannot silently exercise a different chart than ArgoCD deploys.
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/cert-manager.yaml"))
+          ver = next(s["targetRevision"] for s in app["spec"]["sources"]
+                     if s.get("chart") == "cert-manager")
+          print(f"CM_VERSION={ver}")
+          PY
+
+      - name: Install cert-manager via helm (version and values from git)
+        run: |
+          echo "cert-manager chart version: ${CM_VERSION}"
           helm repo add jetstack https://charts.jetstack.io
           helm repo update
           helm install cert-manager jetstack/cert-manager \
             --namespace cert-manager \
             --create-namespace \
-            --set crds.enabled=true \
+            --version "${CM_VERSION}" \
+            --values cluster/helm/cert-manager/values.yaml \
             --wait
 
       - name: Wait for cert-manager webhook
         run: |
           kubectl rollout status deployment/cert-manager-webhook \
             -n cert-manager --timeout=120s
+
+      - name: Assert cert-manager stays on the manual-sync infra tier
+        run: |
+          # cert-manager is Tier C in #206: manually gated indefinitely. Auto-sync
+          # would let an unattended chart bump replace the component every TLS
+          # certificate in the cluster depends on, and a finalizer would let an
+          # Application delete cascade into the CRDs.
+          python3 - <<'PY'
+          import re, sys, yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/cert-manager.yaml"))
+          errs = []
+          if "automated" in app["spec"].get("syncPolicy", {}):
+              errs.append("syncPolicy.automated is set; cert-manager must stay manual-sync")
+          if app["metadata"].get("finalizers"):
+              errs.append("finalizer present; an Application delete would cascade to the CRDs")
+          anns = app["metadata"].get("annotations", {})
+          if "notifications.argoproj.io/subscribe.on-out-of-sync.pushover" not in anns:
+              errs.append("missing on-out-of-sync Pushover annotation required of manual-sync apps")
+          chart = next((s for s in app["spec"]["sources"] if s.get("chart") == "cert-manager"), None)
+          if chart is None:
+              errs.append("no cert-manager chart source found")
+          elif not re.fullmatch(r"v\d+\.\d+\.\d+", str(chart.get("targetRevision", ""))):
+              errs.append(f"chart version {chart.get('targetRevision')!r} is not an exact pin")
+          if "ServerSideApply=true" not in app["spec"]["syncPolicy"].get("syncOptions", []):
+              errs.append("ServerSideApply=true required; cert-manager CRDs exceed the client-side apply limit")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Verify cert-manager issues a certificate under our values
+        run: |
+          # Proves the values file yields a cert-manager that actually works, not
+          # just one that reaches Ready. A self-signed issuer keeps this off the
+          # network — the ACME path needs real DNS and cannot run in k3d.
+          kubectl apply -f - <<'EOF'
+          apiVersion: cert-manager.io/v1
+          kind: ClusterIssuer
+          metadata:
+            name: ci-selfsigned
+          spec:
+            selfSigned: {}
+          ---
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            name: ci-smoke
+            namespace: default
+          spec:
+            secretName: ci-smoke-tls
+            dnsNames:
+              - ci-smoke.example.com
+            issuerRef:
+              name: ci-selfsigned
+              kind: ClusterIssuer
+          EOF
+          kubectl wait --for=condition=Ready certificate/ci-smoke \
+            -n default --timeout=120s
+          kubectl -n default get secret ci-smoke-tls -o name
+          kubectl delete certificate/ci-smoke -n default
+          kubectl delete clusterissuer/ci-selfsigned
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
@@ -285,6 +360,317 @@ jobs:
           fi
           echo "nextcloud-mcp-server MCP client allowlist OK"
 
+      - name: Install nextcloud-mcp-basic (real smoke test)
+        run: |
+          # Second release of the same chart, auth.mode multi-user-basic. Shares
+          # the oidc-stub host so CI never reaches production Nextcloud. 120s,
+          # not 180s: this release is stateless, so no PVC provisioning precedes
+          # the image pull. No fixture secret — offline access is off.
+          helm upgrade --install nextcloud-mcp-basic \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-basic/values.yaml \
+            --set nextcloud.host=http://oidc-stub.default.svc \
+            --wait --timeout 120s
+
+      - name: Diagnose nextcloud-mcp-basic failure
+        if: failure()
+        run: |
+          # Selects on instance, not name: app.kubernetes.io/name is
+          # nextcloud-mcp-server for both releases now.
+          SEL="-l app.kubernetes.io/instance=nextcloud-mcp-basic"
+          kubectl -n default describe pod $SEL
+          echo "=== logs ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers || true
+          echo "=== logs (previous) ==="
+          kubectl -n default logs $SEL --tail=200 --all-containers --previous || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify nextcloud-mcp-basic rollout
+        run: |
+          kubectl wait --for=condition=Ready pod \
+            -l app.kubernetes.io/instance=nextcloud-mcp-basic \
+            -n default --timeout=90s
+
+      - name: Verify nextcloud-mcp-basic deployment mode
+        run: |
+          # The values file selecting the wrong mode is silent otherwise: a
+          # fallback to auth.mode basic would still boot and still pass the
+          # health check, but would serve every client as one shared account.
+          MODE=$(kubectl -n default get deploy nextcloud-mcp-basic-nextcloud-mcp-server \
+            -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="MCP_DEPLOYMENT_MODE")].value}')
+          echo "MCP_DEPLOYMENT_MODE: $MODE"
+          if [ "$MODE" != "multi_user_basic" ]; then
+            echo "FAILED: expected multi_user_basic, got '$MODE'"
+            exit 1
+          fi
+
+          # Statelessness is what justifies this release's auto-sync tier and
+          # its lack of a token_encryption_key. enableOfflineAccess or
+          # dataStorage creeping back on would produce a PVC here.
+          PVCS=$(kubectl -n default get pvc \
+            -l app.kubernetes.io/instance=nextcloud-mcp-basic \
+            -o name)
+          if [ -n "$PVCS" ]; then
+            echo "FAILED: expected no PVC, got: $PVCS"
+            exit 1
+          fi
+          echo "nextcloud-mcp-basic mode and statelessness OK"
+
+      - name: Verify nextcloud-mcp-basic credential handling
+        run: |
+          # 8001 so this cannot collide with the login-flow release's forward.
+          kubectl -n default port-forward \
+            svc/nextcloud-mcp-basic-nextcloud-mcp-server 8001:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8001/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8001/health/live
+          echo
+          echo "nextcloud-mcp-basic health/live OK"
+
+          # This mode does not challenge at the edge. BasicAuthMiddleware only
+          # extracts an Authorization header when one is present and always
+          # continues the chain — no 401, no WWW-Authenticate — so the MCP
+          # handshake is reachable without credentials and enforcement happens
+          # per-operation, when a tool builds its Nextcloud client. A bare
+          # GET /mcp is 406 (content negotiation) and proves nothing either
+          # way. Printed for the record; see nextcloud-mcp.md.
+          echo "=== unauthenticated tools/list (informational) ==="
+          curl -s -X POST http://127.0.0.1:8001/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+            -w '\nHTTP %{http_code}\n' | head -20
+
+          # The gate: an unauthenticated tool call must never come back as a
+          # JSON-RPC success. This is a floor, not proof of enforcement — a
+          # transport-level rejection (missing session, unknown tool) also
+          # errors and passes. It cannot pass on the failure that matters,
+          # which is an anonymous caller getting a real Nextcloud result.
+          BODY=$(curl -s -X POST http://127.0.0.1:8001/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nc_notes_search_notes","arguments":{"query":"ci"}}}')
+          echo "=== unauthenticated tools/call ==="
+          printf '%s\n' "$BODY" | head -20
+          if printf '%s' "$BODY" | grep -q '"result"' \
+             && ! printf '%s' "$BODY" | grep -q '"error"'; then
+            echo "FAILED: unauthenticated tool call returned a JSON-RPC result"
+            echo "        an anonymous caller reached Nextcloud through this pod"
+            exit 1
+          fi
+          echo "nextcloud-mcp-basic credential handling OK"
+
+      - name: Verify nextcloud-mcp-basic tool surface
+        run: |
+          # mcp.extraArgs restricts this release to webdav/notes/deck. Nothing
+          # else surfaces the setting: a dropped or misspelled --enable-app
+          # still boots, still passes health/live, and quietly re-registers all
+          # twelve apps. Only tools/list can tell the difference.
+          kubectl -n default port-forward \
+            svc/nextcloud-mcp-basic-nextcloud-mcp-server 8002:8000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8002/health/live >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
+          INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
+          INIT_PAYLOAD+='"clientInfo":{"name":"test-cluster-ci","version":"0.0.0"}}}'
+
+          INIT_HEADERS=$(mktemp)
+          curl -sS -D "$INIT_HEADERS" -X POST http://127.0.0.1:8002/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d "$INIT_PAYLOAD" >/dev/null
+
+          # Streamable-HTTP assigns a session that later requests must echo.
+          SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$INIT_HEADERS" | tr -d '\r' | cut -d' ' -f2-)
+          SESSION_HEADER=()
+          [ -n "$SESSION_ID" ] && SESSION_HEADER=(-H "Mcp-Session-Id: $SESSION_ID")
+
+          curl -sS -X POST http://127.0.0.1:8002/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >/dev/null
+
+          TOOLS=$(curl -sS -X POST http://127.0.0.1:8002/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+          echo "== tools/list response body =="; echo "$TOOLS" | head -5
+
+          # One tool per enabled app: absent means --enable-app dropped an app
+          # this endpoint is for.
+          for TOOL in nc_webdav_list_directory nc_notes_search_notes deck_get_boards; do
+            echo "$TOOLS" | grep -q "\"$TOOL\"" \
+              || { echo "FAILED: $TOOL missing — an enabled app did not register"; exit 1; }
+          done
+
+          # One tool per app that must stay off. Present means the flag was
+          # dropped entirely and all twelve apps came back.
+          for TOOL in nc_calendar_list_calendars nc_contacts_list_addressbooks nc_tables_list_tables; do
+            if echo "$TOOLS" | grep -q "\"$TOOL\""; then
+              echo "FAILED: $TOOL is registered — app selection is not in effect"
+              exit 1
+            fi
+          done
+          echo "nextcloud-mcp-basic tool surface OK"
+
+      - name: Build plex-mcp image from pinned upstream ref
+        run: |
+          # Same Dockerfile build-plex-mcp-image.yaml pushes, side-loaded so
+          # this test needs no GHCR push. Tag comes from the manifest.
+          IMAGE=$(python3 - <<'PY'
+          import yaml
+          for doc in yaml.safe_load_all(open("cluster/services/plex-mcp.yaml")):
+              if doc and doc["kind"] == "Deployment":
+                  print(doc["spec"]["template"]["spec"]["containers"][0]["image"])
+          PY
+          )
+          echo "building $IMAGE"
+          docker build -t "$IMAGE" \
+            "https://github.com/niavasha/plex-mcp-server.git#${IMAGE##*:}"
+          k3d image import "$IMAGE" -c ci
+
+      - name: Deploy plex-mcp (real smoke test)
+        run: |
+          kubectl create secret generic plex-mcp-credentials \
+            --from-literal=plex-token=ci-test-token \
+            --from-literal=sonarr-api-key=ci-test-sonarr-key \
+            --from-literal=radarr-api-key=ci-test-radarr-key \
+            -n default
+          # {SHA} htpasswd: no apache2-utils needed.
+          kubectl create secret generic plex-mcp-basicauth \
+            --from-literal=users="ci-user:{SHA}$(printf ci-password \
+              | openssl sha1 -binary | base64)" \
+            -n default
+          kubectl apply -f cluster/services/plex-mcp.yaml
+          kubectl -n default rollout status deployment/plex-mcp --timeout=180s
+
+      - name: Diagnose plex-mcp failure
+        if: failure()
+        run: |
+          kubectl -n default describe pod -l run=plex-mcp
+          echo "=== logs ==="
+          kubectl -n default logs -l run=plex-mcp --tail=200 || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify plex-mcp upstream wiring
+        run: |
+          # tools/list cannot catch this: the Arr tools register from static
+          # schemas whether or not the URLs point anywhere.
+          ENV_PATH=.spec.template.spec.containers[0].env
+          for PAIR in "PLEX_URL=http://plex.default.svc.cluster.local:32400" \
+                      "SONARR_URL=http://sonarr.default.svc.cluster.local:8989" \
+                      "RADARR_URL=http://radarr.default.svc.cluster.local:7878"; do
+            GOT=$(kubectl -n default get deploy plex-mcp -o \
+              jsonpath="{$ENV_PATH[?(@.name=='${PAIR%%=*}')].value}")
+            echo "${PAIR%%=*}: $GOT"
+            [ "$GOT" = "${PAIR#*=}" ] || { echo "FAILED: expected ${PAIR#*=}"; exit 1; }
+          done
+          for NAME in PLEX_TOKEN SONARR_API_KEY RADARR_API_KEY; do
+            GOT=$(kubectl -n default get deploy plex-mcp -o \
+              jsonpath="{$ENV_PATH[?(@.name=='$NAME')].valueFrom.secretKeyRef.name}")
+            echo "$NAME: from secret '$GOT'"
+            [ -n "$GOT" ] || { echo "FAILED: $NAME is not sourced from a Secret"; exit 1; }
+          done
+
+      - name: Verify plex-mcp health and Arr tool surface
+        run: |
+          # 8003: 8000-8002 belong to the two nextcloud-mcp forwards above.
+          kubectl -n default port-forward svc/plex-mcp 8003:3000 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8003/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8003/health
+          echo
+
+          INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize",'
+          INIT_PAYLOAD+='"params":{"protocolVersion":"2025-06-18","capabilities":{},'
+          INIT_PAYLOAD+='"clientInfo":{"name":"test-cluster-ci","version":"0.0.0"}}}'
+
+          INIT_HEADERS=$(mktemp)
+          curl -sS -D "$INIT_HEADERS" -X POST http://127.0.0.1:8003/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d "$INIT_PAYLOAD" >/dev/null
+
+          # Streamable HTTP assigns a session that later requests must echo.
+          SESSION_ID=$(grep -i '^Mcp-Session-Id:' "$INIT_HEADERS" | tr -d '\r' | cut -d' ' -f2-)
+          SESSION_HEADER=()
+          [ -n "$SESSION_ID" ] && SESSION_HEADER=(-H "Mcp-Session-Id: $SESSION_ID")
+
+          curl -sS -X POST http://127.0.0.1:8003/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >/dev/null
+
+          TOOLS=$(curl -sS -X POST http://127.0.0.1:8003/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            "${SESSION_HEADER[@]}" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+          echo "== tools/list response body =="; echo "$TOOLS" | head -5
+
+          # One read, one write and the search trigger per service, plus a Plex
+          # tool: an Arr-only build would pass the Arr checks alone.
+          for TOOL in sonarr_get_series sonarr_add_series sonarr_trigger_search \
+                      radarr_get_movies radarr_add_movie radarr_trigger_search \
+                      get_libraries; do
+            echo "$TOOLS" | grep -q "\"$TOOL\"" \
+              || { echo "FAILED: $TOOL missing from tools/list"; exit 1; }
+          done
+          echo "plex-mcp health and tool surface OK"
+
+      - name: Verify plex-mcp ingress requires basic auth
+        run: |
+          kubectl -n kube-system rollout status deploy/traefik --timeout=180s
+          kubectl -n kube-system port-forward svc/traefik 8004:80 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          HOST=$(kubectl -n default get ingress plex-mcp \
+            -o jsonpath='{.spec.rules[0].host}')
+          for i in $(seq 1 15); do
+            curl -s -o /dev/null -H "Host: $HOST" http://127.0.0.1:8004/health && break
+            sleep 2
+          done
+
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Host: $HOST" http://127.0.0.1:8004/health)
+          echo "unauthenticated: $CODE"
+          [ "$CODE" = "401" ] || { echo "FAILED: expected 401, got $CODE"; exit 1; }
+
+          # 200, not just "not 401": proves the request reached the pod.
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -u ci-user:ci-password \
+            -H "Host: $HOST" http://127.0.0.1:8004/health)
+          echo "authenticated: $CODE"
+          [ "$CODE" = "200" ] || { echo "FAILED: expected 200, got $CODE"; exit 1; }
+
+          # Spends the bucket, so it runs last. Burst is 30.
+          SEEN=$(for i in $(seq 1 80); do
+            curl -s -o /dev/null -w '%{http_code}\n' \
+              -H "Host: $HOST" http://127.0.0.1:8004/health
+          done | sort | uniq -c)
+          echo "$SEEN"
+          echo "$SEEN" | grep -q ' 429$' \
+            || { echo "FAILED: no 429 after 80 requests — rate limit not applied"; exit 1; }
+          echo "plex-mcp ingress auth and rate limit OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -395,6 +781,7 @@ jobs:
           helm repo add node-feature-discovery \
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
+          helm repo add jetstack https://charts.jetstack.io
           helm repo update
 
       - name: Dry-run argocd
@@ -478,3 +865,27 @@ jobs:
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-server/values.yaml > /dev/null
+
+      - name: Dry-run nextcloud-mcp-basic
+        run: |
+          helm template nextcloud-mcp-basic \
+            nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
+            --namespace default \
+            -f cluster/helm/nextcloud-mcp-basic/values.yaml > /dev/null
+
+      - name: Resolve pinned cert-manager chart version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/cert-manager.yaml"))
+          ver = next(s["targetRevision"] for s in app["spec"]["sources"]
+                     if s.get("chart") == "cert-manager")
+          print(f"CM_VERSION={ver}")
+          PY
+
+      - name: Dry-run cert-manager
+        run: |
+          helm template cert-manager \
+            jetstack/cert-manager --version "${CM_VERSION}" \
+            --namespace cert-manager \
+            -f cluster/helm/cert-manager/values.yaml > /dev/null

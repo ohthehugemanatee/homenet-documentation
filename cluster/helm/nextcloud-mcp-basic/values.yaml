@@ -1,0 +1,86 @@
+image:
+  # Same pin as cluster/helm/nextcloud-mcp-server/values.yaml — two releases of
+  # one chart; bump both together so the two endpoints never diverge in which
+  # tools *exist*. Which of them this endpoint registers is mcp.extraArgs
+  # below, and that divergence is deliberate.
+  # Check https://github.com/cbcoutinho/nextcloud-mcp-server/releases.
+  tag: "0.165.0"
+
+nextcloud:
+  host: https://germany.vertesi.com
+  # The chart emits NEXTCLOUD_MCP_SERVER_URL for this mode too, defaulted from
+  # ingress.hosts[0]. Pinned so an unrelated ingress edit can't move it silently.
+  mcpServerUrl: https://mcp2.germany.vertesi.com
+
+auth:
+  # BasicAuth pass-through: the client sends Authorization: Basic on every
+  # request and the server forwards those credentials to Nextcloud. Each client
+  # is its own Nextcloud user — unlike auth.mode basic, which is one shared
+  # account. The chart derives MCP_DEPLOYMENT_MODE=multi_user_basic from this.
+  # No OAuth facade is mounted, so claude.ai Connectors cannot use this
+  # endpoint; that is what mcp.germany.vertesi.com is for.
+  mode: multi-user-basic
+  multiUserBasic:
+    # The switch that keeps this release stateless. Chart default, but set
+    # explicitly: turning it on pulls in background operations, a Fernet
+    # token_encryption_key, an admin-registered Nextcloud OIDC client and a
+    # PVC for tokens.db — the whole login-flow footprint, plus its
+    # fernet.InvalidToken key-rotation trap.
+    enableOfflineAccess: false
+
+# No token DB to persist without offline access, so no volume. Explicit because
+# the sibling values file enables it and the asymmetry is deliberate.
+dataStorage:
+  enabled: false
+
+mcp:
+  # Restrict the tool surface to the three apps this endpoint is for. Unset,
+  # --enable-app defaults to all twelve of the server's AVAILABLE_APPS
+  # (calendar, contacts, tables, talk, mail, news, cookbook, collectives,
+  # sharing on top of these). Repeat the flag per app — it is CLI-only, there
+  # is no env var, and the chart has no values for it, so it rides in
+  # extraArgs. Files are `webdav` upstream; file *sharing* is the separate
+  # `sharing` app and stays off.
+  extraArgs:
+    - --enable-app
+    - webdav
+    - --enable-app
+    - notes
+    - --enable-app
+    - deck
+
+# ALLOWED_MCP_CLIENTS and NEXTCLOUD_RESOURCE_URI are deliberately absent here:
+# both govern the OAuth flow, which this mode does not mount. Don't add them
+# back for symmetry with cluster/helm/nextcloud-mcp-server/values.yaml.
+extraEnv:
+  # Narrow from the chart default "*", which pairs with allow_credentials to let
+  # any origin send credentialed requests to a browser-reachable server. Must
+  # stay non-empty — the app falls back to ["*"] on an empty value. No browser
+  # client uses this endpoint today; the Nextcloud origin is the one that would
+  # be added first.
+  - name: CORS_ALLOW_ORIGINS
+    value: https://germany.vertesi.com
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: mcp2.germany.vertesi.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - mcp2.germany.vertesi.com
+      secretName: mcp2-germany-vertesi-com-tls
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
