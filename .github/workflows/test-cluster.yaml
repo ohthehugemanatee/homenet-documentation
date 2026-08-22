@@ -700,7 +700,7 @@ jobs:
           # the ombi shape. SQLite in WAL mode does not work over NFS (#241), so
           # each app joins this set in the PR that converts it. radarr/sonarr are
           # deliberately absent: they overlay only /db and keep /config on NFS.
-          CONFIG_ON_LONGHORN = {"ombi", "jackett"}
+          CONFIG_ON_LONGHORN = {"ombi", "jackett", "delugevpn"}
           failed = 0
           for app in sorted(CONFIG_ON_LONGHORN):
               bad = 0
@@ -762,14 +762,16 @@ jobs:
           python3 - <<'PY'
           import sys, yaml
           f = "cluster/services/delugevpn.yaml"
-          dep = next((d for d in yaml.safe_load_all(open(f))
-                      if d and d.get("kind") == "Deployment"
+          # StatefulSet since #241 moved /config onto a Longhorn
+          # volumeClaimTemplate, which a Deployment cannot carry.
+          sts = next((d for d in yaml.safe_load_all(open(f))
+                      if d and d.get("kind") == "StatefulSet"
                       and d["metadata"]["name"] == "delugevpn"), None)
-          containers = (((dep or {}).get("spec", {}).get("template", {})
+          containers = (((sts or {}).get("spec", {}).get("template", {})
                          .get("spec", {}).get("containers")) or [])
           c = next((c for c in containers if c["name"] == "delugevpn"), None)
           if c is None:
-              print(f"BAD {f}: no 'delugevpn' container in a Deployment named 'delugevpn'")
+              print(f"BAD {f}: no 'delugevpn' container in a StatefulSet named 'delugevpn'")
               sys.exit(1)
           env = {e["name"]: e.get("value") for e in c.get("env", [])}
           sc = c.get("securityContext") or {}

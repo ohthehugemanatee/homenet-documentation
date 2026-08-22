@@ -824,6 +824,7 @@ exceptions:
 
   - pattern: "StatefulSet serviceName does not name a headless Service"
     files:
+      - cluster/services/delugevpn.yaml
       - cluster/services/jackett.yaml
       - cluster/services/ombi.yaml
       - cluster/services/radarr.yaml

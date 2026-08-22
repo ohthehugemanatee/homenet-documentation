@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: delugevpn
 spec:
@@ -7,6 +7,16 @@ spec:
     matchLabels:
       run: delugevpn
   replicas: 1
+  serviceName: delugevpn
+  volumeClaimTemplates:
+    - metadata:
+        name: delugevpn-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 3Gi
   template:
     metadata:
       labels:
@@ -18,9 +28,6 @@ spec:
         - name: nfs-media
           persistentVolumeClaim:
             claimName: media
-        - name: nfs-config
-          persistentVolumeClaim:
-            claimName: app-configs
       containers:
       - name: delugevpn
         image: binhex/arch-delugevpn
@@ -58,9 +65,8 @@ spec:
           - name: VPN_CLIENT
             value: "wireguard"
         volumeMounts:
-          - name: nfs-config
-            mountPath: "/config"
-            subPath: "delugevpn"
+          - name: delugevpn-config
+            mountPath: /config
           - name: nfs-media
             mountPath: "/data"
             subPath: "Downloads"
