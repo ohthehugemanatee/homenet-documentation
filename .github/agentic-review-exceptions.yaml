@@ -842,7 +842,7 @@ exceptions:
       spec.serviceName is still required by the StatefulSet API and is set to
       the existing Service.
 
-  - pattern: "Deployment→StatefulSet /config conversion has no data migration in the diff"
+  - pattern: "/config storage conversion has no data migration in the diff"
     files:
       - cluster/services/calibre.yaml
       - cluster/services/delugevpn.yaml
@@ -859,6 +859,10 @@ exceptions:
       volume the StatefulSet may already have adopted. The old NFS subPath is
       left in place on purpose as the rollback path, and #253 defers deleting
       it until all three apps have run clean. Raised on #262, #266 and #267.
+      calibre (#254) is the one exception to the playbook part: it needs two
+      subPaths seeded on a single volume, which the playbook's preflight
+      correctly refuses, so its copy is done by hand. Its PR carries the
+      equivalent steps, including the same checksum verification.
 
   - pattern: "delugevpn container runs privileged"
     files:
