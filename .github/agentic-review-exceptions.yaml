@@ -825,6 +825,7 @@ exceptions:
   - pattern: "StatefulSet serviceName does not name a headless Service"
     files:
       - cluster/services/jackett.yaml
+      - cluster/services/nzbget.yaml
       - cluster/services/ombi.yaml
       - cluster/services/radarr.yaml
       - cluster/services/sonarr.yaml
