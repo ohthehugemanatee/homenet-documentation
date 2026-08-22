@@ -18,6 +18,9 @@ Every directory has its own `CLAUDE.md` (with `AGENTS.md` symlink); Claude Code 
 - **Prefer established upstream/community components over scripted glue.** Order: (1) upstream Helm chart + our values, (2) community operator/controller, (3) vendored upstream manifest, (4) raw manifest we author. Bash scripts, `curl | sh` init containers, one-off `kubectl` in CI are the **last** resort and require justification in the spec. Ansible: Galaxy roles/collections in `requirements.yaml` over hand-rolled `command:` / `shell:`.
 - **Run tests before commit; fix failures, don't commit around them.** Never commit with known-failing tests, never silence a test or add to an exception file to make CI green, never `--no-verify`.
 - **Verify configuration changes in updated project documentation.** When a change touches configuration (K8s manifests, Helm values, Ansible vars/playbooks, CI workflows, docker-compose), cross-check the updated project docs (`*.md` in the affected directory and repo root) for correctness and effect — stale docs that contradict the new config are a bug. If docs need updating, include the doc fix in the same PR.
+- **Outside `adr/`, documentation describes the current implementation only.** Explain reasoning only where an aspect is unusual or significant enough that a reader would otherwise get it wrong. Do not narrate how the current state was reached.
+- **Implementation history that never reached `master` stays out of the codebase.** With squash-merge, a branch's intermediate states are not history — they are drafts. If a PR took three attempts to pass tests, only the third was merged; the first two are not worth describing anywhere in the repo. Where that context is worth keeping, it belongs in the Issue or PR thread.
+- **An ADR records a decision that changed the repo.** Write one in `adr/` per `adr/CLAUDE.md`; a design discussion that produced no in-repo change does not need one.
 
 ## Coding behavior
 
@@ -38,6 +41,7 @@ Every directory has its own `CLAUDE.md` (with `AGENTS.md` symlink); Claude Code 
 | `cluster/argocd/` | ArgoCD Application manifests (app-of-apps) | `cluster/argocd/CLAUDE.md` |
 | `shoebox/` | External Ansible runner (Semaphore in Docker) | `shoebox/CLAUDE.md` |
 | `.github/` | CI workflows + autofix script | `.github/CLAUDE.md` |
+| `adr/` | Architecture Decision Records (append-only) | `adr/CLAUDE.md` |
 | root `*.md` | Operator architecture docs (imported above) | — |
 
 ## Secrets — never in repo

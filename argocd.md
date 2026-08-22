@@ -65,4 +65,4 @@ Monitoring stack and NFS provisioner use ArgoCD multi-source: the chart comes fr
 
 ## Relationship to install.sh scripts
 
-The `install.sh` / `install-*.sh` scripts in `cluster/helm/` and `cluster/longhorn/` predate ArgoCD. Their secret-creation portions remain necessary for bootstrap. The `helm upgrade` / `kubectl apply` portions are superseded by ArgoCD — do not use them for ongoing management.
+The `install.sh` / `install-*.sh` scripts in `cluster/helm/` and `cluster/longhorn/` are bootstrap tools. Their secret-creation portions are necessary — secrets are not in git, so the first sync needs them to have run. Do not use their `helm upgrade` / `kubectl apply` portions for ongoing management: ArgoCD owns deployed state and self-heal will fight them (ADR-0003).
