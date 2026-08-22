@@ -840,6 +840,23 @@ exceptions:
       spec.serviceName is still required by the StatefulSet API and is set to
       the existing Service.
 
+  - pattern: "Deployment→StatefulSet /config conversion has no data migration in the diff"
+    files:
+      - cluster/services/delugevpn.yaml
+      - cluster/services/jackett.yaml
+      - cluster/services/nzbget.yaml
+    reason: >-
+      Answered, not missing. The data move is deliberately not in the manifest
+      diff: it is a live copy run by
+      cluster/ansible/migrate-config-to-longhorn.yaml (#259) before the PR
+      merges, and every one of these PRs carries a Cutover section with the
+      exact `-t stage` and `-t resume` commands. Each is opened as a draft
+      precisely so it cannot merge ahead of that step. An init-container copy
+      was considered and rejected: it would run on every pod start, against a
+      volume the StatefulSet may already have adopted. The old NFS subPath is
+      left in place on purpose as the rollback path, and #253 defers deleting
+      it until all three apps have run clean. Raised on #262, #266 and #267.
+
   - pattern: "delugevpn container runs privileged"
     files:
       - cluster/services/delugevpn.yaml
