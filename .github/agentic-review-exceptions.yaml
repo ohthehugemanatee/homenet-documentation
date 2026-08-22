@@ -805,6 +805,23 @@ exceptions:
       after a prior visit. The operator accepts the berlin.vertesi.com zone-wide
       HTTPS-only commitment implied by includeSubdomains + preload.
 
+  - pattern: "ansible.builtin.stat does not return a writeable attribute"
+    files:
+      - cluster/ansible/migrate-config-to-longhorn.yaml
+    reason: >-
+      False positive, verified against the installed module. ansible.builtin.stat
+      returns readable, writeable and executable alongside exists/isdir; the
+      module computes them with
+      "for perm in [('readable', os.R_OK), ('writeable', os.W_OK),
+      ('executable', os.X_OK)]" over os.access(). Confirmed by running
+      "ansible localhost -m ansible.builtin.stat -a path=/tmp", which returns
+      writeable: true. os.access() tests the real uid, which equals the
+      effective uid for a play that does not use become — so it is exactly the
+      right check for whether this playbook can write there as the user
+      Semaphore runs as. The reviewer also proposed a tempfile write-probe
+      instead; that is worse here, since it would create and remove a file in a
+      directory the play has not yet established it may write to.
+
   - pattern: "StatefulSet serviceName does not name a headless Service"
     files:
       - cluster/services/jackett.yaml
