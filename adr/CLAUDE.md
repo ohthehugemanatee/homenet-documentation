@@ -28,3 +28,4 @@ Start from [`template.md`](template.md).
 | [0002](0002-node-ansible-stays-under-cluster.md) | Node Ansible stays under `cluster/ansible/` | accepted |
 | [0003](0003-argocd-supersedes-install-scripts.md) | ArgoCD owns ongoing state; `install.sh` is bootstrap only | accepted |
 | [0004](0004-cloud-sessions-reach-the-cluster-over-mcp.md) | Cloud sessions reach the cluster over MCP | accepted |
+| [0005](0005-cluster-operations-are-ansible-playbooks.md) | Cluster-workload operations are Ansible playbooks | accepted |

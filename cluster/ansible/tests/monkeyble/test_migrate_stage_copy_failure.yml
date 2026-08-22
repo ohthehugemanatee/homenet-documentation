@@ -1,0 +1,76 @@
+---
+# Scenario: the copy helper pod ends Failed, on a re-run where a previous partial
+# stage already removed the Deployment.
+# Expected: the play fails with the pod's log attached, the scale-down skips
+# rather than erroring, and the helper pod is still deleted — one left behind
+# holds the RWO volume and blocks the retry.
+
+x_mocks:
+  - &changed
+    config:
+      hpe.monkeyble.monkeyble_module:
+        consider_changed: true
+        result_dict: {}
+
+monkeyble_scenarios:
+  migrate_stage_copy_failure:
+    tasks_to_test:
+
+      - task: "Read the ArgoCD Application"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi, namespace: argocd}
+                    spec:
+                      syncPolicy:
+                        automated: {prune: true, selfHeal: true}
+
+      - task: "Suspend ArgoCD auto-sync"
+        mock: *changed
+
+      - task: "Look for the app's Deployment"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      # Already pruned by an earlier partial stage — skipping keeps stage
+      # re-runnable instead of failing on a missing Deployment.
+      - task: "Scale the Deployment to zero"
+        should_be_skipped: true
+
+      - task: "Create the Longhorn PVC the StatefulSet will adopt"
+        mock: *changed
+
+      - task: "Run the config copy helper pod"
+        mock: *changed
+
+      - task: "Wait for the config copy helper pod to finish"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi-config-migrate}
+                    status: {phase: Failed}
+
+      - task: "Read the config copy helper pod log"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                log: "cp: cannot create '/dst/db': No space left on device\n"
+
+      - task: "Assert the config copy succeeded"
+        should_fail: true
+
+      - task: "Delete the config copy helper pod"
+        should_be_skipped: false
+        mock: *changed

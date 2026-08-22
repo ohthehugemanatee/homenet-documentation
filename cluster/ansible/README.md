@@ -7,6 +7,7 @@
 | `k3s-agent.yaml` | Initial node provisioning — hostname, k3s install | No (imperative) |
 | `node-state.yaml` | Idempotent state enforcement — packages, config, services | Yes |
 | `rolling-upgrade.yaml` | Rolling OS dist-upgrade with drain/uncordon | Yes |
+| `migrate-config-to-longhorn.yaml` | Move one app's `/config` from the `app-configs` NFS PVC onto Longhorn | Yes (per phase) |
 
 Note that to keep CI happy, the encrypted vault file is not loaded by default.
 `k3s-agent.yaml` and `rolling-upgrade.yaml` load it via
@@ -128,3 +129,36 @@ ansible-playbook -i inventory.yaml --ask-vault-pass --limit agents rolling-upgra
 | `templates/sysctl-k3s.conf.j2` | `/etc/sysctl.d/99-k3s.conf` |
 | `templates/timesyncd.conf.j2` | `/etc/systemd/timesyncd.conf` |
 | `templates/50unattended-upgrades.j2` | `/etc/apt/apt.conf.d/50unattended-upgrades` |
+
+---
+
+## `migrate-config-to-longhorn.yaml` — NFS → Longhorn config cutover
+
+Stages one app's `/config` onto its own Longhorn volume (#241). Runs against the
+cluster from the shoebox controller, so it needs a working `KUBECONFIG`, not SSH to a
+node. Requires a phase tag — a bare run only does preflight.
+
+```sh
+# before merging the manifest PR that converts the app to a StatefulSet
+ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t stage
+```
+
+`stage` saves the app's ArgoCD sync policy under `state_dir`, suspends auto-sync,
+scales the Deployment to 0, creates the Longhorn PVC, and copies `/config` into it with
+a helper pod. The copy is verified by a sorted `sha256sum` diff over source and
+destination inside that pod, so a truncated copy and leftovers from an earlier partial
+run both fail the play. The helper pod is deleted either way.
+
+**Run it from a checkout of the branch that converts the app.** Preflight reads
+`cluster/services/<app>.yaml` and derives the PVC name from its `volumeClaimTemplate`:
+a StatefulSet adopts `<template>-<statefulset>-0` and silently provisions an empty
+volume for any other name. Against an unconverted manifest the playbook refuses to run.
+
+Afterwards, merge the manifest PR and restore auto-sync — ArgoCD applies the
+StatefulSet, which adopts the staged PVC:
+
+```sh
+argocd app set jackett --sync-policy automated --auto-prune --self-heal
+```
+
+The NFS directory is left untouched, so reverting the manifest PR is the rollback.
