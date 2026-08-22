@@ -1,0 +1,30 @@
+---
+# Scenario: the state directory is missing.
+# Expected: the play refuses with a message naming the setup playbook. The
+# directory is a host bind mount provisioned by shoebox-ansible-setup.yaml, so
+# this playbook checks the precondition rather than creating it — creating it
+# is what produced the EPERM traceback in #264, since Semaphore can write into
+# that directory but does not own it and so cannot chmod it.
+
+monkeyble_scenarios:
+  migrate_stage_no_state_dir:
+    tasks_to_test:
+
+      - task: "Read the ArgoCD Application"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi, namespace: argocd}
+                    spec:
+                      syncPolicy:
+                        automated: {prune: true, selfHeal: true}
+
+      - task: "Assert the state directory exists"
+        should_fail: true
+
+      # Nothing may be suspended or scaled once the precondition failed.
+      - task: "Suspend ArgoCD auto-sync"
+        should_be_skipped: true

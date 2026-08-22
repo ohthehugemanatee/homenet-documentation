@@ -181,6 +181,13 @@ run_failing_scenario "migrate_stage_copy_failure" \
   "No space left on device" \
   "-e" "app=ombi" "-t" "stage"
 
+# A missing state directory must report the precondition, not a traceback (#264).
+run_scenario_expecting "migrate_stage_no_state_dir" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_stage_no_state_dir.yml" \
+  "shoebox-ansible-setup.yaml" \
+  "-e" "app=ombi" "-e" "state_dir=${STATE_DIR}/definitely-not-here" "-t" "stage"
+
 # ── Scenarios 6-8: resume and rollback ──────────────────────────────────────
 # stage writes the saved policy; these read it back. Write it here rather than
 # depending on scenario 4 having run, so each scenario stands alone.
