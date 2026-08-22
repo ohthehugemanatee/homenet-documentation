@@ -38,8 +38,8 @@ A second path to `$K8S_API_HOSTNAME` — raw `kubectl` against
 `kubernetes.default.svc:443` through a local `cloudflared access tcp` forwarder — runs
 over the same tunnel and the same Access mechanism, but nothing sets it up
 automatically. It is a manual fallback for the rare case raw `kubectl` is needed beyond
-what MCP tools cover: "One-time Cloudflare setup" below covers its configuration, and
-the forwarder and kubeconfig have to be built by hand (ADR-0004).
+what MCP tools cover. "One-time Cloudflare setup" below has its configuration; the
+forwarder and kubeconfig are built by hand (ADR-0004).
 
 ## Read-only scope
 

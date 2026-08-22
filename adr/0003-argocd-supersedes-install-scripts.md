@@ -13,15 +13,14 @@ mechanisms able to write the same resources.
 ## Decision
 
 ArgoCD owns the deployed state of everything with an Application manifest. The
-scripts' secret-creation portions stay — secrets are not in git, so something has to
-create them before the first sync — and their `helm upgrade` / `kubectl apply`
-portions are not used for ongoing management. The scripts are kept rather than split
-because bootstrap is the only time they run.
+scripts' `helm upgrade` / `kubectl apply` portions are not used for ongoing
+management. Their secret-creation portions stay: secrets are not in git, so something has to create them
+before the first sync. The scripts are kept whole rather than split, because bootstrap
+is the only time they run.
 
 ## Consequences
 
-- Running an `install.sh` against a live cluster fights ArgoCD's self-heal. The
-  scripts are a bootstrap tool, and `argocd.md` says so in present tense.
+- Running an `install.sh` against a live cluster fights ArgoCD's self-heal.
 - A workload brought under ArgoCD after being installed by hand does not need its
   history recorded; its sync policy is chosen by the tier rules in
   `cluster/argocd/CLAUDE.md`, not by how it was first installed.

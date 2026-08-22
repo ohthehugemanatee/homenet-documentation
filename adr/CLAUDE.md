@@ -6,17 +6,14 @@ file, `NNNN-kebab-case-title.md`, numbers never reused.
 ## Rules
 
 - **Append-only.** An accepted ADR is not edited to reflect a later change of mind.
-  A reversed or replaced decision gets a **new** ADR; the old file stays and its
-  `Status` becomes `superseded by ADR-NNNN`. That status line is the only edit an
-  accepted ADR ever receives.
+  A reversed or replaced decision gets a new ADR; the old file stays and its `Status`
+  becomes `superseded by ADR-NNNN`. That status line is the only edit it ever gets.
 - **In-repo impact is the bar.** Write an ADR when a decision changed what is in this
   repo. A design discussion that produced no in-repo change does not get one.
-- **Short.** Homelab scale, not MADR. Three sections, a few sentences each. If it runs
-  past a screen, it is describing implementation — that belongs in the doc for the
-  thing, not here.
-- **Present tense elsewhere.** The reason this directory exists is so that every other
-  file describes what is implemented now. Moving history out of a file is only half the
-  job; the sentence left behind has to read as current fact.
+- **Short.** Homelab scale, not MADR. Three sections, a few sentences each. Past a
+  screen, it is describing implementation, which belongs in the doc for the thing.
+- **Present tense elsewhere.** Moving history out of a file is half the job; the
+  sentence left behind has to read as current fact.
 - **Not counted by the PR size gate.** `.github/scripts/pr_size.js` exempts `adr/`, so
   writing the record never pushes a PR over the 200/400 LOC thresholds. Everything
   else in the same PR still counts.

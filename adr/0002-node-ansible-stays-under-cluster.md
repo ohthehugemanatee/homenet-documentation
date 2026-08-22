@@ -21,6 +21,6 @@ a wide rename whose only benefit is which `CLAUDE.md` gets loaded.
 
 - Agents working in `cluster/ansible/` load K8s-manifest rules that do not apply there.
   `cluster/ansible/CLAUDE.md` is the authority for that subtree.
-- Ansible outside the cluster (`shoebox/`) is the exception that already lives at root,
-  so the two Ansible trees are not siblings. That asymmetry is accepted.
+- Ansible outside the cluster (`shoebox/`) already lives at root, so the two Ansible
+  trees are not siblings. That asymmetry is accepted.
 - Revisit only if a change is already touching those paths for another reason.
