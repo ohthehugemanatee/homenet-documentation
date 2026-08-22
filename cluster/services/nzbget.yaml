@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: nzbget
 spec:
@@ -7,6 +7,16 @@ spec:
     matchLabels:
       run: nzbget
   replicas: 1
+  serviceName: nzbget
+  volumeClaimTemplates:
+    - metadata:
+        name: nzbget-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 3Gi
   template:
     metadata:
       labels:
@@ -16,9 +26,6 @@ spec:
         - name: nfs-media
           persistentVolumeClaim:
             claimName: media
-        - name: nfs-config
-          persistentVolumeClaim:
-            claimName: app-configs
       containers:
       - name: nzbget
         image: linuxserver/nzbget
@@ -32,9 +39,8 @@ spec:
           - name: TZ
             value: "Europe/Berlin"
         volumeMounts:
-          - name: nfs-config
-            mountPath: "/config"
-            subPath: "nzbget"
+          - name: nzbget-config
+            mountPath: /config
           - name: nfs-media
             mountPath: "/downloads"
             subPath: "Downloads"
