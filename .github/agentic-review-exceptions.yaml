@@ -824,6 +824,7 @@ exceptions:
 
   - pattern: "StatefulSet serviceName does not name a headless Service"
     files:
+      - cluster/services/calibre.yaml
       - cluster/services/delugevpn.yaml
       - cluster/services/jackett.yaml
       - cluster/services/nzbget.yaml
@@ -843,6 +844,7 @@ exceptions:
 
   - pattern: "Deployment→StatefulSet /config conversion has no data migration in the diff"
     files:
+      - cluster/services/calibre.yaml
       - cluster/services/delugevpn.yaml
       - cluster/services/jackett.yaml
       - cluster/services/nzbget.yaml

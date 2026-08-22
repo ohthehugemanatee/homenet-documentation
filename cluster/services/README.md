@@ -22,14 +22,19 @@ a Longhorn `volumeClaimTemplate`, no overlay mount, no app-side path configurati
 (`/config/databases`) instead overlay a Longhorn volume onto the database path only, with
 the rest of `/config` still on NFS.
 
+`calibre` is a third shape: one pod running both the `calibre` and `calibre-web` containers
+on a single Longhorn volume, each container taking its own `subPath` for `/config` and
+`calibre-web` mounting calibre's `subPath` again at `/calibre-library`. The subPaths sit
+inside one volume, so a snapshot still covers the library and its WAL together. Two pods is
+not an option: they would have to share the library over a network filesystem, which is the
+hazard being removed, and a Longhorn RWO volume cannot be mounted twice.
+
 `cluster/ansible/migrate-config-to-longhorn.yaml` stages the cutover for an app moving to
-the reference shape.
+the reference shape. `calibre` was moved by hand, since the playbook derives a single
+`/config` volume per app.
 
 Not yet migrated:
 
-- `calibre` holds SQLite on the `app-configs` NFS PVC (#241).
-- `calibre` and `calibre-web` mount the same `subPath: calibre` from two separate
-  StatefulSets, so two pods share one SQLite library over NFS (#254).
 - `redis` mounts `app-configs` at `/data` but runs `--appendonly no --save ""`, so it writes
   nothing (#255).
 
