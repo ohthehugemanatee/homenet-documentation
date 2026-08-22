@@ -79,7 +79,15 @@ ansible-lint <touched-ansible-paths>   # any Ansible file in the diff
 - Autofix commits carry `[autofix]` so `autofix.yaml` doesn't re-loop.
 - `[skip-review]` or `[no-review]` skips AI review.
 - Open PRs as **draft** until self-review + local tests pass.
+- PR bodies and review comments are prose: run them through `avoid-ai-writing` before posting (see [Documentation style](#documentation-style)).
 
 ## Documentation style
 
 Terse, operator-first; real names (`warehouse`, `shoebox`, `Pi-hole`, `k3s`, `Longhorn`, `MetalLB`, `traefik`, `cloudflared`, `Semaphore`). No marketing prose, no emojis, no "in conclusion" sections.
+
+**Every piece of prose goes through the `avoid-ai-writing` skill before it ships.** Scope is anything a human reads as sentences: Issue bodies, PR descriptions, PR and review comments, `*.md` files, ADRs, commit message bodies. Code and YAML comments are out of scope.
+
+- Invoke it with voice `technical` and context `docs`. That pairing keeps the imperative, one-idea-per-sentence register described above, and tolerates the em dashes and dense lists this repo already uses.
+- Run it on the draft, apply the rewrite, then ship. Detect-only mode is for auditing text you did not write.
+- The skill lives in the operator's Claude profile. An agent that does not have it reads the current version from <https://raw.githubusercontent.com/conorbronsdon/avoid-ai-writing/refs/heads/main/SKILL.md>.
+- Removing AI-isms is part of writing the prose. It never needs its own Issue.
