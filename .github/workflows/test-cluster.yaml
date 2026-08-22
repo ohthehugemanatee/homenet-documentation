@@ -757,6 +757,45 @@ jobs:
           sys.exit(failed)
           PY
 
+      - name: Assert stateless apps declare no volumes
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          # Apps with no durable state, which under the storage placement rule
+          # in cluster/services/README.md get no volume at all. A vestigial
+          # mount is not free: it makes the pod fail to start whenever its
+          # backing storage is away, for nothing in return.
+          NO_VOLUMES = {"redis"}
+          WORKLOADS = {"Deployment", "StatefulSet", "DaemonSet"}
+          failed = 0
+          for app in sorted(NO_VOLUMES):
+              f = f"cluster/services/{app}.yaml"
+              docs = [d for d in yaml.safe_load_all(open(f)) if isinstance(d, dict)]
+              w = next((d for d in docs if d.get("kind") in WORKLOADS
+                        and d["metadata"]["name"] == app), None)
+              if w is None:
+                  print(f"BAD {f}: no workload named {app!r}")
+                  failed = 1
+                  continue
+              spec = w["spec"]
+              pod = spec["template"]["spec"]
+              bad = 0
+              for v in pod.get("volumes") or []:
+                  print(f"BAD {f}: declares pod volume {v['name']!r}")
+                  failed = bad = 1
+              for v in spec.get("volumeClaimTemplates") or []:
+                  print(f"BAD {f}: declares volumeClaimTemplate {v['metadata']['name']!r}")
+                  failed = bad = 1
+              for c in (pod.get("containers") or []) + (pod.get("initContainers") or []):
+                  for m in c.get("volumeMounts") or []:
+                      print(f"BAD {f}: container {c['name']!r} mounts "
+                            f"{m['name']!r} at {m['mountPath']!r}")
+                      failed = bad = 1
+              if not bad:
+                  print(f"OK  {f}: {w['kind']} {app} declares no volumes")
+          sys.exit(failed)
+          PY
+
       - name: Assert delugevpn WireGuard transport/privilege coupling
         run: |
           python3 - <<'PY'

@@ -30,8 +30,6 @@ Not yet migrated:
 - `calibre` holds SQLite on the `app-configs` NFS PVC (#241).
 - `calibre` and `calibre-web` mount the same `subPath: calibre` from two separate
   StatefulSets, so two pods share one SQLite library over NFS (#254).
-- `redis` mounts `app-configs` at `/data` but runs `--appendonly no --save ""`, so it writes
-  nothing (#255).
 
 ## Backups
 
