@@ -822,6 +822,23 @@ exceptions:
       instead; that is worse here, since it would create and remove a file in a
       directory the play has not yet established it may write to.
 
+  - pattern: "StatefulSet serviceName does not name a headless Service"
+    files:
+      - cluster/services/jackett.yaml
+      - cluster/services/ombi.yaml
+      - cluster/services/radarr.yaml
+      - cluster/services/sonarr.yaml
+    reason: >-
+      Advisory (kube-score), accepted. A headless Service exists to give each
+      pod a stable per-ordinal DNS name, which matters when replicas address
+      each other. Every StatefulSet here runs a single replica of an app that
+      no peer dials by ordinal — the only consumers are Traefik, via the
+      Ingress, and sibling apps using the ClusterIP Service name. Setting
+      clusterIP: None on that Service to satisfy the check would remove the
+      virtual IP those consumers resolve, to provide identity nothing uses.
+      spec.serviceName is still required by the StatefulSet API and is set to
+      the existing Service.
+
   - pattern: "delugevpn container runs privileged"
     files:
       - cluster/services/delugevpn.yaml
