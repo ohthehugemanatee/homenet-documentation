@@ -145,9 +145,9 @@ ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t stage
 
 `stage` saves the app's ArgoCD sync policy under `state_dir`, suspends auto-sync,
 scales the Deployment to 0, creates the Longhorn PVC, and copies `/config` into it with
-a helper pod. The copy is verified by a sorted `sha256sum` diff over source and
-destination inside that pod, so a truncated copy and leftovers from an earlier partial
-run both fail the play. The helper pod is deleted either way.
+a helper pod. That pod verifies its own work with a sorted `sha256sum` diff over
+source and destination, so a truncated copy and leftovers from an earlier partial run
+both fail the play. The playbook deletes the helper pod either way.
 
 **Run it from a checkout of the branch that converts the app.** Preflight reads
 `cluster/services/<app>.yaml` and derives the PVC name from its `volumeClaimTemplate`:
@@ -161,4 +161,4 @@ StatefulSet, which adopts the staged PVC:
 argocd app set jackett --sync-policy automated --auto-prune --self-heal
 ```
 
-The NFS directory is left untouched, so reverting the manifest PR is the rollback.
+Nothing writes to the NFS directory, so reverting the manifest PR is the rollback.
