@@ -9,7 +9,7 @@
 # never boots against an empty volume, which is what keeps jackett from minting
 # a fresh API key and breaking sonarr and radarr.
 
-- name: Stage an app's /config migration from NFS onto Longhorn
+- name: Migrate an app's /config from NFS onto Longhorn
   hosts: localhost
   connection: local
   gather_facts: false
@@ -22,6 +22,7 @@
     migrate_helper_image: busybox:1.36
     migrate_owner: "1000:1000"
     migrate_copy_timeout: 900
+    migrate_rollout_timeout: 600
     migrate_manifest: "{{ playbook_dir }}/../services/{{ app | default('') }}.yaml"
     migrate_helper_pod: "{{ app | default('') }}-config-migrate"
     # group_vars/all.yaml is not loaded for the implicit localhost, so carry the
@@ -308,3 +309,149 @@
               - "Merge the manifest PR, then restore auto-sync:"
               - "  argocd app set {{ app }} --sync-policy automated --auto-prune --self-heal"
               - "The NFS directory is left untouched as the rollback path."
+
+    # ── resume — after the manifest PR merges ───────────────────────────────
+    - name: Resume after the merge
+      tags: [never, resume]
+      block:
+
+        - name: Read the saved ArgoCD sync policy
+          ansible.builtin.slurp:
+            src: "{{ migrate_state_dir }}/migrate-{{ app }}-syncpolicy.json"
+          register: migrate_saved_policy_raw
+
+        # With auto-sync suspended, merging alone applies nothing. Restoring the
+        # policy is what makes ArgoCD create the StatefulSet, which then adopts
+        # the PVC staged earlier, and prune the old Deployment.
+        - name: Restore ArgoCD auto-sync
+          kubernetes.core.k8s:
+            state: patched
+            api_version: argoproj.io/v1alpha1
+            kind: Application
+            name: "{{ app }}"
+            namespace: "{{ migrate_argocd_namespace }}"
+            definition:
+              spec:
+                syncPolicy: "{{ migrate_saved_policy_raw.content | b64decode | from_json }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+
+        - name: Wait for the StatefulSet to become ready
+          kubernetes.core.k8s_info:
+            kind: StatefulSet
+            name: "{{ app }}"
+            namespace: "{{ migrate_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          register: migrate_sts_status
+          until: >-
+            ((migrate_sts_status.resources | first | default({}, true)).status
+             | default({})).readyReplicas | default(0) | int == 1
+          retries: "{{ ((migrate_rollout_timeout | int) / 10) | int }}"
+          delay: 10
+          changed_when: false
+
+        - name: Read the running pod
+          kubernetes.core.k8s_info:
+            kind: Pod
+            name: "{{ app }}-0"
+            namespace: "{{ migrate_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          register: migrate_running_pod
+          changed_when: false
+
+        - name: Resolve the running pod's /config mount
+          ansible.builtin.set_fact:
+            migrate_running_claims: >-
+              {{ (migrate_running_pod.resources | first | default({}, true)).spec.volumes | default([])
+                 | selectattr('persistentVolumeClaim', 'defined')
+                 | items2dict(key_name='name', value_name='persistentVolumeClaim') }}
+            migrate_running_mounts: >-
+              {{ (migrate_running_pod.resources | first | default({}, true)).spec.containers | default([])
+                 | map(attribute='volumeMounts', default=[]) | flatten
+                 | selectattr('mountPath', 'equalto', '/config') | list }}
+
+        - name: Resolve the claim backing /config
+          ansible.builtin.set_fact:
+            migrate_config_claim: >-
+              {{ migrate_running_claims.get(
+                   (migrate_running_mounts | first | default({}, true)).get('name', ''), {}
+                 ).get('claimName', '(none)') }}
+
+        # The check that catches a mis-adopted PVC. The app is up either way, so
+        # nothing else would notice — and for jackett, "up on the wrong volume"
+        # means it has already minted an API key sonarr and radarr do not have.
+        - name: Assert the pod's /config resolves to the staged Longhorn PVC
+          ansible.builtin.assert:
+            that:
+              - migrate_running_mounts | length == 1
+              - migrate_config_claim == migrate_pvc_name
+            fail_msg: >-
+              {{ app }}-0: /config resolves to PVC '{{ migrate_config_claim }}',
+              expected '{{ migrate_pvc_name }}'
+
+        - name: Look for a leftover Deployment
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            name: "{{ app }}"
+            namespace: "{{ migrate_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          register: migrate_old_deployment
+          changed_when: false
+
+        - name: Assert the old Deployment is gone
+          ansible.builtin.assert:
+            that:
+              - migrate_old_deployment.resources | length == 0
+            fail_msg: >-
+              Deployment/{{ app }} still exists alongside the StatefulSet; ArgoCD
+              has not pruned it, so the sync policy may not have been restored.
+
+        - name: Report the completed migration
+          ansible.builtin.debug:
+            msg:
+              - "{{ app }} is live on {{ migrate_pvc_name }}."
+              - "The NFS directory is retained as the rollback path; do not delete it yet."
+
+    # ── rollback — after the manifest PR is reverted ────────────────────────
+    - name: Roll back to NFS
+      tags: [never, rollback]
+      block:
+
+        - name: Read the saved ArgoCD sync policy for rollback
+          ansible.builtin.slurp:
+            src: "{{ migrate_state_dir }}/migrate-{{ app }}-syncpolicy.json"
+          register: migrate_rollback_policy_raw
+
+        - name: Restore ArgoCD auto-sync after rollback
+          kubernetes.core.k8s:
+            state: patched
+            api_version: argoproj.io/v1alpha1
+            kind: Application
+            name: "{{ app }}"
+            namespace: "{{ migrate_argocd_namespace }}"
+            definition:
+              spec:
+                syncPolicy: "{{ migrate_rollback_policy_raw.content | b64decode | from_json }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+
+        - name: Wait for the Deployment to become ready
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            name: "{{ app }}"
+            namespace: "{{ migrate_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          register: migrate_rollback_deployment
+          until: >-
+            ((migrate_rollback_deployment.resources | first | default({}, true)).status
+             | default({})).readyReplicas | default(0) | int == 1
+          retries: "{{ ((migrate_rollout_timeout | int) / 10) | int }}"
+          delay: 10
+          changed_when: false
+
+        # Deleting the staged volume is destructive and not reversible, so it is
+        # printed rather than run.
+        - name: Report the rollback
+          ansible.builtin.debug:
+            msg:
+              - "{{ app }} is back on NFS."
+              - "{{ migrate_pvc_name }} is retained. Delete it by hand once you are sure:"
+              - "  kubectl -n {{ migrate_namespace }} delete pvc {{ migrate_pvc_name }}"

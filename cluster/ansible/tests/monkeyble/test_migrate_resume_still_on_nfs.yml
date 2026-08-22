@@ -1,0 +1,47 @@
+---
+# Scenario: resume, but the pod came up still mounting app-configs at /config —
+# what a mis-named PVC or an unsynced Application looks like from outside.
+# Expected: the post-check fails. Reporting success here is the failure mode the
+# whole playbook exists to prevent: the app would be live on NFS, and for jackett
+# it would already have minted a new API key.
+
+monkeyble_scenarios:
+  migrate_resume_still_on_nfs:
+    tasks_to_test:
+
+      - task: "Restore ArgoCD auto-sync"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict: {}
+
+      - task: "Wait for the StatefulSet to become ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi}
+                    status: {readyReplicas: 1}
+
+      - task: "Read the running pod"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi-0, namespace: default}
+                    spec:
+                      volumes:
+                        - name: nfs-config
+                          persistentVolumeClaim: {claimName: app-configs}
+                      containers:
+                        - name: ombi
+                          volumeMounts:
+                            - {name: nfs-config, mountPath: /config, subPath: ombi}
+
+      - task: "Assert the pod's /config resolves to the staged Longhorn PVC"
+        should_fail: true
