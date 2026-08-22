@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run all Monkeyble scenarios for rolling-upgrade.yaml.
+# Run all Monkeyble scenarios for rolling-upgrade.yaml and
+# migrate-config-to-longhorn.yaml.
 # Requires: pip install monkeyble && ansible-galaxy collection install hpe.monkeyble
 # Run from cluster/ansible/ or any directory (script auto-cds).
 set -euo pipefail
@@ -16,38 +17,74 @@ cd "$ANSIBLE_DIR"
 # Enable the hpe.monkeyble callback plugin (installed via ansible-galaxy collection)
 export ANSIBLE_CALLBACKS_ENABLED=hpe.monkeyble.monkeyble_callback
 
-run_scenario() {
-  local name=$1
-  local vars_file=$2
-  shift 2
-  local extra=("$@")
-
-  echo ""
-  echo "══════════════════════════════════════════════"
-  echo "  Scenario: ${name}"
-  echo "══════════════════════════════════════════════"
-
+# _play <name> <playbook> <vars_file> [extra ansible-playbook args...]
+# Echoes combined output; returns the playbook's exit status.
+_play() {
+  local name=$1 playbook=$2 vars_file=$3
+  shift 3
   ansible-playbook \
     -i "$INVENTORY" \
     -e "@${vars_file}" \
     -e "monkeyble_scenario=${name}" \
     -e "vault_file=${TEST_SECRETS}" \
     -e "state_dir=${STATE_DIR}" \
-    "${extra[@]+"${extra[@]}"}" \
-    rolling-upgrade.yaml
+    "$@" \
+    "$playbook" 2>&1
+}
 
+banner() {
+  echo ""
+  echo "══════════════════════════════════════════════"
+  echo "  Scenario: $1"
+  echo "══════════════════════════════════════════════"
+}
+
+# run_scenario <name> <playbook> <vars_file> [extra args...]
+run_scenario() {
+  banner "$1"
+  local output
+  output=$(_play "$@") || {
+    echo "$output"
+    echo "  ERROR: expected $1 to pass"
+    exit 1
+  }
+  echo "$output"
+  echo "  PASSED: $1"
+}
+
+# Same, but the playbook must fail AND its output must match the regex. A bare
+# non-zero exit would also be produced by a typo in the scenario file, so the
+# message is what distinguishes "refused for the right reason".
+# run_failing_scenario <name> <playbook> <vars_file> <expected regex> [extra args...]
+run_failing_scenario() {
+  local name=$1 playbook=$2 vars_file=$3 expected=$4
+  shift 4
+  banner "${name} (expected to fail)"
+  local output
+  output=$(_play "$name" "$playbook" "$vars_file" "$@") && {
+    echo "$output"
+    echo "  ERROR: expected ${name} to fail but it succeeded"
+    exit 1
+  }
+  if ! grep -Eq "$expected" <<<"$output"; then
+    echo "$output"
+    echo "  ERROR: ${name} failed, but not with the expected message: ${expected}"
+    exit 1
+  fi
   echo "  PASSED: ${name}"
 }
 
 # ── Scenario 1: health check fails, rebuild succeeds → WARNING sent ──────────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario "agent_rescue_success" \
+  rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_success.yml" \
   "--limit" "agents"
 
 # ── Scenario 2: health check fails, rebuild also fails → CRITICAL sent ───────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario "agent_rescue_failure" \
+  rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_failure.yml" \
   "--limit" "agents"
 
@@ -89,6 +126,36 @@ if [[ ! -f "${STATE_DIR}/rolling-upgrade-failed" ]]; then
 fi
 
 echo "  PASSED: cross_play_abort (play aborted with expected message, failure flag persists)"
+
+# ── Scenario 4: stage the ombi cutover end to end ───────────────────────────
+# ombi already carries the migrated shape, so the preflight parses a real
+# manifest and the scenario pins cluster/services/ombi.yaml alongside the
+# playbook. state_dir is the temp dir, so the saved sync policy lands there.
+run_scenario "migrate_stage_success" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_stage_success.yml" \
+  "-e" "app=ombi" "-t" "stage"
+
+# The saved policy is the contract between stage and resume: resume restores
+# exactly what was suspended, so an unreadable file must not be silently ignored.
+POLICY_FILE="${STATE_DIR}/migrate-ombi-syncpolicy.json"
+if [[ ! -f "$POLICY_FILE" ]]; then
+  echo "  ERROR: stage did not save the ArgoCD sync policy to ${POLICY_FILE}"
+  exit 1
+fi
+python3 -c "
+import json, sys
+policy = json.load(open('${POLICY_FILE}'))
+assert policy['automated'] == {'prune': True, 'selfHeal': True}, policy
+" || { echo '  ERROR: saved sync policy is not the one the Application had'; exit 1; }
+echo "  PASSED: stage saved the ArgoCD sync policy verbatim"
+
+# ── Scenario 5: the copy helper pod fails → play fails, pod still cleaned up ──
+run_failing_scenario "migrate_stage_copy_failure" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_stage_copy_failure.yml" \
+  "No space left on device" \
+  "-e" "app=ombi" "-t" "stage"
 
 echo ""
 echo "All Monkeyble scenarios passed."

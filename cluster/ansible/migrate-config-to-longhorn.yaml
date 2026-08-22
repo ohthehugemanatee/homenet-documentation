@@ -1,0 +1,310 @@
+---
+# Move one app's /config off the app-configs NFS PVC onto its own Longhorn
+# volume (#241 — SQLite in WAL mode does not work over NFS). See
+# README.md for the operator workflow.
+#
+#   ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t stage
+#
+# `stage` is everything that must happen before the manifest PR merges. The app
+# never boots against an empty volume, which is what keeps jackett from minting
+# a fresh API key and breaking sonarr and radarr.
+
+- name: Stage an app's /config migration from NFS onto Longhorn
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
+    migrate_namespace: default
+    migrate_argocd_namespace: argocd
+    migrate_source_claim: app-configs
+    migrate_helper_image: busybox:1.36
+    migrate_owner: "1000:1000"
+    migrate_copy_timeout: 900
+    migrate_manifest: "{{ playbook_dir }}/../services/{{ app | default('') }}.yaml"
+    migrate_helper_pod: "{{ app | default('') }}-config-migrate"
+    # group_vars/all.yaml is not loaded for the implicit localhost, so carry the
+    # same default the rolling playbooks get from there.
+    migrate_state_dir: "{{ state_dir | default('/var/lib/ansible-upgrade') }}"
+
+  tasks:
+
+    # ── Preflight — runs for every phase ────────────────────────────────────
+    - name: Preflight
+      tags: always
+      block:
+
+        - name: Assert an app name was given
+          ansible.builtin.assert:
+            that:
+              - app is defined
+              - app is match('^[a-z0-9][a-z0-9-]*$')
+            fail_msg: "pass the app to migrate, e.g. -e app=jackett"
+
+        - name: Read the app's service manifest
+          ansible.builtin.slurp:
+            src: "{{ migrate_manifest }}"
+          register: migrate_manifest_raw
+
+        - name: Parse the app's StatefulSet from the service manifest
+          ansible.builtin.set_fact:
+            migrate_sts: >-
+              {{ (migrate_manifest_raw.content | b64decode | from_yaml_all | list)
+                 | select('mapping')
+                 | selectattr('kind', 'defined')
+                 | selectattr('kind', 'equalto', 'StatefulSet')
+                 | selectattr('metadata.name', 'equalto', app)
+                 | list | first | default({}, true) }}
+
+        - name: Derive the config volume claim template and its mount
+          ansible.builtin.set_fact:
+            migrate_pvc_template: >-
+              {{ (migrate_sts.spec.volumeClaimTemplates | default([]) | first) | default({}, true) }}
+            migrate_config_mounts: >-
+              {{ migrate_sts.spec.template.spec.containers | default([])
+                 | map(attribute='volumeMounts', default=[]) | flatten
+                 | selectattr('mountPath', 'equalto', '/config') | list }}
+
+        # Same invariants test-cluster.yaml asserts, so CI and this playbook
+        # cannot disagree about what "migrated" means.
+        - name: Assert the manifest is in the migrated shape
+          ansible.builtin.assert:
+            that:
+              - migrate_sts | length > 0
+              - (migrate_sts.spec.volumeClaimTemplates | default([])) | length == 1
+              - migrate_pvc_template.spec.storageClassName == 'longhorn'
+              - migrate_config_mounts | length == 1
+              - migrate_config_mounts[0].name == migrate_pvc_template.metadata.name
+              - migrate_config_mounts[0].subPath is not defined
+            fail_msg: >-
+              {{ migrate_manifest }} is not in the migrated shape: it needs a
+              StatefulSet named {{ app }} with exactly one longhorn
+              volumeClaimTemplate mounted at /config with no subPath. Run this
+              from a checkout of the branch that converts it.
+
+        # A StatefulSet adopts a pre-existing PVC named <template>-<sts>-<ordinal>
+        # and silently provisions an empty one for any other name, so the name is
+        # derived, never passed in.
+        - name: Derive the PVC the StatefulSet will adopt
+          ansible.builtin.set_fact:
+            migrate_pvc_name: "{{ migrate_pvc_template.metadata.name }}-{{ app }}-0"
+
+        - name: Assert the StatefulSet has a single replica
+          ansible.builtin.assert:
+            that:
+              - (migrate_sts.spec.replicas | default(1) | int) == 1
+            fail_msg: >-
+              {{ app }} declares more than one replica, so ordinal 0 is not the
+              only volume and staging a single PVC would leave the rest empty.
+
+        - name: Show what will be migrated
+          ansible.builtin.debug:
+            msg: >-
+              {{ app }}: {{ migrate_source_claim }}/{{ app }} (NFS) →
+              PVC {{ migrate_pvc_name }}
+              ({{ migrate_pvc_template.spec.resources.requests.storage }}, longhorn)
+
+    # ── stage — everything before the manifest PR merges ────────────────────
+    - name: Stage the migration
+      tags: [never, stage]
+      block:
+
+        - name: Read the ArgoCD Application
+          kubernetes.core.k8s_info:
+            api_version: argoproj.io/v1alpha1
+            kind: Application
+            name: "{{ app }}"
+            namespace: "{{ migrate_argocd_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          register: migrate_argocd_app
+          changed_when: false
+
+        - name: Assert the ArgoCD Application exists
+          ansible.builtin.assert:
+            that:
+              - migrate_argocd_app.resources | length == 1
+            fail_msg: "no ArgoCD Application {{ app }} in {{ migrate_argocd_namespace }}"
+
+        - name: Ensure the state directory exists
+          ansible.builtin.file:
+            path: "{{ migrate_state_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Check for an already-saved sync policy
+          ansible.builtin.stat:
+            path: "{{ migrate_state_dir }}/migrate-{{ app }}-syncpolicy.json"
+          register: migrate_saved_policy
+
+        # Written before auto-sync is suspended, and never overwritten: a re-run
+        # of stage must not save the suspended policy over the real one.
+        - name: Save the ArgoCD sync policy for restore
+          ansible.builtin.copy:
+            content: "{{ migrate_argocd_app.resources[0].spec.syncPolicy | to_nice_json }}\n"
+            dest: "{{ migrate_state_dir }}/migrate-{{ app }}-syncpolicy.json"
+            mode: "0644"
+          when: not migrate_saved_policy.stat.exists
+
+        # selfHeal would scale the Deployment straight back up under us.
+        - name: Suspend ArgoCD auto-sync
+          kubernetes.core.k8s:
+            state: patched
+            api_version: argoproj.io/v1alpha1
+            kind: Application
+            name: "{{ app }}"
+            namespace: "{{ migrate_argocd_namespace }}"
+            definition:
+              spec:
+                syncPolicy:
+                  automated: null
+            kubeconfig: "{{ k8s_kubeconfig }}"
+
+        - name: Look for the app's Deployment
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            name: "{{ app }}"
+            namespace: "{{ migrate_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          register: migrate_deployment
+          changed_when: false
+
+        # Absent on a re-run after a partial stage, which must stay re-runnable.
+        - name: Scale the Deployment to zero
+          kubernetes.core.k8s_scale:
+            kind: Deployment
+            name: "{{ app }}"
+            namespace: "{{ migrate_namespace }}"
+            replicas: 0
+            wait: true
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          when: migrate_deployment.resources | length > 0
+
+        - name: Create the Longhorn PVC the StatefulSet will adopt
+          kubernetes.core.k8s:
+            state: present
+            definition:
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: "{{ migrate_pvc_name }}"
+                namespace: "{{ migrate_namespace }}"
+                labels:
+                  homenet.vertesi.com/migrated-from: "{{ migrate_source_claim }}"
+              spec: "{{ migrate_pvc_template.spec }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+
+        - name: Copy the config into the Longhorn volume
+          block:
+
+            - name: Run the config copy helper pod
+              kubernetes.core.k8s:
+                state: present
+                definition:
+                  apiVersion: v1
+                  kind: Pod
+                  metadata:
+                    name: "{{ migrate_helper_pod }}"
+                    namespace: "{{ migrate_namespace }}"
+                  spec:
+                    restartPolicy: Never
+                    volumes:
+                      - name: src
+                        persistentVolumeClaim:
+                          claimName: "{{ migrate_source_claim }}"
+                      - name: dst
+                        persistentVolumeClaim:
+                          claimName: "{{ migrate_pvc_name }}"
+                    containers:
+                      - name: copy
+                        image: "{{ migrate_helper_image }}"
+                        command:
+                          - /bin/sh
+                          - -c
+                          - |
+                            set -e
+                            cp -a /src/. /dst/
+                            chown -R {{ migrate_owner }} /dst
+                            cd /src && find . -type f -exec sha256sum {} + | sort > /tmp/src.sums
+                            cd /dst && find . -type f -exec sha256sum {} + | sort > /tmp/dst.sums
+                            test -s /tmp/src.sums || {
+                              echo "source is empty - wrong subPath?" >&2
+                              exit 1
+                            }
+                            diff /tmp/src.sums /tmp/dst.sums
+                            echo "copied $(wc -l < /tmp/dst.sums) files"
+                        volumeMounts:
+                          - name: src
+                            mountPath: /src
+                            subPath: "{{ app }}"
+                            readOnly: true
+                          - name: dst
+                            mountPath: /dst
+                        resources:
+                          requests:
+                            cpu: 100m
+                            memory: 64Mi
+                kubeconfig: "{{ k8s_kubeconfig }}"
+
+            - name: Wait for the config copy helper pod to finish
+              kubernetes.core.k8s_info:
+                kind: Pod
+                name: "{{ migrate_helper_pod }}"
+                namespace: "{{ migrate_namespace }}"
+                kubeconfig: "{{ k8s_kubeconfig }}"
+              register: migrate_helper_status
+              until: >-
+                ((migrate_helper_status.resources | first | default({}, true)).status
+                 | default({})).phase | default('') in ['Succeeded', 'Failed']
+              retries: "{{ ((migrate_copy_timeout | int) / 10) | int }}"
+              delay: 10
+              changed_when: false
+
+            - name: Read the config copy helper pod log
+              kubernetes.core.k8s_log:
+                kind: Pod
+                name: "{{ migrate_helper_pod }}"
+                namespace: "{{ migrate_namespace }}"
+                kubeconfig: "{{ k8s_kubeconfig }}"
+              register: migrate_helper_log
+              changed_when: false
+
+            # The pod's sha256sum diff over /src and /dst is the verification, and
+            # it is symmetric: a truncated copy and leftovers from an earlier
+            # partial run both fail it. Covers ServerConfig.json byte for byte.
+            - name: Assert the config copy succeeded
+              ansible.builtin.assert:
+                that:
+                  - ((migrate_helper_status.resources | first | default({}, true)).status
+                     | default({})).phase | default('') == 'Succeeded'
+                fail_msg: "{{ migrate_helper_pod }} did not succeed"
+
+          rescue:
+
+            - name: Fail with the config copy helper pod log
+              ansible.builtin.fail:
+                msg: >-
+                  copying {{ app }}'s config onto {{ migrate_pvc_name }} failed.
+                  Helper pod log:
+                  {{ migrate_helper_log.log | default('(no log captured)') }}
+
+          always:
+
+            # It holds the RWO volume open, so a leftover pod blocks the retry.
+            - name: Delete the config copy helper pod
+              kubernetes.core.k8s:
+                state: absent
+                api_version: v1
+                kind: Pod
+                name: "{{ migrate_helper_pod }}"
+                namespace: "{{ migrate_namespace }}"
+                kubeconfig: "{{ k8s_kubeconfig }}"
+
+        - name: Report the staged migration
+          ansible.builtin.debug:
+            msg:
+              - "{{ app }} is staged on {{ migrate_pvc_name }} and scaled to 0."
+              - "{{ migrate_helper_log.log | default('') | trim }}"
+              - "Merge the manifest PR, then restore auto-sync:"
+              - "  argocd app set {{ app }} --sync-policy automated --auto-prune --self-heal"
+              - "The NFS directory is left untouched as the rollback path."
