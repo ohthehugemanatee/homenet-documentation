@@ -34,14 +34,12 @@ Access checks a Service Token (headers set via `.mcp.json`'s env-var interpolati
 at the edge before any request reaches the tunnel, which matters because Claude Code
 environment variables are not a real secrets store (see below).
 
-The original forwarder-based path to `$K8S_API_HOSTNAME` (raw `kubectl` against
-`kubernetes.default.svc:443` through a local `cloudflared access tcp` forwarder)
-still exists as infrastructure — same tunnel, same Access mechanism, untouched by
-this change — but is no longer automated. It's a manual fallback only, for the rare
-case raw `kubectl` is needed beyond what MCP tools cover: see "One-time Cloudflare
-setup" below for how that path was configured; reconstructing the forwarder and a
-kubeconfig by hand runs the same commands the old SessionStart hook used to run
-automatically.
+A second path to `$K8S_API_HOSTNAME` — raw `kubectl` against
+`kubernetes.default.svc:443` through a local `cloudflared access tcp` forwarder — runs
+over the same tunnel and the same Access mechanism, but nothing sets it up
+automatically. It is a manual fallback for the rare case raw `kubectl` is needed beyond
+what MCP tools cover: "One-time Cloudflare setup" below covers its configuration, and
+the forwarder and kubeconfig have to be built by hand (ADR-0004).
 
 ## Read-only scope
 
@@ -77,12 +75,11 @@ widening scope (e.g. handing the token to anything beyond this one use case).
      connection (`.mcp.json`).
    - `K8S_MCP_HOSTNAME` — the kubernetes-mcp-server hostname, used directly in
      `.mcp.json`'s `url`.
-   - `K8S_API_HOSTNAME` — the original tunnel hostname. No longer used by
-     default; only needed for the manual forwarder fallback.
+   - `K8S_API_HOSTNAME` — the API-server tunnel hostname. Needed only for the
+     manual forwarder fallback.
 
-   `K8S_BEARER_TOKEN` is gone — nothing in this repo consumes it anymore. If
-   your Claude Code cloud environment still has it set from before #145, it's
-   safe to delete; it's just ignored otherwise.
+   `K8S_BEARER_TOKEN` is not consumed by anything in this repo; an environment
+   that still sets it is ignoring it (ADR-0004).
 
    **These environment variables are visible to anyone who can edit the Claude Code
    environment configuration — there is no dedicated secrets store.** Every credential

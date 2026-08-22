@@ -30,3 +30,4 @@ Start from [`template.md`](template.md).
 | [0001](0001-decisions-live-in-adr.md) | Architecture decisions live in `adr/` | accepted |
 | [0002](0002-node-ansible-stays-under-cluster.md) | Node Ansible stays under `cluster/ansible/` | accepted |
 | [0003](0003-argocd-supersedes-install-scripts.md) | ArgoCD owns ongoing state; `install.sh` is bootstrap only | accepted |
+| [0004](0004-cloud-sessions-reach-the-cluster-over-mcp.md) | Cloud sessions reach the cluster over MCP | accepted |
