@@ -127,11 +127,26 @@
               - migrate_argocd_app.resources | length == 1
             fail_msg: "no ArgoCD Application {{ app }} in {{ migrate_argocd_namespace }}"
 
-        - name: Ensure the state directory exists
-          ansible.builtin.file:
+        - name: Look for the state directory
+          ansible.builtin.stat:
             path: "{{ migrate_state_dir }}"
-            state: directory
-            mode: "0755"
+          register: migrate_state_dir_stat
+
+        # Do not create it. On shoebox this is a host bind mount owned by the
+        # `ansible` user and group-writable by Semaphore's uid, so Semaphore can
+        # write files into it but cannot chmod the directory itself — and
+        # `file: state=directory` with a mode enforces that chmod on every run
+        # (#264).
+        - name: Assert the state directory exists
+          ansible.builtin.assert:
+            that:
+              - migrate_state_dir_stat.stat.exists
+              - migrate_state_dir_stat.stat.isdir
+              - migrate_state_dir_stat.stat.writeable
+            fail_msg: >-
+              {{ migrate_state_dir }} is not a writable directory. It is
+              provisioned by shoebox/shoebox-ansible-setup.yaml; run that first,
+              or pass -e state_dir=<path> for a local run.
 
         - name: Check for an already-saved sync policy
           ansible.builtin.stat:
