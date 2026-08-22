@@ -826,6 +826,7 @@ exceptions:
     files:
       - cluster/services/delugevpn.yaml
       - cluster/services/jackett.yaml
+      - cluster/services/nzbget.yaml
       - cluster/services/ombi.yaml
       - cluster/services/radarr.yaml
       - cluster/services/sonarr.yaml

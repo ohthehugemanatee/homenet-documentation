@@ -700,7 +700,7 @@ jobs:
           # the ombi shape. SQLite in WAL mode does not work over NFS (#241), so
           # each app joins this set in the PR that converts it. radarr/sonarr are
           # deliberately absent: they overlay only /db and keep /config on NFS.
-          CONFIG_ON_LONGHORN = {"ombi", "jackett", "delugevpn"}
+          CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn"}
           failed = 0
           for app in sorted(CONFIG_ON_LONGHORN):
               bad = 0
