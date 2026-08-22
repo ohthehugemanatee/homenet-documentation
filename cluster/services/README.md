@@ -16,14 +16,18 @@ because the `-shm` file needs real shared memory and NFS advisory locking is not
 enough for the rollback journal. Keeping a database and its WAL on one Longhorn volume also
 means a single snapshot covers both.
 
-`ombi` is the reference shape — whole `/config` on a Longhorn `volumeClaimTemplate`, no
-overlay mount, no app-side path configuration. `radarr`/`sonarr` (`/db`), `plex`
-(`Plug-in Support/Databases`) and `mariadb` (`/config/databases`) instead overlay a Longhorn
-volume onto the database path only, with the rest of `/config` still on NFS.
+`ombi` and `jackett` carry the reference shape — whole `/config` on a Longhorn
+`volumeClaimTemplate`, no overlay mount, no app-side path configuration.
+`radarr`/`sonarr` (`/db`), `plex` (`Plug-in Support/Databases`) and `mariadb`
+(`/config/databases`) instead overlay a Longhorn volume onto the database path only, with
+the rest of `/config` still on NFS.
+
+`cluster/ansible/migrate-config-to-longhorn.yaml` stages the cutover for an app moving to
+the reference shape.
 
 Not yet migrated:
 
-- `jackett`, `nzbget`, `delugevpn`, `calibre` hold SQLite on the `app-configs` NFS PVC (#241).
+- `nzbget`, `delugevpn`, `calibre` hold SQLite on the `app-configs` NFS PVC (#241).
 - `calibre` and `calibre-web` mount the same `subPath: calibre` from two separate
   StatefulSets, so two pods share one SQLite library over NFS (#254).
 - `redis` mounts `app-configs` at `/data` but runs `--appendonly no --save ""`, so it writes

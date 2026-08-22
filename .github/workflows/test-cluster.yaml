@@ -692,6 +692,71 @@ jobs:
             | sort)
           exit "$FAILED"
 
+      - name: Assert whole-/config apps keep /config on Longhorn
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          # Apps whose entire /config lives on a Longhorn volumeClaimTemplate —
+          # the ombi shape. SQLite in WAL mode does not work over NFS (#241), so
+          # each app joins this set in the PR that converts it. radarr/sonarr are
+          # deliberately absent: they overlay only /db and keep /config on NFS.
+          CONFIG_ON_LONGHORN = {"ombi", "jackett"}
+          failed = 0
+          for app in sorted(CONFIG_ON_LONGHORN):
+              bad = 0
+              f = f"cluster/services/{app}.yaml"
+              docs = [d for d in yaml.safe_load_all(open(f)) if isinstance(d, dict)]
+              sts = next((d for d in docs if d.get("kind") == "StatefulSet"
+                          and d["metadata"]["name"] == app), None)
+              if sts is None:
+                  print(f"BAD {f}: no StatefulSet named {app!r} "
+                        "(a volumeClaimTemplate needs a StatefulSet)")
+                  failed = 1
+                  continue
+              spec = sts["spec"]
+              pod = spec["template"]["spec"]
+              vcts = {v["metadata"]["name"]: v for v in spec.get("volumeClaimTemplates") or []}
+              # claimName by pod-volume name, to tell a volumeClaimTemplate mount
+              # apart from one backed by a plain PVC such as app-configs.
+              pod_claims = {v["name"]: (v.get("persistentVolumeClaim") or {}).get("claimName")
+                            for v in pod.get("volumes") or []}
+              mounts = [m for c in pod.get("containers") or []
+                        for m in c.get("volumeMounts") or []
+                        if m["mountPath"].rstrip("/") == "/config"]
+
+              if spec.get("serviceName") != app:
+                  print(f"BAD {f}: serviceName is {spec.get('serviceName')!r}, expected {app!r}")
+                  failed = bad = 1
+              if len(mounts) != 1:
+                  print(f"BAD {f}: expected exactly one /config mount, found {len(mounts)}")
+                  failed = 1
+                  continue
+              mount = mounts[0]
+              if mount["name"] in pod_claims:
+                  print(f"BAD {f}: /config resolves to PVC "
+                        f"{pod_claims[mount['name']]!r}, not a volumeClaimTemplate")
+                  failed = 1
+                  continue
+              if mount["name"] not in vcts:
+                  print(f"BAD {f}: /config mounts {mount['name']!r}, "
+                        "which is neither a pod volume nor a volumeClaimTemplate")
+                  failed = 1
+                  continue
+              # A subPath would split the database from its WAL across volumes,
+              # which is exactly what makes the snapshot non-atomic.
+              if "subPath" in mount:
+                  print(f"BAD {f}: /config mount declares subPath {mount['subPath']!r}; "
+                        "the whole /config moves")
+                  failed = bad = 1
+              sc = vcts[mount["name"]]["spec"].get("storageClassName")
+              if sc != "longhorn":
+                  print(f"BAD {f}: {mount['name']} storageClassName is {sc!r}, expected 'longhorn'")
+                  failed = bad = 1
+              if not bad:
+                  print(f"OK  {f}: /config on longhorn volumeClaimTemplate {mount['name']}")
+          sys.exit(failed)
+          PY
+
       - name: Assert delugevpn WireGuard transport/privilege coupling
         run: |
           python3 - <<'PY'
