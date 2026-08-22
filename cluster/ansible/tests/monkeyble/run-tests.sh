@@ -52,6 +52,30 @@ run_scenario() {
   echo "  PASSED: $1"
 }
 
+# Runs a scenario that must pass, and proves it did the thing under test rather
+# than merely exiting 0. Needed for two cases: a scenario whose subject is a task
+# marked `should_fail` (monkeyble treats the expected failure as a pass, so the
+# playbook still exits 0), and any scenario whose assertions would pass vacuously
+# if the tasks never ran at all.
+# run_scenario_expecting <name> <playbook> <vars_file> <expected regex> [extra args...]
+run_scenario_expecting() {
+  local name=$1 playbook=$2 vars_file=$3 expected=$4
+  shift 4
+  banner "$name"
+  local output
+  output=$(_play "$name" "$playbook" "$vars_file" "$@") || {
+    echo "$output"
+    echo "  ERROR: expected ${name} to pass"
+    exit 1
+  }
+  echo "$output"
+  if ! grep -Eq "$expected" <<<"$output"; then
+    echo "  ERROR: ${name} passed, but the expected evidence is missing: ${expected}"
+    exit 1
+  fi
+  echo "  PASSED: ${name}"
+}
+
 # Same, but the playbook must fail AND its output must match the regex. A bare
 # non-zero exit would also be produced by a typo in the scenario file, so the
 # message is what distinguishes "refused for the right reason".
@@ -156,6 +180,39 @@ run_failing_scenario "migrate_stage_copy_failure" \
   "${SCRIPT_DIR}/test_migrate_stage_copy_failure.yml" \
   "No space left on device" \
   "-e" "app=ombi" "-t" "stage"
+
+# ── Scenarios 6-8: resume and rollback ──────────────────────────────────────
+# stage writes the saved policy; these read it back. Write it here rather than
+# depending on scenario 4 having run, so each scenario stands alone.
+cat > "${STATE_DIR}/migrate-ombi-syncpolicy.json" <<'JSON'
+{
+    "automated": {
+        "prune": true,
+        "selfHeal": true
+    }
+}
+JSON
+
+run_scenario_expecting "migrate_resume_success" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_resume_success.yml" \
+  "ombi is live on ombi-config-ombi-0" \
+  "-e" "app=ombi" "-t" "resume"
+
+# The post-check is the last thing standing between a mis-adopted PVC and an app
+# live on NFS, so prove it fires rather than trusting that it would. The scenario
+# marks the assert `should_fail`, which monkeyble scores as a pass, so the exit
+# code proves nothing here — the failure message is the evidence.
+run_scenario_expecting "migrate_resume_still_on_nfs" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_resume_still_on_nfs.yml" \
+  "/config resolves to PVC 'app-configs', expected 'ombi-config-ombi-0'" \
+  "-e" "app=ombi" "-t" "resume"
+
+run_scenario "migrate_rollback" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_rollback.yml" \
+  "-e" "app=ombi" "-t" "rollback"
 
 echo ""
 echo "All Monkeyble scenarios passed."

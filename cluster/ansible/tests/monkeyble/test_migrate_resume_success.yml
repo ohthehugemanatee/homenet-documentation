@@ -1,0 +1,57 @@
+---
+# Scenario: resume after the manifest PR merged and the StatefulSet came up.
+# Expected: the saved sync policy is restored and the post-checks confirm the
+# pod's /config really resolves to the staged Longhorn PVC.
+
+monkeyble_scenarios:
+  migrate_resume_success:
+    tasks_to_test:
+
+      - task: "Restore ArgoCD auto-sync"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict: {}
+
+      - task: "Wait for the StatefulSet to become ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi}
+                    status: {readyReplicas: 1}
+
+      - task: "Read the running pod"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi-0, namespace: default}
+                    spec:
+                      volumes:
+                        - name: ombi-config
+                          persistentVolumeClaim: {claimName: ombi-config-ombi-0}
+                      containers:
+                        - name: ombi
+                          volumeMounts:
+                            - {name: ombi-config, mountPath: /config}
+
+      - task: "Assert the pod's /config resolves to the staged Longhorn PVC"
+        should_be_skipped: false
+
+      - task: "Look for a leftover Deployment"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Assert the old Deployment is gone"
+        should_be_skipped: false

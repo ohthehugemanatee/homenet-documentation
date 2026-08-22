@@ -139,8 +139,9 @@ cluster from the shoebox controller, so it needs a working `KUBECONFIG`, not SSH
 node. Requires a phase tag — a bare run only does preflight.
 
 ```sh
-# before merging the manifest PR that converts the app to a StatefulSet
-ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t stage
+ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t stage    # before merge
+#   ... merge the manifest PR ...
+ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t resume   # after merge
 ```
 
 `stage` saves the app's ArgoCD sync policy under `state_dir`, suspends auto-sync,
@@ -154,11 +155,20 @@ both fail the play. The playbook deletes the helper pod either way.
 a StatefulSet adopts `<template>-<statefulset>-0` and silently provisions an empty
 volume for any other name. Against an unconverted manifest the playbook refuses to run.
 
-Afterwards, merge the manifest PR and restore auto-sync — ArgoCD applies the
-StatefulSet, which adopts the staged PVC:
+`resume` restores the saved sync policy, which is what makes ArgoCD apply the
+StatefulSet and prune the Deployment: with auto-sync suspended, merging alone
+applies nothing. It then waits for the pod and asserts that its `/config` really
+resolves to the staged PVC. That last check is the point of the phase — a
+StatefulSet that adopted the wrong PVC comes up healthy on an empty volume, so
+nothing else would notice.
+
+Nothing writes to the NFS directory, so reverting the manifest PR is the
+rollback. After the revert:
 
 ```sh
-argocd app set jackett --sync-policy automated --auto-prune --self-heal
+ansible-playbook migrate-config-to-longhorn.yaml -e app=jackett -t rollback
 ```
 
-Nothing writes to the NFS directory, so reverting the manifest PR is the rollback.
+That restores the sync policy and waits for the Deployment to come back on NFS.
+It leaves the Longhorn PVC in place and prints the `kubectl delete pvc` command
+instead of running it.

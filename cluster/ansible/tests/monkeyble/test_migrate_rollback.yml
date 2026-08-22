@@ -1,0 +1,27 @@
+---
+# Scenario: rollback after the manifest PR was reverted.
+# Expected: the saved sync policy is restored so ArgoCD recreates the Deployment
+# on NFS. The staged Longhorn PVC is NOT deleted — that is destructive and stays
+# a deliberate manual step, so no delete task may run here.
+
+monkeyble_scenarios:
+  migrate_rollback:
+    tasks_to_test:
+
+      - task: "Restore ArgoCD auto-sync after rollback"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict: {}
+
+      - task: "Wait for the Deployment to become ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: ombi}
+                    status: {readyReplicas: 1}
