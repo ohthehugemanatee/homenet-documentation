@@ -1,6 +1,6 @@
 # cluster/CLAUDE.md — shared Kubernetes foundation
 
-Loaded for every directory under `cluster/`. The root `CLAUDE.md` covers cross-cutting workflow + secrets + universal lint; this file adds Kubernetes-specific foundation that `services/`, `helm/`, `storage/`, and the thin K8s-resource dirs (`ConfigMaps/`, `jobs/`, `ingress-only/`, etc.) all rely on. `cluster/ansible/` inherits it as well; its content is largely K8s-irrelevant for OS-provisioning, which is the cost of not hoisting `cluster/ansible/` to root `/ansible/` in this PR.
+Loaded for every directory under `cluster/`. The root `CLAUDE.md` covers cross-cutting workflow + secrets + universal lint; this file adds Kubernetes-specific foundation that `services/`, `helm/`, `storage/`, and the thin K8s-resource dirs (`ConfigMaps/`, `jobs/`, `ingress-only/`, etc.) all rely on. `cluster/ansible/` inherits it too, though its OS-provisioning content is largely K8s-irrelevant (ADR-0002); `cluster/ansible/CLAUDE.md` is the authority for that subtree.
 
 ## Manifest foundation
 

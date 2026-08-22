@@ -180,11 +180,10 @@ credentials here. Keep the Secret only as long as you want the old single-accoun
 ## GitOps
 
 [`cluster/argocd/apps/nextcloud-mcp-server.yaml`](cluster/argocd/apps/nextcloud-mcp-server.yaml)
-is a manual-sync Application (`helm.releaseName: nextcloud-mcp`) — this workload was
-originally installed by hand (`helm install`) before being brought under GitOps, so
-manual sync matches `kubernetes-mcp-server`'s tier: single-pod utility, not complex
-stateful infra, but still worth watching the first sync of a version bump rather than
-letting `automated`/`selfHeal` apply it unattended.
+is a manual-sync Application (`helm.releaseName: nextcloud-mcp`), the same tier as
+`kubernetes-mcp-server`: single-pod utility, not complex stateful infra. It holds a
+Secret and a PVC, so a version bump is worth watching through its first sync rather
+than letting `automated`/`selfHeal` apply it unattended.
 
 [`cluster/argocd/apps/nextcloud-mcp-basic.yaml`](cluster/argocd/apps/nextcloud-mcp-basic.yaml)
 is auto-sync (`prune` + `selfHeal`, with the finalizer). The tier differs because the
