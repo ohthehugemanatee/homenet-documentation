@@ -1,0 +1,46 @@
+---
+# Longhorn recurring jobs, transcribed from the live cluster (#209).
+#
+# Names match the live RecurringJob CRs exactly, so `kubectl apply` adopts the
+# running schedule instead of creating a duplicate one. See README.md for the
+# audit these came from, and CLAUDE.md before editing.
+#
+# The weekly `backups` job (task: backup) is NOT here yet — see README.md.
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshots2
+  namespace: longhorn-system
+spec:
+  cron: "33 4 * * ?"
+  task: snapshot
+  groups:
+    - default
+  retain: 7
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: snapshot-cleanup
+  namespace: longhorn-system
+spec:
+  cron: "3 3 * * *"
+  task: snapshot-cleanup
+  groups:
+    - default
+  retain: 0
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: fs-trim
+  namespace: longhorn-system
+spec:
+  cron: "0 5 */6 * *"
+  task: filesystem-trim
+  groups:
+    - default
+  retain: 0
+  concurrency: 1

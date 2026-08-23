@@ -40,4 +40,5 @@ mount is the root of shoebox's storage device, so it covers the backup target an
 A Longhorn snapshot is not a backup. Snapshots live on the volume's own replicas, so a dead
 node takes its snapshots with it — only the backup-target copy is durable.
 
-Longhorn's snapshot and backup schedule is configured in the Longhorn UI, not in git (#209).
+The daily snapshot, snapshot-cleanup and filesystem-trim schedules are in git at
+`cluster/longhorn/recurring-jobs.yaml`. The weekly backup job is still UI-only (#209).
