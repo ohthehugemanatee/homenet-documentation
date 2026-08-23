@@ -1,0 +1,72 @@
+---
+# Documented homelab tradeoffs. Consult before "fixing" a finding here.
+# `paths` match relative to the scanned dir, so use a `**/` glob: a literal
+# prefix fails open if the scan root moves. Omit `paths` for repo-wide.
+misconfigurations:
+  - id: KSV-0118
+    statement: >-
+      linuxserver images set the runtime user via PUID/PGID env vars processed
+      by s6-overlay, not via securityContext.runAsNonRoot. Adding
+      runAsNonRoot: false would be misleading documentation; setting it true
+      breaks PUID/PGID entirely.
+
+  - id: DS-0002
+    statement: >-
+      linuxserver images must start as root so s6-overlay can write to
+      /etc/passwd and /etc/group to apply PUID/PGID. Running as non-root
+      disables PUID/PGID entirely, breaking NFS UID 1001 access.
+
+  - id: KSV-0014
+    statement: >-
+      linuxserver read-only mode disables PUID/PGID (falls back to UID 911),
+      breaking NFS filesystem access. All workloads use linuxserver or similar
+      images that legitimately write to their root filesystems for runtime
+      state.
+
+  - id: KSV-0009
+    statement: >-
+      nodelocaldns requires hostNetwork to bind to the node loopback for DNS
+      interception. This is the only supported deployment method for node-local
+      DNS caching.
+
+  - id: KSV-0017
+    statement: >-
+      nodelocaldns needs privileged to manage iptables rules. Also covers
+      delugevpn (cluster/services/delugevpn.yaml): the binhex WireGuard client
+      runs wg-quick, which sets net.ipv4.conf.all.src_valid_mark in the pod
+      netns and so needs a rw /proc/sys. privileged is the upstream-documented
+      requirement (binhex/arch-delugevpn#wireguard); NET_ADMIN alone is not
+      enough.
+
+  - id: KSV-0041
+    statement: >-
+      cert-manager legitimately needs to read/write Secrets — that is how it
+      stores TLS certificates. From the upstream vendor installer; intentional.
+
+  - id: KSV-0056
+    statement: >-
+      cert-manager legitimately manages webhook configurations. From the
+      upstream vendor installer; intentional.
+
+  - id: KSV-0114
+    statement: >-
+      cert-manager legitimately manages webhook configurations. From the
+      upstream vendor installer; intentional.
+
+  - id: KSV-0119
+    statement: >-
+      kube-vip's control-plane DaemonSet needs NET_RAW to emit the gratuitous
+      ARP that claims the floating VIP on the node's L2 segment.
+      NET_ADMIN+NET_RAW with hostNetwork is the upstream-prescribed ARP mode
+      (cluster/kube-vip/kube-vip.yaml); dropping NET_RAW breaks the VIP. Same
+      accepted-tradeoff class as nodelocaldns.
+
+  - id: KSV-0046
+    paths:
+      - "**/claude-remote-debug-rbac.yaml"
+    statement: >-
+      KSV-0046 matches `resources: ["*"]` regardless of verbs, so a read-only
+      wildcard scores the same as a write one. claude-remote-debug-extended-read
+      grants get/list/watch only and omits the core API group, so Secrets stay
+      unreadable. Scoped to this file so the rule still catches a wildcard
+      paired with write verbs elsewhere.
