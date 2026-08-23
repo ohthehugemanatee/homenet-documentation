@@ -23,6 +23,22 @@
     migrate_owner: "1000:1000"
     migrate_copy_timeout: 900
     migrate_rollout_timeout: 600
+    # Workloads to stop before the copy. calibre stages two, and both are
+    # StatefulSets rather than Deployments.
+    migrate_scale_targets:
+      - kind: Deployment
+        name: "{{ app | default('') }}"
+    # Directories to seed on the new volume, as {subpath, dest} pairs read from
+    # the source PVC. The default copies the app's own subPath to the volume
+    # root; calibre seeds two named directories on one volume instead.
+    migrate_sources:
+      - subpath: "{{ app | default('') }}"
+        dest: "."
+    # Delete the scale targets after a verified copy. Needed only when the
+    # workload exists in a shape the new spec cannot update in place — adding
+    # volumeClaimTemplates to a StatefulSet is a forbidden update. Off by
+    # default: everything else this playbook deletes is a pod it created.
+    migrate_replace_workloads: false
     migrate_manifest: "{{ playbook_dir }}/../services/{{ app | default('') }}.yaml"
     migrate_helper_pod: "{{ app | default('') }}-config-migrate"
     # group_vars/all.yaml is not loaded for the implicit localhost, so carry the
@@ -69,14 +85,29 @@
 
         # Same invariants test-cluster.yaml asserts, so CI and this playbook
         # cannot disagree about what "migrated" means.
-        - name: Assert the manifest is in the migrated shape
+        - name: Assert the volume claim template is on Longhorn
           ansible.builtin.assert:
             that:
               - migrate_sts | length > 0
               - (migrate_sts.spec.volumeClaimTemplates | default([])) | length == 1
               - migrate_pvc_template.spec.storageClassName == 'longhorn'
-              - migrate_config_mounts | length == 1
-              - migrate_config_mounts[0].name == migrate_pvc_template.metadata.name
+              - migrate_config_mounts | length > 0
+              - migrate_config_mounts
+                | rejectattr('name', 'equalto', migrate_pvc_template.metadata.name)
+                | list | length == 0
+            fail_msg: >-
+              {{ migrate_manifest }} needs a StatefulSet named {{ app }} with
+              exactly one longhorn volumeClaimTemplate, and every /config mount
+              on it. Run this from a checkout of the branch that converts it.
+
+        # Only the whole-/config shape forbids a subPath, and the manifest says
+        # which shape this is — a merged pod mounts /config once per container.
+        # Those subPaths stay inside one volume, so a snapshot still covers the
+        # database and its WAL together.
+        - name: Assert the manifest is in the migrated shape
+          when: migrate_config_mounts | length == 1
+          ansible.builtin.assert:
+            that:
               - migrate_config_mounts[0].subPath is not defined
             fail_msg: >-
               {{ migrate_manifest }} is not in the migrated shape: it needs a
@@ -176,25 +207,31 @@
                   automated: null
             kubeconfig: "{{ k8s_kubeconfig }}"
 
-        - name: Look for the app's Deployment
+        - name: Look for the workloads to scale down
           kubernetes.core.k8s_info:
-            kind: Deployment
-            name: "{{ app }}"
+            kind: "{{ item.kind }}"
+            name: "{{ item.name }}"
             namespace: "{{ migrate_namespace }}"
             kubeconfig: "{{ k8s_kubeconfig }}"
-          register: migrate_deployment
+          loop: "{{ migrate_scale_targets }}"
+          loop_control:
+            label: "{{ item.kind }}/{{ item.name }}"
+          register: migrate_workloads
           changed_when: false
 
         # Absent on a re-run after a partial stage, which must stay re-runnable.
-        - name: Scale the Deployment to zero
+        - name: Scale the workload to zero
           kubernetes.core.k8s_scale:
-            kind: Deployment
-            name: "{{ app }}"
+            kind: "{{ item.item.kind }}"
+            name: "{{ item.item.name }}"
             namespace: "{{ migrate_namespace }}"
             replicas: 0
             wait: true
             kubeconfig: "{{ k8s_kubeconfig }}"
-          when: migrate_deployment.resources | length > 0
+          loop: "{{ migrate_workloads.results }}"
+          loop_control:
+            label: "{{ item.item.kind }}/{{ item.item.name }}"
+          when: item.resources | length > 0
 
         - name: Create the Longhorn PVC the StatefulSet will adopt
           kubernetes.core.k8s:
@@ -209,6 +246,20 @@
                   homenet.vertesi.com/migrated-from: "{{ migrate_source_claim }}"
               spec: "{{ migrate_pvc_template.spec }}"
             kubeconfig: "{{ k8s_kubeconfig }}"
+
+        # One read-only mount per source, each scoped to its own subPath, so the
+        # helper pod never sees another app's config.
+        - name: Build the helper pod's source mounts
+          ansible.builtin.set_fact:
+            migrate_src_mounts: >-
+              {{ (migrate_src_mounts | default([]))
+                 + [{'name': 'src',
+                     'mountPath': '/src/' ~ item.subpath,
+                     'subPath': item.subpath,
+                     'readOnly': true}] }}
+          loop: "{{ migrate_sources }}"
+          loop_control:
+            label: "{{ item.subpath }}"
 
         - name: Copy the config into the Longhorn volume
           block:
@@ -239,23 +290,28 @@
                           - -c
                           - |
                             set -e
-                            cp -a /src/. /dst/
-                            chown -R {{ migrate_owner }} /dst
-                            cd /src && find . -type f -exec sha256sum {} + | sort > /tmp/src.sums
-                            cd /dst && find . -type f -exec sha256sum {} + | sort > /tmp/dst.sums
-                            test -s /tmp/src.sums || {
-                              echo "source is empty - wrong subPath?" >&2
+                            total=0
+                            {% for c in migrate_sources %}
+                            mkdir -p "/dst/{{ c.dest }}"
+                            cp -a "/src/{{ c.subpath }}/." "/dst/{{ c.dest }}/"
+                            ( cd "/src/{{ c.subpath }}" \
+                              && find . -type f -exec sha256sum {} + | sort ) > /tmp/s
+                            ( cd "/dst/{{ c.dest }}" \
+                              && find . -type f -exec sha256sum {} + | sort ) > /tmp/d
+                            test -s /tmp/s || {
+                              echo "/src/{{ c.subpath }} is empty - wrong subPath?" >&2
                               exit 1
                             }
-                            diff /tmp/src.sums /tmp/dst.sums
-                            echo "copied $(wc -l < /tmp/dst.sums) files"
-                        volumeMounts:
-                          - name: src
-                            mountPath: /src
-                            subPath: "{{ app }}"
-                            readOnly: true
-                          - name: dst
-                            mountPath: /dst
+                            diff /tmp/s /tmp/d
+                            n=$(wc -l < /tmp/d)
+                            total=$((total + n))
+                            echo "{{ c.subpath }}: $n files"
+                            {% endfor %}
+                            chown -R {{ migrate_owner }} /dst
+                            echo "copied $total files"
+                        volumeMounts: >-
+                          {{ migrate_src_mounts
+                             + [{'name': 'dst', 'mountPath': '/dst'}] }}
                         resources:
                           requests:
                             cpu: 100m
@@ -315,6 +371,22 @@
                 name: "{{ migrate_helper_pod }}"
                 namespace: "{{ migrate_namespace }}"
                 kubeconfig: "{{ k8s_kubeconfig }}"
+
+        # Adding volumeClaimTemplates to an existing StatefulSet is a forbidden
+        # in-place update, so the old workload has to go before the new spec can
+        # apply. Only runs after the copy has been verified.
+        - name: Delete the workloads so the new spec can apply
+          kubernetes.core.k8s:
+            state: absent
+            api_version: apps/v1
+            kind: "{{ item.kind }}"
+            name: "{{ item.name }}"
+            namespace: "{{ migrate_namespace }}"
+            kubeconfig: "{{ k8s_kubeconfig }}"
+          loop: "{{ migrate_scale_targets }}"
+          loop_control:
+            label: "{{ item.kind }}/{{ item.name }}"
+          when: migrate_replace_workloads | bool
 
         - name: Report the staged migration
           ansible.builtin.debug:
@@ -384,12 +456,15 @@
                  | map(attribute='volumeMounts', default=[]) | flatten
                  | selectattr('mountPath', 'equalto', '/config') | list }}
 
-        - name: Resolve the claim backing /config
+        # Every /config mount, not just the first: a pod can mount it once per
+        # container, and all of them must be on the staged volume.
+        - name: Resolve the claims backing /config
           ansible.builtin.set_fact:
-            migrate_config_claim: >-
-              {{ migrate_running_claims.get(
-                   (migrate_running_mounts | first | default({}, true)).get('name', ''), {}
-                 ).get('claimName', '(none)') }}
+            migrate_config_claims: >-
+              {{ migrate_running_mounts
+                 | map(attribute='name')
+                 | map('extract', migrate_running_claims, 'claimName')
+                 | select('string') | list | unique }}
 
         # The check that catches a mis-adopted PVC. The app is up either way, so
         # nothing else would notice — and for jackett, "up on the wrong volume"
@@ -397,10 +472,11 @@
         - name: Assert the pod's /config resolves to the staged Longhorn PVC
           ansible.builtin.assert:
             that:
-              - migrate_running_mounts | length == 1
-              - migrate_config_claim == migrate_pvc_name
+              - migrate_running_mounts | length > 0
+              - migrate_config_claims == [migrate_pvc_name]
             fail_msg: >-
-              {{ app }}-0: /config resolves to PVC '{{ migrate_config_claim }}',
+              {{ app }}-0: /config resolves to PVC
+              '{{ migrate_config_claims | join("', '") | default('(none)', true) }}',
               expected '{{ migrate_pvc_name }}'
 
         - name: Look for a leftover Deployment

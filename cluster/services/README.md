@@ -29,14 +29,14 @@ inside one volume, so a snapshot still covers the library and its WAL together. 
 not an option: they would have to share the library over a network filesystem, which is the
 hazard being removed, and a Longhorn RWO volume cannot be mounted twice.
 
-`cluster/ansible/migrate-config-to-longhorn.yaml` stages the cutover for an app moving to
-the reference shape. `calibre` was moved by hand, since the playbook derives a single
-`/config` volume per app.
+`cluster/ansible/migrate-config-to-longhorn.yaml` stages the cutover for an app moving onto
+Longhorn, in either shape. An app seeding several directories on one volume passes
+`migrate_sources` and `migrate_scale_targets`; see that playbook's README for calibre's
+invocation.
 
-Not yet migrated:
-
-- `redis` mounts `app-configs` at `/data` but runs `--appendonly no --save ""`, so it writes
-  nothing (#255).
+The #241 audit list is closed: no app keeps a SQLite database on `app-configs` any more.
+What still mounts it holds configuration whose database already sits on Longhorn
+(`radarr`/`sonarr`/`plex`/`mariadb`) or no database at all.
 
 ## Backups
 

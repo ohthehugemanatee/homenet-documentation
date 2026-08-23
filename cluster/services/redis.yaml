@@ -32,10 +32,6 @@ spec:
         ports:
           - name: redis-server
             containerPort: 6379
-        volumeMounts:
-          - name: nfs-config
-            subPath: "redis"
-            mountPath: "/data"
         livenessProbe:
           exec:
             command:
@@ -53,10 +49,6 @@ spec:
         env:
           - name: ALLOW_EMPTY_PASSWORD
             value: "yes"
-      volumes:
-        - name: nfs-config
-          persistentVolumeClaim:
-            claimName: app-configs
 ---
 
 apiVersion: v1

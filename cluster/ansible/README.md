@@ -150,6 +150,27 @@ a helper pod. That pod verifies its own work with a sorted `sha256sum` diff over
 source and destination, so a truncated copy and leftovers from an earlier partial run
 both fail the play. The playbook deletes the helper pod either way.
 
+An app that seeds several directories on one volume passes them explicitly.
+`calibre` runs both its containers from one volume, so it stages two subPaths
+and stops two workloads:
+
+```sh
+ansible-playbook migrate-config-to-longhorn.yaml -e app=calibre -t stage \
+  -e '{"migrate_sources":[{"subpath":"calibre","dest":"calibre"},
+                          {"subpath":"calibre-web","dest":"calibre-web"}],
+       "migrate_scale_targets":[{"kind":"StatefulSet","name":"calibre"},
+                                {"kind":"StatefulSet","name":"calibre-web"}],
+       "migrate_replace_workloads":true}'
+```
+
+`migrate_replace_workloads` deletes those workloads once the copy verifies.
+calibre needs it because adding a `volumeClaimTemplate` to a StatefulSet that
+already exists is a forbidden in-place update, so the old object has to go
+before the new spec can apply. It is off by default: every other object this
+playbook deletes is a helper pod it created itself.
+
+`resume` needs no extra arguments for either shape — it reads the manifest.
+
 **Run it from a checkout of the branch that converts the app.** Preflight reads
 `cluster/services/<app>.yaml` and derives the PVC name from its `volumeClaimTemplate`:
 a StatefulSet adopts `<template>-<statefulset>-0` and silently provisions an empty
