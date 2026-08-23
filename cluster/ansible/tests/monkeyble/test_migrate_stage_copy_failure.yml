@@ -31,7 +31,7 @@ monkeyble_scenarios:
       - task: "Suspend ArgoCD auto-sync"
         mock: *changed
 
-      - task: "Look for the app's Deployment"
+      - task: "Look for the workloads to scale down"
         mock:
           config:
             hpe.monkeyble.monkeyble_module:
@@ -41,7 +41,7 @@ monkeyble_scenarios:
 
       # Already pruned by an earlier partial stage — skipping keeps stage
       # re-runnable instead of failing on a missing Deployment.
-      - task: "Scale the Deployment to zero"
+      - task: "Scale the workload to zero"
         should_be_skipped: true
 
       - task: "Create the Longhorn PVC the StatefulSet will adopt"

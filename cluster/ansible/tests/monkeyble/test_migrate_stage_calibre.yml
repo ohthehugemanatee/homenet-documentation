@@ -1,11 +1,9 @@
 ---
-# Scenario: stage the ombi cutover end to end.
-# ombi already carries the migrated shape, so preflight parses a real manifest —
-# this scenario pins cluster/services/ombi.yaml as much as it does the playbook.
-# Expected: sync policy saved, Deployment scaled to 0, PVC created from the
-# volumeClaimTemplate, helper pod runs and is cleaned up.
+# Scenario: stage the calibre cutover — two workloads down, two source subPaths
+# seeded onto one Longhorn volume, then both workloads deleted because adding
+# volumeClaimTemplates to an existing StatefulSet is a forbidden in-place update.
+# Runs against the real cluster/services/calibre.yaml, so it pins that shape too.
 
-# Most mocks just stand in for a k8s write. Anchor the two shapes once.
 x_mocks:
   - &changed
     config:
@@ -14,7 +12,7 @@ x_mocks:
         result_dict: {}
 
 monkeyble_scenarios:
-  migrate_stage_success:
+  migrate_stage_calibre:
     tasks_to_test:
 
       - task: "Read the ArgoCD Application"
@@ -24,25 +22,23 @@ monkeyble_scenarios:
               consider_changed: false
               result_dict:
                 resources:
-                  - metadata: {name: ombi, namespace: argocd}
+                  - metadata: {name: calibre, namespace: argocd}
                     spec:
                       syncPolicy:
                         automated: {prune: true, selfHeal: true}
 
-      # The whole point of parsing the manifest instead of taking the PVC name as
-      # a variable: a StatefulSet adopts <template>-<sts>-0 and silently
-      # provisions an empty volume for anything else.
       - task: "Derive the PVC the StatefulSet will adopt"
         test_output:
           - assert_equal:
               result_key: result.ansible_facts.migrate_pvc_name
-              expected: "ombi-config-ombi-0"
+              expected: "calibre-config-calibre-0"
 
-      # Asserts the parsed manifest cleared preflight rather than being skipped.
+      # calibre uses subPaths inside one volume, so the whole-/config shape
+      # assert must not run for it.
       - task: "Assert the manifest is in the migrated shape"
-        should_be_skipped: false
+        should_be_skipped: true
 
-      - task: "Assert the StatefulSet has a single replica"
+      - task: "Assert the volume claim template is on Longhorn"
         should_be_skipped: false
 
       - task: "Suspend ArgoCD auto-sync"
@@ -55,10 +51,8 @@ monkeyble_scenarios:
               consider_changed: false
               result_dict:
                 resources:
-                  - metadata: {name: ombi, namespace: default}
-                    spec: {replicas: 1}
+                  - metadata: {name: calibre, namespace: default}
 
-      # The Deployment exists, so the scale-down must not be skipped.
       - task: "Scale the workload to zero"
         should_be_skipped: false
         mock: *changed
@@ -76,7 +70,7 @@ monkeyble_scenarios:
               consider_changed: false
               result_dict:
                 resources:
-                  - metadata: {name: ombi-config-migrate}
+                  - metadata: {name: calibre-config-migrate}
                     status: {phase: Succeeded}
 
       - task: "Read the config copy helper pod log"
@@ -85,12 +79,16 @@ monkeyble_scenarios:
             hpe.monkeyble.monkeyble_module:
               consider_changed: false
               result_dict:
-                log: "copied 42 files\n"
+                log: "calibre: 120 files\ncalibre-web: 8 files\ncopied 128 files\n"
 
       - task: "Assert the config copy succeeded"
         should_be_skipped: false
 
-      # always: block — the helper pod holds the RWO volume, so it must go.
       - task: "Delete the config copy helper pod"
+        should_be_skipped: false
+        mock: *changed
+
+      # Opt-in, and calibre is the only caller that sets it.
+      - task: "Delete the workloads so the new spec can apply"
         should_be_skipped: false
         mock: *changed
