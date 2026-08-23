@@ -27,7 +27,9 @@ record it as a gap in `README.md` — as `backups` is today.
 Foundation (namespace rules, kubeconform, kube-score, polaris) is in
 `cluster/CLAUDE.md`. Longhorn CRDs have no schema in the kubeconform store, so
 `--ignore-missing-schemas` skips these CRs — their structural checks come from
-`.github/scripts/check_recurring_jobs.py` instead.
+`.github/scripts/check_recurring_jobs.py` instead. The k3d dry-run excludes
+`recurring-jobs.yaml` for the same reason: no Longhorn install, so no CRD to
+validate against (as with `elasticsearch.yaml` and `probe-alerts.yaml`).
 
 ```sh
 yamllint cluster/longhorn/
