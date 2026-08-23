@@ -1,7 +1,7 @@
 ---
 # Documented homelab tradeoffs. Consult before "fixing" a finding here.
-# `paths` are relative to the scanned dir (CI scans `cluster`), and a wrong
-# prefix fails open. Omit `paths` to apply an entry repo-wide.
+# `paths` match relative to the scanned dir, so use a `**/` glob: a literal
+# prefix fails open if the scan root moves. Omit `paths` for repo-wide.
 misconfigurations:
   - id: KSV-0118
     statement: >-
@@ -63,7 +63,7 @@ misconfigurations:
 
   - id: KSV-0046
     paths:
-      - "services/claude-remote-debug-rbac.yaml"
+      - "**/claude-remote-debug-rbac.yaml"
     statement: >-
       KSV-0046 matches `resources: ["*"]` regardless of verbs, so a read-only
       wildcard scores the same as a write one. claude-remote-debug-extended-read
