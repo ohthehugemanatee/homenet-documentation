@@ -138,12 +138,7 @@ jobs:
           kubectl apply -f cluster/priorityClasses/
 
       - name: Install Longhorn CRDs (schema only, no controllers)
-        # `kubectl auth can-i list recurringjobs.longhorn.io` resolves the API
-        # group through discovery. With no CRD registered, kubectl falls back to
-        # an empty group and the check silently answers about the wrong
-        # resource, so the auth matrix below would pass while proving nothing.
-        # CRDs alone are enough — no Longhorn pods, no storage, no controllers.
-        # Version comes from git, like the cert-manager chart above.
+        # auth can-i needs registered CRDs.
         run: |
           REF=$(grep -o 'longhorn/[0-9a-f]\{40\}/deploy' cluster/longhorn/install.sh \
             | cut -d/ -f2)
@@ -173,12 +168,11 @@ jobs:
           test "$(kubectl auth can-i create pods/exec --as="$SA")" = no
           test "$(kubectl auth can-i delete pods --as="$SA")" = no
 
-          # The one thing that must never become readable, in any group.
+          # Never readable.
           test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
           test "$(kubectl auth can-i list secrets --as="$SA" -A)" = no
 
-          # Custom resources and the built-in groups `view` omits: readable.
-          # These are what make cluster state debuggable at all.
+          # CRDs and view's blind spots.
           for r in customresourcedefinitions.apiextensions.k8s.io \
                    storageclasses.storage.k8s.io \
                    clusterroles.rbac.authorization.k8s.io \
@@ -197,11 +191,6 @@ jobs:
           echo "claude-remote-debug auth matrix OK"
 
       - name: Assert no API group is missing from the extended-read role
-        # `resources: ["*"]` covers new kinds inside a listed group, but a new
-        # operator brings a new *group*, which would silently 403 in a debugging
-        # session. Compare the role against what the cluster actually serves so
-        # the list cannot quietly go stale. Core ("v1") is excluded on purpose:
-        # it is served by `view`, and adding it here would grant Secrets.
         run: |
           kubectl api-versions | sed 's|/.*||' | sort -u | grep -v '^v1$' \
             > /tmp/cluster-groups.txt

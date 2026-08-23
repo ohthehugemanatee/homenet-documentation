@@ -1,13 +1,7 @@
 ---
 # Documented homelab tradeoffs. Consult before "fixing" a finding here.
-#
-# Entries without `paths` apply repo-wide, matching the plain `.trivyignore`
-# this replaced. Give an entry `paths` when the tradeoff is specific to one
-# file, so the rule keeps firing everywhere else.
-#
-# `paths` are relative to the directory trivy scans, not to the repo root. CI
-# scans `cluster`, so the prefix is `services/...`, not `cluster/services/...`.
-# Getting that wrong fails open: the finding simply reappears.
+# `paths` are relative to the scanned dir (CI scans `cluster`), and a wrong
+# prefix fails open. Omit `paths` to apply an entry repo-wide.
 misconfigurations:
   - id: KSV-0118
     statement: >-
@@ -67,18 +61,12 @@ misconfigurations:
       (cluster/kube-vip/kube-vip.yaml); dropping NET_RAW breaks the VIP. Same
       accepted-tradeoff class as nodelocaldns.
 
-  # Scoped deliberately: KSV-0046 matches `resources: ["*"]` regardless of
-  # verbs — a read-only wildcard and a write wildcard score identically — so
-  # the finding's premise (full control, root on nodes, access to all pods,
-  # secrets and data) does not hold for this role. It grants get/list/watch
-  # only, and omits the core API group so Secrets stay unreadable. Keeping the
-  # rule live everywhere else means a ClusterRole that pairs a wildcard with
-  # write verbs still fails CI.
   - id: KSV-0046
     paths:
       - "services/claude-remote-debug-rbac.yaml"
     statement: >-
-      claude-remote-debug-extended-read grants read-only access across every
-      non-core API group so cluster state is debuggable from a remote session
-      (see remote-debugging.md). Read verbs only; core group excluded, so
-      Secrets remain unreadable.
+      KSV-0046 matches `resources: ["*"]` regardless of verbs, so a read-only
+      wildcard scores the same as a write one. claude-remote-debug-extended-read
+      grants get/list/watch only and omits the core API group, so Secrets stay
+      unreadable. Scoped to this file so the rule still catches a wildcard
+      paired with write verbs elsewhere.
