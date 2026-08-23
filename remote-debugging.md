@@ -53,6 +53,26 @@ server rather than Prometheus/Grafana.
 for secret-adjacent data, since anything in one is now readable from a Claude Code
 session.
 
+`view` covers built-in resources in a handful of groups. Every CRD reads 403
+under it, as do StorageClasses, RBAC objects, the CRD definitions, and
+`metrics.k8s.io` (which backs `kubectl top` and the MCP server's `pods_top` /
+`nodes_top`). Auditing the Longhorn backup schedule for #209 could not read a
+`RecurringJob` at all, and reconstructed it from generated CronJobs and job logs.
+
+A second ClusterRole, `claude-remote-debug-extended-read`, grants
+`get`/`list`/`watch` on every resource in every API group except core. Still not
+granted: any write verb, `pods/exec`, and Secrets in any group.
+
+Core is omitted deliberately. RBAC has no deny rule, so a wildcard `apiGroups`
+would hand over Secrets too; core reads come from the `view` binding, which
+already excludes them. Omitting core is what keeps Secrets unreadable, so never
+add `""` or `"*"` to that role. CI asserts both.
+
+`resources: ["*"]` covers a new kind inside a listed group. A new operator brings
+a new group, which has to be added to
+`cluster/services/claude-remote-debug-rbac.yaml` by hand. CI compares the role
+against the groups the cluster serves and fails on any it misses.
+
 **Privacy note:** `view` grants `get pods/log` cluster-wide, and a session with a
 valid token can read live logs from every workload — Plex, Nextcloud, Unifi,
 delugevpn, etc. Those logs can contain personal viewing/download activity and

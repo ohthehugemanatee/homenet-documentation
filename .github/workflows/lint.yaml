@@ -308,5 +308,6 @@ jobs:
           trivy config \
             --exit-code 1 \
             --severity CRITICAL,HIGH \
+            --ignorefile .trivyignore.yaml \
             --skip-files "cluster/services/cert-manager.yaml" \
             cluster

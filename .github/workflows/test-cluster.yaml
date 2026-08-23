@@ -137,6 +137,27 @@ jobs:
           done
           kubectl apply -f cluster/priorityClasses/
 
+      - name: Install Longhorn CRDs (schema only, no controllers)
+        # auth can-i needs registered CRDs.
+        run: |
+          REF=$(grep -o 'longhorn/[0-9a-f]\{40\}/deploy' cluster/longhorn/install.sh \
+            | cut -d/ -f2)
+          echo "longhorn ref: ${REF}"
+          curl -fsSL \
+            "https://raw.githubusercontent.com/longhorn/longhorn/${REF}/deploy/longhorn.yaml" \
+            -o /tmp/longhorn.yaml
+          python3 - <<'PY' > /tmp/longhorn-crds.yaml
+          import yaml
+          docs = [d for d in yaml.safe_load_all(open('/tmp/longhorn.yaml'))
+                  if d and d.get('kind') == 'CustomResourceDefinition']
+          assert docs, 'no CRDs found in the pinned longhorn.yaml'
+          print(yaml.dump_all(docs))
+          PY
+          kubectl apply --server-side -f /tmp/longhorn-crds.yaml
+          kubectl wait --for condition=established --timeout=60s \
+            crd/recurringjobs.longhorn.io crd/backuptargets.longhorn.io \
+            crd/volumes.longhorn.io crd/settings.longhorn.io
+
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
           kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
@@ -144,10 +165,53 @@ jobs:
           test "$(kubectl auth can-i list pods --as="$SA")" = yes
           test "$(kubectl auth can-i get pods/log --as="$SA")" = yes
           test "$(kubectl auth can-i list events --as="$SA" -A)" = yes
-          test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
           test "$(kubectl auth can-i create pods/exec --as="$SA")" = no
           test "$(kubectl auth can-i delete pods --as="$SA")" = no
+
+          # Never readable.
+          test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
+          test "$(kubectl auth can-i list secrets --as="$SA" -A)" = no
+
+          # CRDs and view's blind spots.
+          for r in customresourcedefinitions.apiextensions.k8s.io \
+                   storageclasses.storage.k8s.io \
+                   clusterroles.rbac.authorization.k8s.io \
+                   priorityclasses.scheduling.k8s.io \
+                   certificates.cert-manager.io \
+                   recurringjobs.longhorn.io \
+                   backuptargets.longhorn.io \
+                   volumes.longhorn.io \
+                   settings.longhorn.io; do
+            test "$(kubectl auth can-i list "$r" --as="$SA" -A)" = yes
+            test "$(kubectl auth can-i get "$r" --as="$SA" -A)" = yes
+            test "$(kubectl auth can-i create "$r" --as="$SA" -A)" = no
+            test "$(kubectl auth can-i delete "$r" --as="$SA" -A)" = no
+            test "$(kubectl auth can-i patch "$r" --as="$SA" -A)" = no
+          done
           echo "claude-remote-debug auth matrix OK"
+
+      - name: Assert no API group is missing from the extended-read role
+        run: |
+          kubectl api-versions | sed 's|/.*||' | sort -u | grep -v '^v1$' \
+            > /tmp/cluster-groups.txt
+          python3 - <<'PY'
+          import sys, yaml
+          docs = list(yaml.safe_load_all(
+              open('cluster/services/claude-remote-debug-rbac.yaml')))
+          role = next(d for d in docs if d and d.get('kind') == 'ClusterRole'
+                      and d['metadata']['name'] ==
+                      'claude-remote-debug-extended-read')
+          granted = {g for rule in role['rules'] for g in rule['apiGroups']}
+          assert '' not in granted, 'core group present: this would grant Secrets'
+          assert '*' not in granted, 'wildcard apiGroups would grant Secrets'
+          served = {l.strip() for l in open('/tmp/cluster-groups.txt') if l.strip()}
+          missing = sorted(served - granted)
+          for g in missing:
+              print(f'FAIL :: API group {g} is served but not in the role')
+          if missing:
+              sys.exit(1)
+          print(f'OK :: all {len(served)} non-core API groups are covered')
+          PY
 
       - name: Install kubernetes-mcp-server (real, read-only smoke test)
         run: |

@@ -59,7 +59,7 @@ Repo-wide gating linters apply to every directory:
 K8s-specific linters (`kubeconform`, `kube-score`, `polaris`, `hadolint`) live in `cluster/CLAUDE.md`.
 
 **Consult before "fixing" a finding:**
-- `.trivyignore` — documented homelab tradeoffs (linuxserver images, nodelocaldns privileged, cert-manager).
+- `.trivyignore.yaml` — documented homelab tradeoffs (linuxserver images, nodelocaldns privileged, cert-manager, claude-remote-debug's read-only wildcard). An entry with `paths` is scoped to those files so the rule keeps firing elsewhere.
 - `.github/agentic-review-exceptions.yaml` — dismissed AI-review findings; do not re-raise.
 
 ## Universal verification — before every commit
