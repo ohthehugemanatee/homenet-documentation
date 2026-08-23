@@ -1,0 +1,48 @@
+---
+# Fixture for the multi-source stage scenario (#270). Not a deployed manifest.
+#
+# Deliberately a fixture rather than cluster/services/calibre.yaml: this
+# scenario pins the playbook's multi-source behaviour, and test-cluster.yaml's
+# "Assert calibre and calibre-web share one Longhorn volume" step is what pins
+# the real manifest. Coupling them would make this suite fail for a reason that
+# has nothing to do with the playbook.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: calibre
+spec:
+  selector:
+    matchLabels:
+      run: calibre
+  replicas: 1
+  serviceName: calibre
+  volumeClaimTemplates:
+    - metadata:
+        name: calibre-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 10Gi
+  template:
+    metadata:
+      labels:
+        run: calibre
+    spec:
+      containers:
+        - name: calibre
+          image: example/calibre
+          volumeMounts:
+            - name: calibre-config
+              mountPath: /config
+              subPath: "calibre"
+        - name: calibre-web
+          image: example/calibre-web
+          volumeMounts:
+            - name: calibre-config
+              mountPath: /config
+              subPath: "calibre-web"
+            - name: calibre-config
+              mountPath: /calibre-library
+              subPath: "calibre"

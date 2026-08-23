@@ -1,0 +1,63 @@
+---
+# Scenario: resume a merged two-container pod.
+# The post-check has to accept more than one /config mount — calibre mounts it
+# once per container — while still requiring every one of them to be on the
+# staged volume. A check that only looked at the first mount would pass a pod
+# whose second container was left on NFS.
+
+monkeyble_scenarios:
+  migrate_resume_calibre:
+    tasks_to_test:
+
+      - task: "Restore ArgoCD auto-sync"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict: {}
+
+      - task: "Wait for the StatefulSet to become ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: calibre}
+                    status: {readyReplicas: 1}
+
+      - task: "Read the running pod"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: calibre-0, namespace: default}
+                    spec:
+                      volumes:
+                        - name: calibre-config
+                          persistentVolumeClaim: {claimName: calibre-config-calibre-0}
+                      containers:
+                        - name: calibre
+                          volumeMounts:
+                            - {name: calibre-config, mountPath: /config, subPath: calibre}
+                        - name: calibre-web
+                          volumeMounts:
+                            - {name: calibre-config, mountPath: /config, subPath: calibre-web}
+                            - {name: calibre-config, mountPath: /calibre-library, subPath: calibre}
+
+      - task: "Assert the pod's /config resolves to the staged Longhorn PVC"
+        should_be_skipped: false
+
+      - task: "Look for a leftover Deployment"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Assert the old Deployment is gone"
+        should_be_skipped: false

@@ -69,14 +69,29 @@
 
         # Same invariants test-cluster.yaml asserts, so CI and this playbook
         # cannot disagree about what "migrated" means.
-        - name: Assert the manifest is in the migrated shape
+        - name: Assert the volume claim template is on Longhorn
           ansible.builtin.assert:
             that:
               - migrate_sts | length > 0
               - (migrate_sts.spec.volumeClaimTemplates | default([])) | length == 1
               - migrate_pvc_template.spec.storageClassName == 'longhorn'
-              - migrate_config_mounts | length == 1
-              - migrate_config_mounts[0].name == migrate_pvc_template.metadata.name
+              - migrate_config_mounts | length > 0
+              - migrate_config_mounts
+                | rejectattr('name', 'equalto', migrate_pvc_template.metadata.name)
+                | list | length == 0
+            fail_msg: >-
+              {{ migrate_manifest }} needs a StatefulSet named {{ app }} with
+              exactly one longhorn volumeClaimTemplate, and every /config mount
+              on it. Run this from a checkout of the branch that converts it.
+
+        # Only the whole-/config shape forbids a subPath, and the manifest says
+        # which shape this is — a merged pod mounts /config once per container.
+        # Those subPaths stay inside one volume, so a snapshot still covers the
+        # database and its WAL together.
+        - name: Assert the manifest is in the migrated shape
+          when: migrate_config_mounts | length == 1
+          ansible.builtin.assert:
+            that:
               - migrate_config_mounts[0].subPath is not defined
             fail_msg: >-
               {{ migrate_manifest }} is not in the migrated shape: it needs a
@@ -384,12 +399,15 @@
                  | map(attribute='volumeMounts', default=[]) | flatten
                  | selectattr('mountPath', 'equalto', '/config') | list }}
 
-        - name: Resolve the claim backing /config
+        # Every /config mount, not just the first: a pod can mount it once per
+        # container, and all of them must be on the staged volume.
+        - name: Resolve the claims backing /config
           ansible.builtin.set_fact:
-            migrate_config_claim: >-
-              {{ migrate_running_claims.get(
-                   (migrate_running_mounts | first | default({}, true)).get('name', ''), {}
-                 ).get('claimName', '(none)') }}
+            migrate_config_claims: >-
+              {{ migrate_running_mounts
+                 | map(attribute='name')
+                 | map('extract', migrate_running_claims, 'claimName')
+                 | select('string') | list | unique }}
 
         # The check that catches a mis-adopted PVC. The app is up either way, so
         # nothing else would notice — and for jackett, "up on the wrong volume"
@@ -397,10 +415,11 @@
         - name: Assert the pod's /config resolves to the staged Longhorn PVC
           ansible.builtin.assert:
             that:
-              - migrate_running_mounts | length == 1
-              - migrate_config_claim == migrate_pvc_name
+              - migrate_running_mounts | length > 0
+              - migrate_config_claims == [migrate_pvc_name]
             fail_msg: >-
-              {{ app }}-0: /config resolves to PVC '{{ migrate_config_claim }}',
+              {{ app }}-0: /config resolves to PVC
+              '{{ migrate_config_claims | join("', '") | default('(none)', true) }}',
               expected '{{ migrate_pvc_name }}'
 
         - name: Look for a leftover Deployment

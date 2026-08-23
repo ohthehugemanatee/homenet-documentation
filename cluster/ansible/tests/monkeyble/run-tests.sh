@@ -216,6 +216,28 @@ run_scenario_expecting "migrate_resume_still_on_nfs" \
   "/config resolves to PVC 'app-configs', expected 'ombi-config-ombi-0'" \
   "-e" "app=ombi" "-t" "resume"
 
+cat > "${STATE_DIR}/migrate-calibre-syncpolicy.json" <<'JSON'
+{"automated": {"prune": true, "selfHeal": true}}
+JSON
+
+# A merged pod mounts /config once per container. The post-check has to accept
+# that while still requiring every mount to be on the staged volume.
+run_scenario_expecting "migrate_resume_calibre" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_resume_calibre.yml" \
+  "calibre is live on calibre-config-calibre-0" \
+  "-e" "app=calibre" "-t" "resume" \
+  "-e" "migrate_manifest=${SCRIPT_DIR}/fixtures/two-container-app.yaml"
+
+# Only the second container left on NFS. Checking one mount would miss it.
+# Claim order is not guaranteed, so match both halves rather than a literal.
+run_scenario_expecting "migrate_resume_calibre_split" \
+  migrate-config-to-longhorn.yaml \
+  "${SCRIPT_DIR}/test_migrate_resume_calibre_split.yml" \
+  "resolves to PVC .*'app-configs'.*expected 'calibre-config-calibre-0'" \
+  "-e" "app=calibre" "-t" "resume" \
+  "-e" "migrate_manifest=${SCRIPT_DIR}/fixtures/two-container-app.yaml"
+
 run_scenario "migrate_rollback" \
   migrate-config-to-longhorn.yaml \
   "${SCRIPT_DIR}/test_migrate_rollback.yml" \
