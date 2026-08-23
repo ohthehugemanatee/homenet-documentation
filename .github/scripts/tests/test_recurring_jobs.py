@@ -1,10 +1,9 @@
-"""Tests for check_recurring_jobs — the Longhorn schedule structural gate.
+"""Tests for check_recurring_jobs.
 
-Longhorn CRDs have no schema in the kubeconform store, so `--ignore-missing-schemas`
-skips these manifests entirely. A RecurringJob with a typo'd task or a missing
-`groups` would pass every other lint job and then silently schedule nothing.
+kubeconform skips these CRs (no longhorn.io schema), so a RecurringJob with a
+typo'd task or a missing `groups` would pass every other lint job and then
+silently schedule nothing.
 """
-
 import os
 import sys
 import unittest

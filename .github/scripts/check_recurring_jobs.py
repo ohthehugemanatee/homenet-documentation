@@ -1,17 +1,13 @@
 """Structural gate for the Longhorn RecurringJob manifests.
 
-kubeconform runs with --ignore-missing-schemas, and the JSON Schema store has no
-schema for longhorn.io CRDs, so these manifests are skipped by every other lint
-job. A RecurringJob with a typo'd task, an empty `groups`, or a four-field cron
-lints clean and then schedules nothing — the exact silent-drift failure #209 is
-about. This checks what a schema would have.
-
-Also asserts every job appears in cluster/longhorn/README.md, so the schedule
-table cannot fall out of step with the manifests.
+The JSON Schema store has no longhorn.io schema, so kubeconform's
+--ignore-missing-schemas skips these manifests entirely. A typo'd task, an empty
+`groups`, or a four-field cron lints clean and then schedules nothing. This
+checks what a schema would have, and asserts each job is in
+cluster/longhorn/README.md so the table cannot drift from the manifests.
 
 problems() and undocumented() are pure; main() does the I/O.
 """
-
 import glob
 import os
 import re
@@ -51,8 +47,7 @@ def problems(doc):
 
     groups = spec.get('groups')
     if not isinstance(groups, list) or not groups:
-        # Longhorn selects no volumes rather than erroring, so the job runs and
-        # does nothing. Nothing downstream notices.
+        # Longhorn runs the job against nothing rather than erroring.
         found.append(f'spec.groups {groups!r} is empty or missing')
 
     retain = spec.get('retain')

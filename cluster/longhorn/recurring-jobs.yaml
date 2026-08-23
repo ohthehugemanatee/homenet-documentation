@@ -1,11 +1,6 @@
 ---
-# Longhorn recurring jobs, transcribed from the live cluster (#209).
-#
-# Names match the live RecurringJob CRs exactly, so `kubectl apply` adopts the
-# running schedule instead of creating a duplicate one. See README.md for the
-# audit these came from, and CLAUDE.md before editing.
-#
-# The weekly `backups` job (task: backup) is NOT here yet — see README.md.
+# Transcribed from the live cluster (#209); see README.md.
+# Names must match the live CRs, or apply creates duplicates.
 apiVersion: longhorn.io/v1beta2
 kind: RecurringJob
 metadata:
