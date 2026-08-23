@@ -859,10 +859,10 @@ exceptions:
       volume the StatefulSet may already have adopted. The old NFS subPath is
       left in place on purpose as the rollback path, and #253 defers deleting
       it until all three apps have run clean. Raised on #262, #266 and #267.
-      calibre (#254) is the one exception to the playbook part: it needs two
-      subPaths seeded on a single volume, which the playbook's preflight
-      correctly refuses, so its copy is done by hand. Its PR carries the
-      equivalent steps, including the same checksum verification.
+      calibre (#254) needed two subPaths seeded on a single volume, which the
+      playbook originally refused; #270 taught it that shape, so calibre stages
+      with the same verified copy as the others by passing migrate_sources and
+      migrate_scale_targets.
 
   - pattern: "delugevpn container runs privileged"
     files:
