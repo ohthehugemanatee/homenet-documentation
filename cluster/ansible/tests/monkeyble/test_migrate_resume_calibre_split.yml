@@ -1,0 +1,51 @@
+---
+# Scenario: a merged pod where only the second container was left on NFS.
+# Checking just the first /config mount would call this a success, and calibre
+# would run with its library on the shared NFS PVC — the exact hazard #254
+# removed. Every mount must be on the staged volume.
+
+monkeyble_scenarios:
+  migrate_resume_calibre_split:
+    tasks_to_test:
+
+      - task: "Restore ArgoCD auto-sync"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict: {}
+
+      - task: "Wait for the StatefulSet to become ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: calibre}
+                    status: {readyReplicas: 1}
+
+      - task: "Read the running pod"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: calibre-0, namespace: default}
+                    spec:
+                      volumes:
+                        - name: calibre-config
+                          persistentVolumeClaim: {claimName: calibre-config-calibre-0}
+                        - name: nfs-config
+                          persistentVolumeClaim: {claimName: app-configs}
+                      containers:
+                        - name: calibre
+                          volumeMounts:
+                            - {name: calibre-config, mountPath: /config, subPath: calibre}
+                        - name: calibre-web
+                          volumeMounts:
+                            - {name: nfs-config, mountPath: /config, subPath: calibre-web}
+
+      - task: "Assert the pod's /config resolves to the staged Longhorn PVC"
+        should_fail: true
