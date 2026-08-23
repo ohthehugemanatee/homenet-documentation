@@ -170,20 +170,59 @@ jobs:
           test "$(kubectl auth can-i list pods --as="$SA")" = yes
           test "$(kubectl auth can-i get pods/log --as="$SA")" = yes
           test "$(kubectl auth can-i list events --as="$SA" -A)" = yes
-          test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
           test "$(kubectl auth can-i create pods/exec --as="$SA")" = no
           test "$(kubectl auth can-i delete pods --as="$SA")" = no
-          # Longhorn read (#209): the schedule and backup target must be
-          # readable, and must stay read-only.
-          for r in recurringjobs backuptargets volumes settings; do
-            test "$(kubectl auth can-i list "$r.longhorn.io" --as="$SA" -A)" = yes
-            test "$(kubectl auth can-i get "$r.longhorn.io" --as="$SA" -A)" = yes
-            test "$(kubectl auth can-i create "$r.longhorn.io" --as="$SA" -A)" = no
-            test "$(kubectl auth can-i delete "$r.longhorn.io" --as="$SA" -A)" = no
+
+          # The one thing that must never become readable, in any group.
+          test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
+          test "$(kubectl auth can-i list secrets --as="$SA" -A)" = no
+
+          # Custom resources and the built-in groups `view` omits: readable.
+          # These are what make cluster state debuggable at all.
+          for r in customresourcedefinitions.apiextensions.k8s.io \
+                   storageclasses.storage.k8s.io \
+                   clusterroles.rbac.authorization.k8s.io \
+                   priorityclasses.scheduling.k8s.io \
+                   certificates.cert-manager.io \
+                   recurringjobs.longhorn.io \
+                   backuptargets.longhorn.io \
+                   volumes.longhorn.io \
+                   settings.longhorn.io; do
+            test "$(kubectl auth can-i list "$r" --as="$SA" -A)" = yes
+            test "$(kubectl auth can-i get "$r" --as="$SA" -A)" = yes
+            test "$(kubectl auth can-i create "$r" --as="$SA" -A)" = no
+            test "$(kubectl auth can-i delete "$r" --as="$SA" -A)" = no
+            test "$(kubectl auth can-i patch "$r" --as="$SA" -A)" = no
           done
-          # Not granted: the rest of longhorn.io stays closed.
-          test "$(kubectl auth can-i list nodes.longhorn.io --as="$SA" -A)" = no
           echo "claude-remote-debug auth matrix OK"
+
+      - name: Assert no API group is missing from the extended-read role
+        # `resources: ["*"]` covers new kinds inside a listed group, but a new
+        # operator brings a new *group*, which would silently 403 in a debugging
+        # session. Compare the role against what the cluster actually serves so
+        # the list cannot quietly go stale. Core ("v1") is excluded on purpose:
+        # it is served by `view`, and adding it here would grant Secrets.
+        run: |
+          kubectl api-versions | sed 's|/.*||' | sort -u | grep -v '^v1$' \
+            > /tmp/cluster-groups.txt
+          python3 - <<'PY'
+          import sys, yaml
+          docs = list(yaml.safe_load_all(
+              open('cluster/services/claude-remote-debug-rbac.yaml')))
+          role = next(d for d in docs if d and d.get('kind') == 'ClusterRole'
+                      and d['metadata']['name'] ==
+                      'claude-remote-debug-extended-read')
+          granted = {g for rule in role['rules'] for g in rule['apiGroups']}
+          assert '' not in granted, 'core group present: this would grant Secrets'
+          assert '*' not in granted, 'wildcard apiGroups would grant Secrets'
+          served = {l.strip() for l in open('/tmp/cluster-groups.txt') if l.strip()}
+          missing = sorted(served - granted)
+          for g in missing:
+              print(f'FAIL :: API group {g} is served but not in the role')
+          if missing:
+              sys.exit(1)
+          print(f'OK :: all {len(served)} non-core API groups are covered')
+          PY
 
       - name: Install kubernetes-mcp-server (real, read-only smoke test)
         run: |

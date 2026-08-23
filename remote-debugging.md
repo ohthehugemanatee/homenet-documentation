@@ -53,21 +53,30 @@ server rather than Prometheus/Grafana.
 for secret-adjacent data, since anything in one is now readable from a Claude Code
 session.
 
-`view` covers built-in resources only — CRDs are not aggregated into it, so every
-`longhorn.io` read returns 403 under it alone. A second ClusterRole,
-`claude-remote-debug-longhorn-read`, adds `get`/`list`/`watch` on
-`recurringjobs`, `backuptargets`, `volumes` and `settings` in that group, and
-nothing else: the rest of `longhorn.io` (including `nodes`) stays closed, and no
-write verb is granted anywhere. Without it the backup schedule could not be
-audited from a session — #209 had to reconstruct it from generated CronJobs and
-recurring-job pod logs.
+`view` only covers built-in resources in a handful of groups, so every CRD reads
+403 under it — Longhorn volumes, cert-manager Certificates, ArgoCD Applications,
+Traefik IngressRoutes, Prometheus rules — and so do StorageClasses, RBAC objects,
+the CRD definitions themselves, and `metrics.k8s.io` (which is what `kubectl top`
+and the MCP server's `pods_top`/`nodes_top` need). Debugging cluster state without
+those means guessing: auditing the Longhorn backup schedule for #209 could not
+read a `RecurringJob` at all, and had to reconstruct it from generated CronJobs
+and job logs.
 
-None of those four carry secret material. `BackupTarget` references its
-credentials by Secret name, and Secrets remain unreadable. Extending the list is
-a deliberate act: add the resource to
-`cluster/services/claude-remote-debug-rbac.yaml` and an assertion to the auth
-matrix in `.github/workflows/test-cluster.yaml`, which fails if a granted
-resource stops being readable or a withheld one becomes writable.
+A second ClusterRole, `claude-remote-debug-extended-read`, grants
+`get`/`list`/`watch` on **all resources in every API group except core**. Core is
+absent on purpose: RBAC has no deny rule, so a wildcard `apiGroups` would hand
+over Secrets along with everything else. Core reads come from the `view` binding,
+which already excludes Secrets — leaving core out of the second role is precisely
+what keeps them unreadable. Never add `""` or `"*"` to that role's `apiGroups`;
+CI asserts both.
+
+Still not granted: any write verb anywhere, `pods/exec`, and Secrets in any group.
+
+`resources: ["*"]` means a new kind inside an already-listed group is covered
+automatically. A new operator that introduces a new *API group* is not — add the
+group to `cluster/services/claude-remote-debug-rbac.yaml`. CI compares the role
+against the API groups the cluster actually serves and fails on any it does not
+cover, so the list cannot quietly go stale.
 
 **Privacy note:** `view` grants `get pods/log` cluster-wide, and a session with a
 valid token can read live logs from every workload — Plex, Nextcloud, Unifi,

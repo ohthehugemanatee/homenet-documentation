@@ -21,37 +21,76 @@ roleRef:
   name: view
   apiGroup: rbac.authorization.k8s.io
 ---
-# `view` covers built-in resources only — CRDs are not aggregated into it, so
-# every longhorn.io read 403s. That blocked auditing the backup schedule in
-# #209, which had to be reconstructed from generated CronJobs and job logs.
+# `view` only covers built-in resources in a handful of groups. Every CRD reads
+# 403 under it — Longhorn volumes, cert-manager Certificates, ArgoCD
+# Applications, Traefik IngressRoutes, Prometheus rules — and so do
+# StorageClasses and the CRD definitions themselves. Debugging cluster state
+# without them means guessing, so this grants read on everything else.
 #
-# Resources are enumerated rather than wildcarded, and verbs are read-only.
-# None of these carry secret material: BackupTarget references its credentials
-# by Secret name, and Secrets stay unreadable. Extending this list is a
-# deliberate act — add the resource here and an assertion to the auth matrix in
-# .github/workflows/test-cluster.yaml.
+# **The core group ("") is deliberately absent.** RBAC has no deny rule, so a
+# wildcard `apiGroups` would grant Secrets along with everything else. Core
+# reads come from the `view` binding above, which already excludes Secrets —
+# leaving core out here is what keeps Secrets unreadable. Do not add "" to this
+# list, and do not collapse it to ["*"].
+#
+# `resources: ["*"]` means a new kind inside a group listed here is covered
+# automatically. A new operator that introduces a new *group* is not: add it
+# here, and the auth matrix in .github/workflows/test-cluster.yaml will fail
+# until you do.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: claude-remote-debug-longhorn-read
+  name: claude-remote-debug-extended-read
 rules:
-  - apiGroups: ["longhorn.io"]
-    resources:
-      - recurringjobs
-      - backuptargets
-      - volumes
-      - settings
+  - apiGroups:
+      # Built-in groups, including the ones `view` omits.
+      - admissionregistration.k8s.io
+      - apiextensions.k8s.io
+      - apiregistration.k8s.io
+      - apps
+      - authentication.k8s.io
+      - authorization.k8s.io
+      - autoscaling
+      - batch
+      - certificates.k8s.io
+      - coordination.k8s.io
+      - discovery.k8s.io
+      - events.k8s.io
+      - flowcontrol.apiserver.k8s.io
+      # metrics.k8s.io backs `kubectl top` and the MCP server's pods_top /
+      # nodes_top tools, which 403 without it.
+      - metrics.k8s.io
+      - networking.k8s.io
+      - node.k8s.io
+      - policy
+      - rbac.authorization.k8s.io
+      - scheduling.k8s.io
+      - storage.k8s.io
+      # Operator-installed groups.
+      - acme.cert-manager.io
+      - argoproj.io
+      - cert-manager.io
+      - helm.cattle.io
+      - k3s.cattle.io
+      - longhorn.io
+      - metallb.io
+      - monitoring.coreos.com
+      - nfd.k8s-sigs.io
+      - traefik.containo.us
+      - traefik.io
+      - upgrade.cattle.io
+    resources: ["*"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: claude-remote-debug-longhorn-read
+  name: claude-remote-debug-extended-read
 subjects:
   - kind: ServiceAccount
     name: claude-remote-debug
     namespace: default
 roleRef:
   kind: ClusterRole
-  name: claude-remote-debug-longhorn-read
+  name: claude-remote-debug-extended-read
   apiGroup: rbac.authorization.k8s.io
