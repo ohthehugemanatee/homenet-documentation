@@ -53,6 +53,22 @@ server rather than Prometheus/Grafana.
 for secret-adjacent data, since anything in one is now readable from a Claude Code
 session.
 
+`view` covers built-in resources only — CRDs are not aggregated into it, so every
+`longhorn.io` read returns 403 under it alone. A second ClusterRole,
+`claude-remote-debug-longhorn-read`, adds `get`/`list`/`watch` on
+`recurringjobs`, `backuptargets`, `volumes` and `settings` in that group, and
+nothing else: the rest of `longhorn.io` (including `nodes`) stays closed, and no
+write verb is granted anywhere. Without it the backup schedule could not be
+audited from a session — #209 had to reconstruct it from generated CronJobs and
+recurring-job pod logs.
+
+None of those four carry secret material. `BackupTarget` references its
+credentials by Secret name, and Secrets remain unreadable. Extending the list is
+a deliberate act: add the resource to
+`cluster/services/claude-remote-debug-rbac.yaml` and an assertion to the auth
+matrix in `.github/workflows/test-cluster.yaml`, which fails if a granted
+resource stops being readable or a withheld one becomes writable.
+
 **Privacy note:** `view` grants `get pods/log` cluster-wide, and a session with a
 valid token can read live logs from every workload — Plex, Nextcloud, Unifi,
 delugevpn, etc. Those logs can contain personal viewing/download activity and

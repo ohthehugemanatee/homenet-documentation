@@ -20,3 +20,38 @@ roleRef:
   kind: ClusterRole
   name: view
   apiGroup: rbac.authorization.k8s.io
+---
+# `view` covers built-in resources only — CRDs are not aggregated into it, so
+# every longhorn.io read 403s. That blocked auditing the backup schedule in
+# #209, which had to be reconstructed from generated CronJobs and job logs.
+#
+# Resources are enumerated rather than wildcarded, and verbs are read-only.
+# None of these carry secret material: BackupTarget references its credentials
+# by Secret name, and Secrets stay unreadable. Extending this list is a
+# deliberate act — add the resource here and an assertion to the auth matrix in
+# .github/workflows/test-cluster.yaml.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: claude-remote-debug-longhorn-read
+rules:
+  - apiGroups: ["longhorn.io"]
+    resources:
+      - recurringjobs
+      - backuptargets
+      - volumes
+      - settings
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: claude-remote-debug-longhorn-read
+subjects:
+  - kind: ServiceAccount
+    name: claude-remote-debug
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: claude-remote-debug-longhorn-read
+  apiGroup: rbac.authorization.k8s.io
