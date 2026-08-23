@@ -57,7 +57,7 @@ Two consequences of the catch-all worth knowing:
   `plex-transcode`, `loki`, `prometheus`, `alertmanager`, `nextcloud-previews`.
   That is 7 retained snapshots each of data nobody would restore.
 - A new Longhorn volume is covered the moment it exists, with no per-volume
-  labelling. `calibre` (#241) will be picked up automatically once migrated.
+  labelling. `calibre` (#268) joins the set that way, taking the count to 21.
 
 ## Known gap
 
