@@ -65,6 +65,13 @@ jobs:
               --ignore-missing-schemas \
               --kubernetes-version "${KUBERNETES_VERSION}" \
               --cache /tmp/kubeconform-cache
+      - name: Validate Longhorn recurring jobs
+        # --ignore-missing-schemas above skips longhorn.io CRDs entirely (the
+        # JSON Schema store has no schema for them), so a RecurringJob with a
+        # typo'd task or an empty `groups` lints clean and then schedules
+        # nothing. This checks what a schema would have, and asserts each job
+        # is in the README table so the two cannot drift (#209).
+        run: python3 .github/scripts/check_recurring_jobs.py
 
   kustomize:
     name: Kustomize builds

@@ -753,6 +753,8 @@ jobs:
             ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
             ! -name "probe-alerts.yaml" \
+            ! -name "recurring-jobs.yaml" \
+            ! -name "backup-target.yaml" \
             | sort)
           exit "$FAILED"
 

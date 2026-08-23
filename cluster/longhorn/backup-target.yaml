@@ -1,0 +1,12 @@
+---
+# Transcribed from the live cluster (#209); see README.md.
+# Name must match the live CR, or apply creates a second target.
+apiVersion: longhorn.io/v1beta2
+kind: BackupTarget
+metadata:
+  name: default
+  namespace: longhorn-system
+spec:
+  backupTargetURL: "nfs://shoebox:/longhorn-backups"
+  credentialSecret: ""  # NFS needs none
+  pollInterval: 5m0s

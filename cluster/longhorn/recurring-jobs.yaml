@@ -1,0 +1,53 @@
+---
+# Transcribed from the live cluster (#209); names must match, see README.md.
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshots2
+  namespace: longhorn-system
+spec:
+  cron: "33 4 * * ?"
+  task: snapshot
+  groups:
+    - default
+  retain: 7
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backups
+  namespace: longhorn-system
+spec:
+  cron: "0 5 * * 1"
+  task: backup
+  groups:
+    - default
+  retain: 4
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: snapshot-cleanup
+  namespace: longhorn-system
+spec:
+  cron: "3 3 * * *"
+  task: snapshot-cleanup
+  groups:
+    - default
+  retain: 0
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: fs-trim
+  namespace: longhorn-system
+spec:
+  cron: "0 5 */6 * *"
+  task: filesystem-trim
+  groups:
+    - default
+  retain: 0
+  concurrency: 1
