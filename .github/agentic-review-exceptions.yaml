@@ -824,6 +824,7 @@ exceptions:
 
   - pattern: "StatefulSet serviceName does not name a headless Service"
     files:
+      - cluster/services/calibre.yaml
       - cluster/services/delugevpn.yaml
       - cluster/services/jackett.yaml
       - cluster/services/nzbget.yaml
@@ -841,8 +842,9 @@ exceptions:
       spec.serviceName is still required by the StatefulSet API and is set to
       the existing Service.
 
-  - pattern: "Deployment→StatefulSet /config conversion has no data migration in the diff"
+  - pattern: "/config storage conversion has no data migration in the diff"
     files:
+      - cluster/services/calibre.yaml
       - cluster/services/delugevpn.yaml
       - cluster/services/jackett.yaml
       - cluster/services/nzbget.yaml
@@ -857,6 +859,10 @@ exceptions:
       volume the StatefulSet may already have adopted. The old NFS subPath is
       left in place on purpose as the rollback path, and #253 defers deleting
       it until all three apps have run clean. Raised on #262, #266 and #267.
+      calibre (#254) needed two subPaths seeded on a single volume, which the
+      playbook originally refused; #270 taught it that shape, so calibre stages
+      with the same verified copy as the others by passing migrate_sources and
+      migrate_scale_targets.
 
   - pattern: "delugevpn container runs privileged"
     files:

@@ -9,17 +9,24 @@ spec:
       run: calibre
   replicas: 1
   serviceName: calibre
+  volumeClaimTemplates:
+    - metadata:
+        name: calibre-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 10Gi
   template:
     metadata:
       labels:
         run: calibre
     spec:
+      # calibre-web inherits this. Both images are published for amd64.
       nodeSelector:
         kubernetes.io/arch: amd64
       volumes:
-        - name: nfs-config
-          persistentVolumeClaim:
-            claimName: app-configs
         - name: nfs-media
           persistentVolumeClaim:
             claimName: media
@@ -45,7 +52,7 @@ spec:
             - name: AUTO_GPU
               value: "true"
           volumeMounts:
-            - name: nfs-config
+            - name: calibre-config
               mountPath: /config
               subPath: "calibre"
             - name: nfs-media
@@ -64,6 +71,48 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
+
+        # Second container, not a second pod: calibre-web reads the same
+        # SQLite library calibre writes. Two pods sharing it over NFS was the
+        # hazard #254 removed, and a Longhorn RWO volume cannot be mounted
+        # twice anyway.
+        - name: calibre-web
+          image: lscr.io/linuxserver/calibre-web:0.6.26-ls393
+          ports:
+            - containerPort: 8083
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+            - name: CALIBRE_PATH
+              value: "/calibre-library/Calibre Library"
+          volumeMounts:
+            - name: calibre-config
+              mountPath: /config
+              subPath: "calibre-web"
+            # Same subPath calibre mounts at /config, so this is literally the
+            # directory calibre writes.
+            - name: calibre-config
+              mountPath: /calibre-library
+              subPath: "calibre"
+          startupProbe:
+            tcpSocket:
+              port: 8083
+            periodSeconds: 30
+            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
+          livenessProbe:
+            tcpSocket:
+              port: 8083
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8083
             periodSeconds: 30
             failureThreshold: 3
 
@@ -133,65 +182,7 @@ spec:
   - hosts:
     - calibre.berlin.vertesi.com
 
-# ── calibre-web ────────────────────────────────────────────────────────────
----
-
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: calibre-web
-spec:
-  selector:
-    matchLabels:
-      run: calibre-web
-  replicas: 1
-  serviceName: calibre-web
-  template:
-    metadata:
-      labels:
-        run: calibre-web
-    spec:
-      volumes:
-        - name: nfs-config
-          persistentVolumeClaim:
-            claimName: app-configs
-      containers:
-        - name: calibre-web
-          image: lscr.io/linuxserver/calibre-web:0.6.26-ls393
-          ports:
-            - containerPort: 8083
-          env:
-            - name: PGID
-              value: "1000"
-            - name: PUID
-              value: "1000"
-            - name: TZ
-              value: "Europe/Berlin"
-            - name: CALIBRE_PATH
-              value: "/calibre-library/Calibre Library"
-          volumeMounts:
-            - name: nfs-config
-              mountPath: /config
-              subPath: "calibre-web"
-            - name: nfs-config
-              mountPath: /calibre-library
-              subPath: "calibre"
-          startupProbe:
-            tcpSocket:
-              port: 8083
-            periodSeconds: 30
-            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
-          livenessProbe:
-            tcpSocket:
-              port: 8083
-            periodSeconds: 30
-            failureThreshold: 3
-          readinessProbe:
-            tcpSocket:
-              port: 8083
-            periodSeconds: 30
-            failureThreshold: 3
-
+# ── calibre-web (Service + Ingress; the container lives in the calibre pod) ──
 ---
 
 apiVersion: v1
@@ -204,8 +195,9 @@ spec:
   ports:
   - port: 8083
     protocol: TCP
+  # One pod serves both hostnames now, so this selects the calibre pod.
   selector:
-    run: calibre-web
+    run: calibre
 
 ---
 
