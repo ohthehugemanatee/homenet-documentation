@@ -1,6 +1,5 @@
 ---
-# Transcribed from the live cluster (#209); see README.md.
-# Names must match the live CRs, or apply creates duplicates.
+# Transcribed from the live cluster (#209); names must match, see README.md.
 apiVersion: longhorn.io/v1beta2
 kind: RecurringJob
 metadata:
@@ -12,6 +11,19 @@ spec:
   groups:
     - default
   retain: 7
+  concurrency: 1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backups
+  namespace: longhorn-system
+spec:
+  cron: "0 5 * * 1"
+  task: backup
+  groups:
+    - default
+  retain: 4
   concurrency: 1
 ---
 apiVersion: longhorn.io/v1beta2
