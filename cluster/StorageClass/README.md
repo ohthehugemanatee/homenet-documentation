@@ -8,7 +8,7 @@ are not defined here but are listed below for the full picture.
 
 | Class | Replicas | Locality | Disk | Reclaim | Data on scale-down/drain | Intended use |
 | --- | --- | --- | --- | --- | --- | --- |
-| `longhorn-ephemeral` | 1 | `strict-local` | any | `Delete` | **Preserved** | Regenerable-but-expensive scratch, co-located with the pod. Consumers: Loki chunks, Prometheus TSDB, Alertmanager state, Plex transcode. |
+| `longhorn-ephemeral` | 1 | `strict-local` | any | `Delete` | **Preserved** | Regenerable-but-expensive scratch, co-located with the pod. Consumers: Loki chunks, Prometheus TSDB, Alertmanager state. |
 | `longhorn-ephemeral-fast` | 1 | `strict-local` | NVMe (`diskSelector`/`nodeSelector: nvme`) | `Retain` | **Preserved** | Same as `-ephemeral` but needs NVMe throughput. Consumer: `nextcloud-previews`. |
 | `longhorn-performance` | 2 | `best-effort` | any | `Delete` | **Preserved** | Durable data wanting replication plus read locality. `WaitForFirstConsumer`. Currently unused. |
 
@@ -25,8 +25,8 @@ are not defined here but are listed below for the full picture.
 
 The `longhorn-ephemeral*` classes are **fully persistent Longhorn volumes**, not
 Kubernetes ephemeral storage. "Ephemeral" describes the *value* of the data
-(regenerable scratch — previews, transcode, TSDB, log chunks, alertmanager
-state), **not** its lifecycle.
+(regenerable scratch — previews, TSDB, log chunks, alertmanager state), **not**
+its lifecycle.
 
 What this means in practice, including across a node drain/reboot:
 
@@ -59,6 +59,7 @@ before draining and restores them afterwards — see
 data is preserved (above), this is a safe, transparent maintenance step rather
 than a data-loss event.
 
-For workloads whose scratch is genuinely worthless between runs (Plex transcode
-is the clearest case), prefer a real `emptyDir` instead: it sidesteps the
-single-replica drain block entirely and costs nothing to discard.
+For workloads whose scratch is genuinely worthless between runs, prefer a real
+`emptyDir` instead: it sidesteps the single-replica drain block entirely and
+costs nothing to discard. Plex transcode moved to `emptyDir` for that reason in
+#277, after each pod restart left an orphaned `BackupVolume` on shoebox.

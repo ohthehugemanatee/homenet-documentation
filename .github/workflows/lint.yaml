@@ -72,6 +72,13 @@ jobs:
         # nothing. This checks what a schema would have, and asserts each job
         # is in the README table so the two cannot drift (#209).
         run: python3 .github/scripts/check_recurring_jobs.py
+      - name: Reject ephemeral volumes on Longhorn StorageClasses
+        # A generic ephemeral volumeClaimTemplate mints a new Longhorn volume
+        # UUID per pod restart. Longhorn stamps each one into the `default`
+        # recurring job group, the weekly backup copies it to shoebox, and
+        # nothing collects the copy once the volume is gone. Plex transcode
+        # leaked 11 BackupVolumes and 27 GiB that way (#277).
+        run: python3 .github/scripts/check_ephemeral_volumes.py
 
   kustomize:
     name: Kustomize builds
