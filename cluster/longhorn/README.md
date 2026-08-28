@@ -35,15 +35,19 @@ leaves a volume created on a Tuesday with no durable copy for six days.
 All four jobs select `groups: [default]`, and Longhorn stamps
 `recurring-job-group.longhorn.io/default: enabled` on each volume at creation.
 All 21 carry it, so every Longhorn volume is covered with no manual labelling.
-The label is writable: deleting it drops that volume from all four jobs silently.
+Removing the label does not opt a volume out: `datastore.FixupRecurringJob` runs
+on both `CreateVolume` and `UpdateVolume`, and re-adds `default` to any volume
+carrying zero job or group labels. Excluding a volume means giving it a
+different group, via the `recurringJobSelector` StorageClass parameter.
 
 Those 21 are every Longhorn-backed PVC: ten stateful app volumes (`duplicacy`,
 `its-mytabs`, `mariadb`, `nextcloud-www`, `ombi`, `plex`, `radarr`, `sonarr`,
 `songhub`, `unifi-db`), three `/config` volumes migrated off NFS (`jackett`,
-`nzbget`, `delugevpn`), `nextcloud-previews`, `nextcloud-mcp`, `plex-transcode`,
+`nzbget`, `delugevpn`), `nextcloud-previews`, `nextcloud-mcp`,
 `calibre` (#268), and four monitoring volumes (`loki`, `prometheus`, `grafana`,
-`alertmanager`). Those four plus `plex-transcode` and `nextcloud-previews` are
-regenerable scratch, snapshotted daily anyway. Narrowing that changes behaviour.
+`alertmanager`). Those four plus `nextcloud-previews` are regenerable scratch,
+snapshotted daily anyway. Narrowing that changes behaviour. Plex transcode was
+the exception and is now an `emptyDir` (#277).
 
 ## Audit, 23 Aug 2026
 
@@ -57,6 +61,12 @@ Backups outlive their volumes. 20 of 37 `BackupVolume` objects had no live
 volume, the oldest last backed up 2024-08-02. `retain` prunes inside a live
 volume's chain and never collects an orphan, so these grow without bound on
 shoebox. Three `Backup` CRs sat in `Error`, all for the deleted `pvc-e3c59c7b`.
+
+#277 deleted those three and 19 of the orphans, reclaiming 51 GiB. Eleven were
+plex transcode, one per pod restart, which is why that volume moved to
+`emptyDir`. The Longhorn system backup `pvc-6847cfb4` was kept deliberately.
+Nothing prunes orphans automatically, so the set regrows whenever a volume is
+retired and needs the same manual sweep.
 
 No `snapshot.storage.k8s.io` API group is served: no `VolumeSnapshotClass`, no
 snapshot-controller. Longhorn's `csi-snapshotter` sidecar runs but only watches

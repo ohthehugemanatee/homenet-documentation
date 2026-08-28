@@ -42,17 +42,11 @@ spec:
         - name: plex-logs
           emptyDir: {}
         - name: plex-transcode
-          ephemeral:
-            volumeClaimTemplate:
-              metadata:
-                labels:
-                  type: plex-transcode
-              spec:
-                accessModes: [ "ReadWriteOnce" ]
-                storageClassName: "longhorn-ephemeral"
-                resources:
-                  requests:
-                    storage: 30Gi
+          # In-flight transcodes only. On Longhorn each restart minted a new PVC
+          # UUID that the weekly backup job copied to shoebox and never
+          # collected (#277). sizeLimit caps it at the old volume's 30Gi.
+          emptyDir:
+            sizeLimit: 30Gi
       securityContext:
         fsGroup: 1000
       containers:

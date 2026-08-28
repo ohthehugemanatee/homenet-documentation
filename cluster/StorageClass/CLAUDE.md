@@ -34,5 +34,5 @@ new `numberOfReplicas: "1"` + `strict-local` class, the drain guard discovers it
 automatically (it keys off the replica count, not the class name) — but verify it
 in `cluster/ansible/tests/monkeyble`.
 
-Genuinely worthless scratch (e.g. Plex transcode) should use `emptyDir`, not
-these classes, to avoid the drain block at no cost.
+Genuinely worthless scratch should use `emptyDir`, not these classes, to avoid
+the drain block at no cost. Plex transcode moved to `emptyDir` in #277.
