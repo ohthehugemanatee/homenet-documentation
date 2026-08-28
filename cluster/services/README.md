@@ -16,8 +16,9 @@ because the `-shm` file needs real shared memory and NFS advisory locking is not
 enough for the rollback journal. Keeping a database and its WAL on one Longhorn volume also
 means a single snapshot covers both.
 
-`ombi`, `jackett`, `nzbget` and `delugevpn` carry the reference shape — whole `/config` on
-a Longhorn `volumeClaimTemplate`, no overlay mount, no app-side path configuration.
+`ombi`, `jackett`, `nzbget`, `delugevpn` and `tautulli` carry the reference shape — whole
+`/config` on a Longhorn `volumeClaimTemplate`, no overlay mount, no app-side path
+configuration.
 `radarr`/`sonarr` (`/db`), `plex` (`Plug-in Support/Databases`) and `mariadb`
 (`/config/databases`) instead overlay a Longhorn volume onto the database path only, with
 the rest of `/config` still on NFS.

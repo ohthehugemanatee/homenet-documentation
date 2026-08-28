@@ -735,6 +735,44 @@ jobs:
             || { echo "FAILED: no 429 after 80 requests — rate limit not applied"; exit 1; }
           echo "plex-mcp ingress auth and rate limit OK"
 
+      - name: Deploy tautulli (real smoke test)
+        run: |
+          kubectl apply -f cluster/services/tautulli.yaml
+          kubectl -n default rollout status statefulset/tautulli --timeout=300s
+
+      - name: Diagnose tautulli failure
+        if: failure()
+        run: |
+          kubectl -n default describe pod -l run=tautulli
+          echo "=== logs ==="
+          kubectl -n default logs -l run=tautulli --tail=200 || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify tautulli serves /status and keeps /config on its own PVC
+        run: |
+          # 8005: 8000-8002 are the nextcloud-mcp forwards, 8003 plex-mcp,
+          # 8004 traefik.
+          kubectl -n default port-forward svc/tautulli 8005:8181 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 15); do
+            curl -fsS http://127.0.0.1:8005/status >/dev/null 2>&1 && break
+            sleep 2
+          done
+          BODY=$(curl -fsS http://127.0.0.1:8005/status)
+          echo "$BODY"
+          echo "$BODY" | grep -q '"result": *"success"' \
+            || { echo "FAILED: /status did not report success"; exit 1; }
+
+          # The static shape assertion below reads the manifest; this proves the
+          # claim actually bound in a live cluster.
+          CLAIM=$(kubectl -n default get pod tautulli-0 -o jsonpath='{.spec.volumes[?(@.name=="tautulli-config")].persistentVolumeClaim.claimName}')
+          echo "config claim: $CLAIM"
+          [ "$CLAIM" = "tautulli-config-tautulli-0" ] \
+            || { echo "FAILED: /config is not on the volumeClaimTemplate"; exit 1; }
+          echo "tautulli health and config volume OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -766,7 +804,7 @@ jobs:
           # the ombi shape. SQLite in WAL mode does not work over NFS (#241), so
           # each app joins this set in the PR that converts it. radarr/sonarr are
           # deliberately absent: they overlay only /db and keep /config on NFS.
-          CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn"}
+          CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn", "tautulli"}
           failed = 0
           for app in sorted(CONFIG_ON_LONGHORN):
               bad = 0
