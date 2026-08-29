@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Assert the Longhorn chart renders the cluster's live config, not new config.
+"""Diff a `helm template` render of the Longhorn chart against the live capture.
 
-Neither the StorageClass nor the settings is a chart object: the chart renders
-each into a ConfigMap that longhorn-manager then applies, so a drifted render
-reaches live config, and the class's `parameters` are immutable. See the chart
-values section of cluster/longhorn/README.md.
+Fails when cluster/helm/longhorn/values.yaml stops reproducing
+cluster/helm/longhorn/live-state.yaml. Why that matters: see the chart values
+section of cluster/longhorn/README.md.
 
 Usage: check_longhorn_render.py <helm-template-output.yaml>
 """

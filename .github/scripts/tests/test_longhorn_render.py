@@ -1,9 +1,4 @@
-"""Tests for check_longhorn_render.
-
-The Longhorn StorageClass and settings are not chart objects: the chart writes
-each into a ConfigMap that longhorn-manager applies. A drifted render therefore
-reaches live config, and the class's `parameters` are immutable (#279).
-"""
+"""Tests for check_longhorn_render.mismatches (#279)."""
 import os
 import sys
 import unittest

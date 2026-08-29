@@ -1,7 +1,6 @@
 ---
 # Longhorn's live config, read from the cluster on 29 Aug 2026 (#279).
-# `values.yaml` reproduces it; CI diffs the render against this file.
-# Read-only capture — nothing applies it.
+# Read-only capture — nothing applies it; `values.yaml` reproduces it.
 
 # `kubectl get sc longhorn`, server-side fields dropped.
 storageClass:
@@ -21,9 +20,7 @@ storageClass:
     unmapMarkSnapChainRemoved: ignored
 
 # The `settings.longhorn.io` CRs `values.yaml` writes into
-# `longhorn-default-setting`, each at its live value. README.md has the table
-# of which differ from the 1.7.2 default, and why two of them look like they
-# contradict the StorageClass above.
+# `longhorn-default-setting`, each at its live value.
 settings:
   backup-compression-method: gzip
   backup-target: nfs://shoebox:/longhorn-backups
