@@ -251,5 +251,23 @@ run_scenario "migrate_rollback" \
   "${SCRIPT_DIR}/test_migrate_rollback.yml" \
   "-e" "app=ombi" "-t" "rollback"
 
+# ── Scenarios 9-10: the Longhorn pre-upgrade readiness gate ─────────────────
+# Runs before every hop of the 1.7.2 → 1.12.1 chain, so both directions matter:
+# it must pass on a healthy cluster and refuse on a faulted one.
+
+# A detached volume reports robustness 'unknown'. Proving the clean run stays
+# clean is the point — a gate that flags normal detached volumes gets ignored.
+run_scenario_expecting "longhorn_preflight_clean" \
+  longhorn-preflight.yaml \
+  "${SCRIPT_DIR}/test_longhorn_preflight_clean.yml" \
+  "longhorn-manager: v1\\.7\\.2"
+
+# The assert is marked should_fail, which monkeyble scores as a pass, so the
+# message is the only evidence the gate refused for the right reason.
+run_failing_scenario "longhorn_preflight_faulted" \
+  longhorn-preflight.yaml \
+  "${SCRIPT_DIR}/test_longhorn_preflight_faulted.yml" \
+  "faulted volumes: pvc-4444dddd"
+
 echo ""
 echo "All Monkeyble scenarios passed."

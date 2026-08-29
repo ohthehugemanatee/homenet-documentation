@@ -8,6 +8,7 @@
 | `node-state.yaml` | Idempotent state enforcement — packages, config, services | Yes |
 | `rolling-upgrade.yaml` | Rolling OS dist-upgrade with drain/uncordon | Yes |
 | `migrate-config-to-longhorn.yaml` | Move one app's `/config` from the `app-configs` NFS PVC onto Longhorn | Yes (per phase) |
+| `longhorn-preflight.yaml` | Check Longhorn is ready to upgrade — read-only | Yes |
 
 Note that to keep CI happy, the encrypted vault file is not loaded by default.
 `k3s-agent.yaml` and `rolling-upgrade.yaml` load it via
@@ -129,6 +130,47 @@ ansible-playbook -i inventory.yaml --ask-vault-pass --limit agents rolling-upgra
 | `templates/sysctl-k3s.conf.j2` | `/etc/sysctl.d/99-k3s.conf` |
 | `templates/timesyncd.conf.j2` | `/etc/systemd/timesyncd.conf` |
 | `templates/50unattended-upgrades.j2` | `/etc/apt/apt.conf.d/50unattended-upgrades` |
+
+---
+
+## `longhorn-preflight.yaml` — Longhorn pre-upgrade readiness gate
+
+Reports whether Longhorn can be upgraded, and refuses when it cannot (#280). Runs
+against the cluster from the shoebox controller, so it needs a working
+`KUBECONFIG` rather than SSH to a node. Every task is a query; it writes nothing.
+
+```sh
+KUBECONFIG=~/.kube/config ansible-playbook longhorn-preflight.yaml
+```
+
+Run it immediately before every hop of the upgrade chain, not once at the start.
+Longhorn only supports upgrading one minor version at a time, so reaching v1.12.1
+from v1.7.2 takes five hops and this gate runs before each of them.
+
+It reports the running `longhorn-manager` version, the volume and backing-image
+counts, and six lists: faulted volumes, volumes unhealthy while attached, volumes
+mid-transition, volumes whose engine image lags their spec, backing images with a
+failed disk file, and backing images with no ready disk file.
+
+Two of those are fatal and exit the play non-zero:
+
+- **a faulted volume** — Longhorn's own pre-upgrade check refuses to run past one
+- **a backing image with a failed disk file** — same
+
+Everything else is reported and left to the operator. A degraded volume rebuilds
+its replica without help, and a transitional state is usually momentary.
+
+Robustness is only read on **attached** volumes. A detached volume has no running
+engine to evaluate its replicas and reports `unknown`, which is normal — flagging
+it would leave the gate red on every run.
+
+The engine-lag list is Longhorn's "engine upgrade required" signal: the volume's
+`spec.image` moved to a newer engine and `status.currentImage` has not caught up.
+A volume left behind here compounds at the next hop, so clear it before moving on.
+
+**The gate is not the rollback plan.** A completed minor upgrade cannot be
+reverted, so take a Longhorn system backup before the first hop and keep the
+weekly `backups` job's output on shoebox. See `cluster/longhorn/README.md`.
 
 ---
 

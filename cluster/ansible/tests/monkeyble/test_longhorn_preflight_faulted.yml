@@ -1,0 +1,82 @@
+---
+# Scenario: one faulted volume blocks the upgrade.
+#
+# Longhorn's own pre-upgrade check refuses to proceed past a faulted volume, and
+# a completed minor upgrade cannot be rolled back. This is the case the gate
+# exists for, so it must exit non-zero and name the volume.
+#
+# The fixture also carries a degraded volume and a volume mid-transition. Those
+# are reported, not fatal — Longhorn rebuilds a degraded replica on its own, and
+# a transitional state is usually momentary.
+#
+# Expected: non-zero exit, fail_msg naming pvc-4444dddd.
+
+monkeyble_scenarios:
+  longhorn_preflight_faulted:
+    tasks_to_test:
+
+      - task: "Read the longhorn-manager DaemonSet"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: longhorn-manager, namespace: longhorn-system}
+                    spec:
+                      template:
+                        spec:
+                          containers:
+                            - name: longhorn-manager
+                              image: longhornio/longhorn-manager:v1.7.2
+
+      - task: "Read every Longhorn volume"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: pvc-4444dddd}
+                    spec: {image: longhornio/longhorn-engine:v1.7.2}
+                    status:
+                      state: attached
+                      robustness: faulted
+                      currentImage: longhornio/longhorn-engine:v1.7.2
+                  - metadata: {name: pvc-5555eeee}
+                    spec: {image: longhornio/longhorn-engine:v1.7.2}
+                    status:
+                      state: attached
+                      robustness: degraded
+                      currentImage: longhornio/longhorn-engine:v1.7.2
+                  - metadata: {name: pvc-6666ffff}
+                    spec: {image: longhornio/longhorn-engine:v1.7.2}
+                    status:
+                      state: attaching
+                      robustness: unknown
+                      currentImage: ""
+                  # Engine left behind by an earlier hop: spec moved, status
+                  # did not. Reported so the operator upgrades it before the
+                  # next hop compounds the gap.
+                  - metadata: {name: pvc-7777aaaa}
+                    spec: {image: longhornio/longhorn-engine:v1.8.2}
+                    status:
+                      state: attached
+                      robustness: healthy
+                      currentImage: longhornio/longhorn-engine:v1.7.2
+
+      - task: "Read every Longhorn backing image"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      # Deliberately not marked `should_fail`. That flag makes monkeyble score
+      # the failure as a pass and the play then exits 0, which would hide the
+      # behaviour under test: the gate's whole job is to exit non-zero here.
+      # The copy-failure scenario can afford the flag because a `rescue:` block
+      # re-fails that play; this one has no rescue.
+      - task: "Assert no volume is faulted and no backing image failed"
+        should_be_skipped: false

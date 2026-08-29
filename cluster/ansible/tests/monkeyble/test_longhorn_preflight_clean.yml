@@ -1,0 +1,80 @@
+---
+# Scenario: a cluster that is ready to upgrade.
+#
+# Three volumes, one of them detached. A detached volume reports robustness
+# 'unknown' because no engine is running to evaluate its replicas, so this
+# fixture pins that a detached volume is not counted unhealthy — a gate that
+# flagged it would be red on every run and get ignored.
+#
+# Backing images are absent: this cluster has none, and the empty list must not
+# read as a failure.
+#
+# Expected: exit 0, the running version reported, every problem list empty.
+
+monkeyble_scenarios:
+  longhorn_preflight_clean:
+    tasks_to_test:
+
+      - task: "Read the longhorn-manager DaemonSet"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: longhorn-manager, namespace: longhorn-system}
+                    spec:
+                      template:
+                        spec:
+                          containers:
+                            - name: longhorn-manager
+                              image: longhornio/longhorn-manager:v1.7.2
+
+      # The DaemonSet image is what Longhorn is running. A
+      # `current-longhorn-version` Setting can disagree with it mid-upgrade.
+      - task: "Derive the running longhorn-manager version"
+        test_output:
+          - assert_equal:
+              result_key: result.ansible_facts.longhorn_version
+              expected: "v1.7.2"
+
+      - task: "Read every Longhorn volume"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata: {name: pvc-1111aaaa}
+                    spec: {image: longhornio/longhorn-engine:v1.7.2}
+                    status:
+                      state: attached
+                      robustness: healthy
+                      currentImage: longhornio/longhorn-engine:v1.7.2
+                  - metadata: {name: pvc-2222bbbb}
+                    spec: {image: longhornio/longhorn-engine:v1.7.2}
+                    status:
+                      state: attached
+                      robustness: healthy
+                      currentImage: longhornio/longhorn-engine:v1.7.2
+                  # Detached: no engine, so robustness is 'unknown' and
+                  # currentImage is empty. Neither is a defect.
+                  - metadata: {name: pvc-3333cccc}
+                    spec: {image: longhornio/longhorn-engine:v1.7.2}
+                    status:
+                      state: detached
+                      robustness: unknown
+                      currentImage: ""
+
+      - task: "Read every Longhorn backing image"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      # A vacuous pass is the failure mode here: if the gate never evaluates,
+      # it exits 0 on a faulted cluster too.
+      - task: "Assert no volume is faulted and no backing image failed"
+        should_be_skipped: false

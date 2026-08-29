@@ -1,0 +1,165 @@
+---
+# Pre-upgrade readiness gate for Longhorn (#280). Longhorn refuses to upgrade
+# past a faulted volume, and a completed minor upgrade cannot be rolled back —
+# recovery means restoring from the shoebox backup target. The chain from v1.7.2
+# to v1.12.1 is five hops (#281-#285), so this runs before each of them, not once.
+#
+#   KUBECONFIG=... ansible-playbook longhorn-preflight.yaml
+#
+# Read-only: every task is a query. It exits non-zero on a faulted volume or a
+# failed BackingImage, and reports everything else for the operator to weigh.
+
+- name: Check Longhorn is ready to upgrade
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
+    longhorn_namespace: longhorn-system
+    longhorn_api_version: longhorn.io/v1beta2
+
+  tasks:
+
+    - name: Read the longhorn-manager DaemonSet
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: DaemonSet
+        name: longhorn-manager
+        namespace: "{{ longhorn_namespace }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      register: longhorn_manager_ds
+      changed_when: false
+
+    - name: Assert Longhorn is installed
+      ansible.builtin.assert:
+        that:
+          - longhorn_manager_ds.resources | length == 1
+        fail_msg: >-
+          no longhorn-manager DaemonSet in {{ longhorn_namespace }}. Check that
+          KUBECONFIG points at the cluster.
+
+    # The DaemonSet image is what Longhorn is running now. The
+    # `current-longhorn-version` Setting can disagree with it mid-upgrade, which
+    # is exactly when this playbook gets run.
+    - name: Derive the running longhorn-manager version
+      ansible.builtin.set_fact:
+        longhorn_version: >-
+          {{ ((longhorn_manager_ds.resources | first).spec.template.spec.containers
+              | selectattr('name', 'equalto', 'longhorn-manager')
+              | first).image | regex_replace('^.*:', '') }}
+
+    - name: Read every Longhorn volume
+      kubernetes.core.k8s_info:
+        api_version: "{{ longhorn_api_version }}"
+        kind: Volume
+        namespace: "{{ longhorn_namespace }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      register: longhorn_volumes
+      changed_when: false
+
+    - name: Read every Longhorn backing image
+      kubernetes.core.k8s_info:
+        api_version: "{{ longhorn_api_version }}"
+        kind: BackingImage
+        namespace: "{{ longhorn_namespace }}"
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      register: longhorn_backing_images
+      changed_when: false
+
+    # Robustness is only meaningful on an attached volume: a detached one has no
+    # running engine to evaluate its replicas and reports 'unknown'. Treating
+    # that as a defect would leave the gate permanently red.
+    - name: Classify the volumes
+      ansible.builtin.set_fact:
+        longhorn_faulted: >-
+          {{ longhorn_volumes.resources
+             | selectattr('status.robustness', 'defined')
+             | selectattr('status.robustness', 'equalto', 'faulted')
+             | map(attribute='metadata.name') | list }}
+        longhorn_unhealthy: >-
+          {{ longhorn_volumes.resources
+             | selectattr('status.state', 'defined')
+             | selectattr('status.state', 'equalto', 'attached')
+             | selectattr('status.robustness', 'defined')
+             | rejectattr('status.robustness', 'equalto', 'healthy')
+             | map(attribute='metadata.name') | list }}
+        longhorn_transitional: >-
+          {{ longhorn_volumes.resources
+             | selectattr('status.state', 'defined')
+             | rejectattr('status.state', 'in', ['attached', 'detached'])
+             | map(attribute='metadata.name') | list }}
+        longhorn_engine_lag: []
+        longhorn_backing_failed: []
+        longhorn_backing_not_ready: []
+
+    # Longhorn's own "engine upgrade required" signal: the volume's spec moved to
+    # the new engine image and its running engine has not caught up. A detached
+    # volume has no running engine, so currentImage is empty and not a lag.
+    - name: Collect volumes whose engine image lags their spec
+      ansible.builtin.set_fact:
+        longhorn_engine_lag: "{{ longhorn_engine_lag + [item.metadata.name] }}"
+      loop: "{{ longhorn_volumes.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when:
+        - item.status.currentImage | default('') | length > 0
+        - item.status.currentImage != (item.spec.image | default(item.status.currentImage))
+
+    # A BackingImage tracks one file state per disk holding it. Any disk in a
+    # failed state blocks the upgrade; no disk in 'ready' means it is not usable
+    # yet, which is worth reporting but resolves on its own.
+    - name: Collect backing images with a failed disk file
+      ansible.builtin.set_fact:
+        longhorn_backing_failed: "{{ longhorn_backing_failed + [item.metadata.name] }}"
+      loop: "{{ longhorn_backing_images.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when: >-
+        item.status.diskFileStatusMap | default({}) | dict2items
+        | selectattr('value.state', 'defined')
+        | selectattr('value.state', 'in', ['failed', 'failed-and-cleanup'])
+        | list | length > 0
+
+    - name: Collect backing images with no ready disk file
+      ansible.builtin.set_fact:
+        longhorn_backing_not_ready: "{{ longhorn_backing_not_ready + [item.metadata.name] }}"
+      loop: "{{ longhorn_backing_images.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when: >-
+        item.status.diskFileStatusMap | default({}) | dict2items
+        | selectattr('value.state', 'defined')
+        | selectattr('value.state', 'equalto', 'ready')
+        | list | length == 0
+
+    - name: Report Longhorn's readiness
+      ansible.builtin.debug:
+        msg:
+          - "longhorn-manager: {{ longhorn_version }}"
+          - "volumes: {{ longhorn_volumes.resources | length }}"
+          - "faulted volumes: {{ longhorn_faulted | join(', ') | default('none', true) }}"
+          - "unhealthy while attached: {{ longhorn_unhealthy | join(', ') | default('none', true) }}"
+          - "mid-transition: {{ longhorn_transitional | join(', ') | default('none', true) }}"
+          - "engine upgrade pending: {{ longhorn_engine_lag | join(', ') | default('none', true) }}"
+          - "backing images: {{ longhorn_backing_images.resources | length }}"
+          - "failed backing images: {{ longhorn_backing_failed | join(', ') | default('none', true) }}"
+          - "backing images not ready: {{ longhorn_backing_not_ready | join(', ') | default('none', true) }}"
+
+    # Only these two are fatal. A degraded volume rebuilds on its own and a
+    # transitional state is usually momentary, so both are reported above and
+    # left to the operator rather than blocking the run.
+    - name: Assert no volume is faulted and no backing image failed
+      ansible.builtin.assert:
+        that:
+          - longhorn_faulted | length == 0
+          - longhorn_backing_failed | length == 0
+        fail_msg: >-
+          Longhorn is not ready to upgrade.
+          faulted volumes: {{ longhorn_faulted | join(', ') | default('none', true) }}.
+          failed backing images: {{ longhorn_backing_failed | join(', ') | default('none', true) }}.
+          Longhorn's own pre-upgrade check refuses to run past these, and a
+          completed minor upgrade cannot be rolled back.
+        success_msg: >-
+          Longhorn {{ longhorn_version }} is ready to upgrade:
+          {{ longhorn_volumes.resources | length }} volumes, none faulted.
