@@ -22,6 +22,72 @@ kubectl apply -f cluster/longhorn/backup-target.yaml
 `retain` applies to `snapshot` and `backup` only; it reads 0 elsewhere. Nodes and
 longhorn-manager run UTC.
 
+## Chart values
+
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.7.2
+values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
+cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
+chart and fails when the two part.
+
+Longhorn's StorageClass and its settings are not chart objects. The chart writes
+each into a ConfigMap and longhorn-manager applies it, stamping the class with
+`longhorn.io/last-applied-configmap`, so what the chart renders does reach live
+config.
+
+The `longhorn` StorageClass is entirely 1.7.2 default. The values pin it anyway,
+because `parameters` are immutable and every Longhorn-backed PVC uses the class.
+`staleReplicaTimeout` and `volumeBindingMode` are template constants in the
+chart, so nothing pins those.
+
+The three classes in `cluster/StorageClass/` are untouched. The chart renders no
+StorageClass object, so it cannot duplicate them.
+
+## Settings
+
+Thirteen of the 88 `settings.longhorn.io` CRs sit off the Longhorn 1.7.2
+built-in default, which is what the chart falls back to for each `~` in its
+`defaultSettings`. `values.yaml` records all thirteen.
+
+| Setting | 1.7.2 default | Live |
+| --- | --- | --- |
+| `backup-compression-method` | `lz4` | `gzip` |
+| `backup-target` | *(empty)* | `nfs://shoebox:/longhorn-backups` |
+| `concurrent-automatic-engine-upgrade-per-node-limit` | `0` | `5` |
+| `default-data-locality` | `disabled` | `best-effort` |
+| `default-replica-count` | `3` | `2` |
+| `detach-manually-attached-volumes-when-cordoned` | `false` | `true` |
+| `node-down-pod-deletion-policy` | `do-nothing` | `delete-both-statefulset-and-deployment-pod` |
+| `node-drain-policy` | `block-if-contains-last-replica` | `allow-if-replica-is-stopped` |
+| `orphan-auto-deletion` | `false` | `true` |
+| `priority-class` | *(empty)* | `longhorn-critical` |
+| `remove-snapshots-during-filesystem-trim` | `false` | `true` |
+| `replica-auto-balance` | `disabled` | `best-effort` |
+| `v2-data-engine-hugepage-limit` | `2048` | `1024` |
+
+`disable-revision-counter: true` is a fourteenth entry in the rendered
+ConfigMap, already at its built-in default. The chart writes it regardless.
+
+Two rows differ from the StorageClass by design. `default-data-locality` is
+`best-effort` here and `dataLocality: disabled` in the class;
+`default-replica-count` is 2 against `numberOfReplicas: "3"`. These are what the
+UI stamps on a volume created outside a PVC; the class parameters win for every
+PVC, and all 21 volumes came from one.
+
+`backup-target` is also held by `backup-target.yaml`. 1.7.2 keeps both the
+setting and the `BackupTarget` CR; change one and change the other.
+
+The other 67 sit at their default, bar 8 that longhorn-manager maintains itself:
+`current-longhorn-version`, `crd-api-version`, and the image and version
+settings.
+
+### Gap: the upgrade hooks
+
+`preUpgradeChecker.jobEnabled` defaults true, so the chart renders
+`longhorn-pre-upgrade` and `longhorn-post-upgrade` Jobs as Helm hooks. The live
+cluster has neither, because `deploy/longhorn.yaml` carries no hooks. Upstream's
+chart README says to disable the setting under ArgoCD. Left at its default here;
+#60 owns it.
+
 ## Snapshot is not backup
 
 Snapshots live on the volume's own replicas, so a dead node takes them with it.
