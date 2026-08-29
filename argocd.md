@@ -59,6 +59,14 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 4. Add notification annotations per `cluster/argocd/CLAUDE.md` conventions.
 5. Commit and push; the root app-of-apps picks it up automatically.
 
+## Sync hooks
+
+`cluster/argocd/hooks/<app>/` holds `PreSync`/`PostSync`/`SyncFail` Jobs for an app, built by kustomize and carried into the app as an extra entry in `spec.sources`.
+
+`hooks/longhorn/` gates the Longhorn upgrade chain: it reads `volumes.longhorn.io` and `backingimages.longhorn.io` over the in-cluster API and exits non-zero on a faulted volume or a backing image with a failed disk file, which aborts the sync before the upgrade starts. Longhorn cannot be rolled back once a minor upgrade completes, so the check runs on the sync rather than as an operator step that can be skipped.
+
+A detached volume reports robustness `unknown` because no engine is running to evaluate its replicas; the gate reads robustness only as a defect when it is `faulted`, so idle volumes do not block a sync.
+
 ## Helm-sourced Applications
 
 Monitoring stack and NFS provisioner use ArgoCD multi-source: the chart comes from an upstream registry, values come from this git repo via `$values` ref. Pin chart versions in `spec.sources[].targetRevision`.
