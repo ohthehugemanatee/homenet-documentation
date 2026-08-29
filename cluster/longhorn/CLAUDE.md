@@ -2,8 +2,10 @@
 
 `install.sh` installs Longhorn from a pinned upstream commit, not from a chart in
 this repo. This directory holds that installer, the `RecurringJob` CRs and the
-`BackupTarget`. StorageClasses are in `cluster/StorageClass/`. `README.md` carries
-the schedule table and the audit behind it; keep the two in sync.
+`BackupTarget`. StorageClasses are in `cluster/StorageClass/`. The live install's
+chart values and the capture they came from are in `cluster/helm/longhorn/`.
+`README.md` carries the schedule table, the settings drift table and the audit
+behind them; keep it in sync with all three.
 
 ## Never rename, never guess
 

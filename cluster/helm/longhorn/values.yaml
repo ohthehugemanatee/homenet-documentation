@@ -1,0 +1,53 @@
+---
+# Longhorn 1.7.2 — the live install expressed as chart values (#279).
+#
+# `cluster/longhorn/install.sh` applied upstream `deploy/longhorn.yaml` and
+# nothing since has been in the repo, so the cluster's StorageClass and its
+# settings existed only in `longhorn-system`. `live-state.yaml` is the capture
+# they were read from; every value below reproduces one of them, so the ArgoCD
+# adoption in #60 asserts what is already running.
+#
+# `.github/scripts/check_longhorn_render.py` renders this and fails CI when it
+# no longer matches the capture.
+
+defaultSettings:
+  # Longhorn seeds its `settings.longhorn.io` CRs from the ConfigMap these
+  # render into, and re-seeds when it changes. All but `disableRevisionCounter`
+  # are drift the chart would otherwise revert to a 1.7.2 default.
+  backupCompressionMethod: gzip
+  # Also held by the BackupTarget CR in cluster/longhorn/backup-target.yaml;
+  # 1.7.2 keeps both and they agree.
+  backupTarget: nfs://shoebox:/longhorn-backups
+  concurrentAutomaticEngineUpgradePerNodeLimit: 5
+  defaultDataLocality: best-effort
+  defaultReplicaCount: 2
+  detachManuallyAttachedVolumesWhenCordoned: true
+  disableRevisionCounter: true
+  nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+  nodeDrainPolicy: allow-if-replica-is-stopped
+  orphanAutoDeletion: true
+  priorityClass: longhorn-critical
+  removeSnapshotsDuringFilesystemTrim: true
+  replicaAutoBalance: best-effort
+  v2DataEngineHugepageLimit: 1024
+
+persistence:
+  # Feeds the `longhorn` StorageClass. All eight match 1.7.2 today and are
+  # pinned because `parameters` are immutable; README.md has the reasoning.
+  #
+  # Two names repeat under `defaultSettings` above with different values, and
+  # that is correct — these are the StorageClass parameters, those are what the
+  # UI stamps on volumes created outside a PVC:
+  #   defaultDataLocality                 disabled  here, best-effort there
+  #   removeSnapshotsDuringFilesystemTrim ignored   here, true        there
+  #
+  # `staleReplicaTimeout: "30"` and `volumeBindingMode: Immediate` are template
+  # constants in this chart, not values — there is nothing here to pin them to.
+  defaultClass: true
+  defaultClassReplicaCount: 3
+  defaultFsType: ext4
+  defaultDataLocality: disabled
+  reclaimPolicy: Delete
+  disableRevisionCounter: "true"
+  removeSnapshotsDuringFilesystemTrim: ignored
+  dataEngine: v1
