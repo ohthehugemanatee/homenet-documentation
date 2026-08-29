@@ -1,7 +1,5 @@
 ---
-# configMapGenerator keeps one copy of preflight.py on disk: the file the unit
-# tests import is the file the Job runs. Embedding it as a ConfigMap literal
-# would fork the two.
+# See cluster/argocd/CLAUDE.md.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: longhorn-system
@@ -13,16 +11,9 @@ configMapGenerator:
     files:
       - preflight.py
     options:
-      # The ConfigMap has to be a PreSync hook too. Without the annotation
-      # ArgoCD applies it in the main sync, which runs *after* PreSync, so the
-      # Job would mount a ConfigMap that does not exist yet and fail on the
-      # first sync of a fresh cluster. sync-wave -1 lands it before the Job.
       annotations:
         argocd.argoproj.io/hook: PreSync
         argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
         argocd.argoproj.io/sync-wave: "-1"
 generatorOptions:
-  # The Job names the ConfigMap, so a content hash suffix would break the
-  # reference. ArgoCD replaces both on every sync anyway, so a changed script
-  # is picked up without the hash.
   disableNameSuffixHash: true

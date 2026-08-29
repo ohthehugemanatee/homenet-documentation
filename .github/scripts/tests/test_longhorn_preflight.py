@@ -1,9 +1,4 @@
-"""Unit tests for the Longhorn PreSync gate (#280).
-
-Deliberately shallow. The Kubernetes and Longhorn APIs are tested upstream; the
-two things that are ours are that the right collections get requested and that a
-blocking response actually blocks.
-"""
+"""Tests for the Longhorn PreSync gate."""
 import importlib.util
 import os
 import unittest
@@ -49,9 +44,6 @@ class TestBlockers(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertIn('bi-a', found[0])
 
-    # The semantic worth pinning: a detached volume has no engine to evaluate
-    # its replicas and always reports 'unknown'. Blocking on that would fail
-    # every sync, which is how a gate gets switched off.
     def test_detached_degraded_and_statusless_do_not_block(self):
         vols = [vol('pvc-a', state='detached', robustness='unknown'),
                 vol('pvc-b', robustness='degraded'),
@@ -59,7 +51,6 @@ class TestBlockers(unittest.TestCase):
                 {'metadata': {'name': 'pvc-d'}}]
         self.assertEqual(preflight.blockers(vols, [bi('bi-a', 'ready')]), [])
 
-    # This cluster runs no BackingImages; an empty collection is the norm.
     def test_empty_collections_do_not_block(self):
         self.assertEqual(preflight.blockers([], []), [])
 
@@ -70,7 +61,6 @@ class TestBlockers(unittest.TestCase):
 
 
 class TestExitCode(unittest.TestCase):
-    """A blocking response returns the status ArgoCD reads to abort the sync."""
 
     def setUp(self):
         self.real_fetch = preflight.fetch
@@ -82,7 +72,6 @@ class TestExitCode(unittest.TestCase):
     def _run(self, volumes, backing_images):
         preflight.fetch = lambda base, tok, ctx, plural: (
             volumes if plural == 'volumes' else backing_images)
-        # main() reads the ServiceAccount token and CA off disk.
         with mock.patch('builtins.open', mock.mock_open(read_data='tok')), \
              mock.patch.object(preflight.ssl, 'create_default_context',
                                return_value=None):
