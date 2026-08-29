@@ -1053,6 +1053,8 @@ jobs:
     env:
       K3D_VERSION: v5.7.5
       AM_VERSION: "0.27.0"
+      # Matches the version cluster/longhorn/install.sh put on the cluster.
+      LONGHORN_VERSION: "1.7.2"
 
     steps:
       - uses: actions/checkout@v4
@@ -1084,6 +1086,7 @@ jobs:
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo add jetstack https://charts.jetstack.io
+          helm repo add longhorn https://charts.longhorn.io
           helm repo update
 
       - name: Dry-run argocd
@@ -1174,6 +1177,19 @@ jobs:
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-basic/values.yaml > /dev/null
+
+      - name: Dry-run longhorn and diff the render against live cluster state
+        # Longhorn's StorageClass is not a chart object: the chart renders it
+        # into a ConfigMap that longhorn-manager applies. `helm template` with
+        # no cluster to read from falls back to a kubeVersion the chart
+        # rejects, so pass the one the rest of CI validates against.
+        run: |
+          helm template longhorn longhorn/longhorn \
+            --version "${LONGHORN_VERSION}" \
+            --namespace longhorn-system \
+            --kube-version 1.29.0 \
+            -f cluster/helm/longhorn/values.yaml > /tmp/longhorn-render.yaml
+          python3 .github/scripts/check_longhorn_render.py /tmp/longhorn-render.yaml
 
       - name: Resolve pinned cert-manager chart version
         run: |

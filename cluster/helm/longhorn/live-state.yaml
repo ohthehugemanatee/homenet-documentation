@@ -1,0 +1,38 @@
+---
+# Longhorn's live config, read from the cluster on 29 Aug 2026 (#279).
+# Read-only capture — nothing applies it; `values.yaml` reproduces it.
+
+# `kubectl get sc longhorn`, server-side fields dropped.
+storageClass:
+  isDefaultClass: "true"
+  provisioner: driver.longhorn.io
+  allowVolumeExpansion: true
+  reclaimPolicy: Delete
+  volumeBindingMode: Immediate
+  parameters:
+    dataEngine: v1
+    dataLocality: disabled
+    disableRevisionCounter: "true"
+    fromBackup: ""
+    fsType: ext4
+    numberOfReplicas: "3"
+    staleReplicaTimeout: "30"
+    unmapMarkSnapChainRemoved: ignored
+
+# The `settings.longhorn.io` CRs `values.yaml` writes into
+# `longhorn-default-setting`, each at its live value.
+settings:
+  backup-compression-method: gzip
+  backup-target: nfs://shoebox:/longhorn-backups
+  concurrent-automatic-engine-upgrade-per-node-limit: "5"
+  default-data-locality: best-effort
+  default-replica-count: "2"
+  detach-manually-attached-volumes-when-cordoned: "true"
+  disable-revision-counter: "true"
+  node-down-pod-deletion-policy: delete-both-statefulset-and-deployment-pod
+  node-drain-policy: allow-if-replica-is-stopped
+  orphan-auto-deletion: "true"
+  priority-class: longhorn-critical
+  remove-snapshots-during-filesystem-trim: "true"
+  replica-auto-balance: best-effort
+  v2-data-engine-hugepage-limit: "1024"
