@@ -1,0 +1,60 @@
+---
+# PreSync gate on the Longhorn Application. A non-zero exit aborts the sync, so
+# an upgrade never starts against a faulted volume (#280).
+#
+# PreSync rather than a manual step: the upgrade chain #281-#285 is five
+# ArgoCD syncs, and a check the operator has to remember before each one is a
+# checklist item, not a gate.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: longhorn-preflight
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    # Replace last run's Job rather than leaving one per sync behind. Deleting
+    # on success instead would throw away the log of the run that let an
+    # upgrade through, which is the log worth keeping.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    # Runs after the ConfigMap carrying preflight.py (wave -1).
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  # A gate that retries is a gate that takes four minutes to say no.
+  backoffLimit: 0
+  # Reads two collections over the in-cluster API; nothing here is slow.
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      name: longhorn-preflight
+    spec:
+      serviceAccountName: longhorn-preflight
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: preflight
+          image: python:3.12-alpine
+          command: ["python3", "/hook/preflight.py"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: hook
+          configMap:
+            name: longhorn-preflight
