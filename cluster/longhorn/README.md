@@ -104,6 +104,12 @@ state with `kubectl` in an initContainer, onto a shared `emptyDir`; the script
 that decides pass or fail only ever reads that JSON, so a throttled or slow
 API server is `kubectl`'s problem, not the readiness check's.
 
+The initContainer's image is `alpine/kubectl`, not upstream's
+`registry.k8s.io/kubectl`: that image is distroless and has no shell, so
+`sh -c` fails at container init before `kubectl` ever runs. `backoffLimit: 0`
+turns that single start failure into a failed `PreSync` hook, which is what
+blocked the 1.7.2 → 1.8.2 hop the first time this gate ran (#294).
+
 ### CRDs stay OutOfSync on one field
 
 The chart sets `spec.preserveUnknownFields: false` on 7 of its 22 CRDs. The
