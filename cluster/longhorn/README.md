@@ -25,7 +25,7 @@ longhorn-manager run UTC.
 
 ## Chart values
 
-`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.7.2
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.8.2
 values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
 cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
 chart and fails when the two part.
@@ -47,7 +47,10 @@ StorageClass object, so it cannot duplicate them.
 
 Thirteen of the 88 `settings.longhorn.io` CRs sit off the Longhorn 1.7.2
 built-in default, which is what the chart falls back to for each `~` in its
-`defaultSettings`. `values.yaml` records all thirteen.
+`defaultSettings`. `values.yaml` recorded all thirteen through 1.7.2; from
+1.8 the chart stopped templating `backup-target` into
+`longhorn-default-setting`, so `values.yaml` records the other twelve and
+`backup-target.yaml`'s `BackupTarget` CR is `backup-target`'s only source.
 
 | Setting | 1.7.2 default | Live |
 | --- | --- | --- |
@@ -74,8 +77,10 @@ Two rows differ from the StorageClass by design. `default-data-locality` is
 UI stamps on a volume created outside a PVC; the class parameters win for every
 PVC, and all 21 volumes came from one.
 
-`backup-target` is also held by `backup-target.yaml`. 1.7.2 keeps both the
-setting and the `BackupTarget` CR; change one and change the other.
+`backup-target` was also held by `backup-target.yaml` under 1.7.2, which kept
+both the setting and the `BackupTarget` CR in step. From 1.8 the chart no
+longer templates a `backup-target` setting at all; `backup-target.yaml`'s
+`BackupTarget` CR is the only place it lives now.
 
 The other 67 sit at their default, bar 8 that longhorn-manager maintains itself:
 `current-longhorn-version`, `crd-api-version`, and the image and version

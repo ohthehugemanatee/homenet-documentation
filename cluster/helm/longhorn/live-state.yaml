@@ -20,10 +20,12 @@ storageClass:
     unmapMarkSnapChainRemoved: ignored
 
 # The `settings.longhorn.io` CRs `values.yaml` writes into
-# `longhorn-default-setting`, each at its live value.
+# `longhorn-default-setting`, each at its live value. `backup-target` isn't
+# here: the 1.8 chart stopped templating it into this ConfigMap, so it's
+# tracked only through `cluster/longhorn/backup-target.yaml`'s `BackupTarget`
+# CR now. See cluster/longhorn/README.md.
 settings:
   backup-compression-method: gzip
-  backup-target: nfs://shoebox:/longhorn-backups
   concurrent-automatic-engine-upgrade-per-node-limit: "5"
   default-data-locality: best-effort
   default-replica-count: "2"
