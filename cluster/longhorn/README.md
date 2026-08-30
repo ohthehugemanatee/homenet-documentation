@@ -104,10 +104,7 @@ state with `kubectl` in an initContainer, onto a shared `emptyDir`; the script
 that decides pass or fail only ever reads that JSON, so a throttled or slow
 API server is `kubectl`'s problem, not the readiness check's.
 
-The initContainer's image is `alpine/kubectl`, pinned to the cluster's k3s
-version, rather than upstream's distroless `registry.k8s.io/kubectl`: the
-fetch script runs under `sh -c`, which the distroless image has no shell to
-run.
+the fetch initContainer's image needs a shell. we use `alpine/kubectl`, not upstreeadistroless one.
 
 ### CRDs stay OutOfSync on one field
 
