@@ -27,7 +27,7 @@ spec:
       initContainers:
         # kubectl handles auth, retry.
         - name: fetch
-          image: registry.k8s.io/kubectl:v1.29.0
+          image: alpine/kubectl:1.36.4
           command:
             - sh
             - -c

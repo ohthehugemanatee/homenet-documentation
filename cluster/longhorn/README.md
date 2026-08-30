@@ -104,6 +104,8 @@ state with `kubectl` in an initContainer, onto a shared `emptyDir`; the script
 that decides pass or fail only ever reads that JSON, so a throttled or slow
 API server is `kubectl`'s problem, not the readiness check's.
 
+the fetch initContainer needs a shell. we use `alpine/kubectl`, not the upstream distroless one.
+
 ### CRDs stay OutOfSync on one field
 
 The chart sets `spec.preserveUnknownFields: false` on 7 of its 22 CRDs. The

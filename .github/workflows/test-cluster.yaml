@@ -209,6 +209,20 @@ jobs:
             crd/recurringjobs.longhorn.io crd/backuptargets.longhorn.io \
             crd/volumes.longhorn.io crd/settings.longhorn.io
 
+      - name: Run the Longhorn PreSync gate
+        # The unit tests import preflight.py and never start the Job, so a
+        # fetch image with no shell passed CI and killed the live sync.
+        run: |
+          kubectl apply -k cluster/argocd/hooks/longhorn
+          kubectl wait --for=condition=complete --timeout=180s \
+            -n longhorn-system job/longhorn-preflight || {
+              kubectl describe -n longhorn-system job/longhorn-preflight
+              kubectl logs -n longhorn-system job/longhorn-preflight \
+                --all-containers --prefix
+              exit 1; }
+          kubectl logs -n longhorn-system job/longhorn-preflight \
+            | grep -q 'Longhorn is ready to upgrade.'
+
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
           kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
