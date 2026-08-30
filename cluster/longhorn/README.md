@@ -1,6 +1,6 @@
 # Longhorn
 
-Longhorn v1.7.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+Longhorn v1.8.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
 (chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
 in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
 `backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
