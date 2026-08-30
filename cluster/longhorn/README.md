@@ -1,9 +1,10 @@
 # Longhorn
 
-Longhorn v1.7.2, installed by `install.sh` from a pinned upstream commit into
-`longhorn-system`. Custom StorageClasses live in `cluster/StorageClass/`.
-`recurring-jobs.yaml` holds the schedule, `backup-target.yaml` the destination.
-ArgoCD syncs neither. Names match the live CRs, so an apply adopts them:
+Longhorn v1.7.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+(chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
+in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
+`backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
+live CRs, so an apply adopts them:
 
 ```sh
 kubectl apply -f cluster/longhorn/recurring-jobs.yaml
@@ -80,13 +81,18 @@ The other 67 sit at their default, bar 8 that longhorn-manager maintains itself:
 `current-longhorn-version`, `crd-api-version`, and the image and version
 settings.
 
-### Gap: the upgrade hooks
+### The upgrade hooks
 
-`preUpgradeChecker.jobEnabled` defaults true, so the chart renders
-`longhorn-pre-upgrade` and `longhorn-post-upgrade` Jobs as Helm hooks. The live
-cluster has neither, because `deploy/longhorn.yaml` carries no hooks. Upstream's
-chart README says to disable the setting under ArgoCD. Left at its default here;
-#60 owns it.
+`values.yaml` pins `preUpgradeChecker.jobEnabled` and `upgradeVersionCheck` to
+true, so a sync renders `longhorn-pre-upgrade` (and, on an upgrade,
+`longhorn-post-upgrade`) as ArgoCD `PreSync`/`PostSync` hooks. Upstream's chart
+README says to disable the checker under ArgoCD. This repo keeps it enabled:
+it enforces the sequential-minor rule and the faulted-volume block that the
+five-hop upgrade chain (#281 through #285) depends on.
+
+`cluster/argocd/hooks/longhorn/` runs its own faulted-volume gate one sync wave
+ahead of `longhorn-pre-upgrade`, so a bad volume blocks the sync before the
+chart's own Job starts.
 
 ## Snapshot is not backup
 

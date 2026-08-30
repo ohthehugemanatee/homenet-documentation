@@ -38,3 +38,8 @@ persistence:
   disableRevisionCounter: "true"
   removeSnapshotsDuringFilesystemTrim: ignored
   dataEngine: v1
+
+preUpgradeChecker:
+  # Guards the upgrade chain.
+  jobEnabled: true
+  upgradeVersionCheck: true
