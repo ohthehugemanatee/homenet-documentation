@@ -1,12 +1,6 @@
 ---
-# Longhorn 1.7.2 values, reproducing the live install. Read from the cluster
-# into `live-state.yaml`; see cluster/longhorn/README.md.
-
 defaultSettings:
-  # All but `disableRevisionCounter` sit off the 1.7.2 default.
   backupCompressionMethod: gzip
-  # Also held by cluster/longhorn/backup-target.yaml; keep the two in step.
-  backupTarget: nfs://shoebox:/longhorn-backups
   concurrentAutomaticEngineUpgradePerNodeLimit: 5
   defaultDataLocality: best-effort
   defaultReplicaCount: 2
@@ -21,15 +15,6 @@ defaultSettings:
   v2DataEngineHugepageLimit: 1024
 
 persistence:
-  # Feeds the `longhorn` StorageClass; all eight match 1.7.2 today.
-  #
-  # Two names repeat under `defaultSettings` above with different values. That
-  # is correct, not a typo; README.md says why.
-  #   defaultDataLocality                 disabled  here, best-effort there
-  #   removeSnapshotsDuringFilesystemTrim ignored   here, true        there
-  #
-  # `staleReplicaTimeout: "30"` and `volumeBindingMode: Immediate` are template
-  # constants in this chart, not values — there is nothing here to pin them to.
   defaultClass: true
   defaultClassReplicaCount: 3
   defaultFsType: ext4
@@ -38,8 +23,9 @@ persistence:
   disableRevisionCounter: "true"
   removeSnapshotsDuringFilesystemTrim: ignored
   dataEngine: v1
+  # Keeps StorageClass immutable.
+  backupTargetName: ""
 
 preUpgradeChecker:
-  # Guards the upgrade chain.
   jobEnabled: true
   upgradeVersionCheck: true

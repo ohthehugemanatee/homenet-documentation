@@ -1,8 +1,4 @@
 ---
-# Longhorn's live config, read from the cluster on 29 Aug 2026 (#279).
-# Read-only capture — nothing applies it; `values.yaml` reproduces it.
-
-# `kubectl get sc longhorn`, server-side fields dropped.
 storageClass:
   isDefaultClass: "true"
   provisioner: driver.longhorn.io
@@ -19,11 +15,8 @@ storageClass:
     staleReplicaTimeout: "30"
     unmapMarkSnapChainRemoved: ignored
 
-# The `settings.longhorn.io` CRs `values.yaml` writes into
-# `longhorn-default-setting`, each at its live value.
 settings:
   backup-compression-method: gzip
-  backup-target: nfs://shoebox:/longhorn-backups
   concurrent-automatic-engine-upgrade-per-node-limit: "5"
   default-data-locality: best-effort
   default-replica-count: "2"
