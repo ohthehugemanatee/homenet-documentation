@@ -97,7 +97,20 @@ five-hop upgrade chain (#281 through #285) depends on.
 
 `cluster/argocd/hooks/longhorn/` runs its own faulted-volume gate one sync wave
 ahead of `longhorn-pre-upgrade`, so a bad volume blocks the sync before the
-chart's own Job starts.
+chart's own Job starts. The gate itself fetches the volume and backing-image
+state with `kubectl` in an initContainer, onto a shared `emptyDir`; the script
+that decides pass or fail only ever reads that JSON, so a throttled or slow
+API server is `kubectl`'s problem, not the readiness check's.
+
+### CRDs stay OutOfSync on one field
+
+The chart sets `spec.preserveUnknownFields: false` on 7 of its 22 CRDs. The
+Kubernetes API server accepts only `false` there and drops the field from the
+stored object, so it never round-trips and ArgoCD reports those 7 as
+permanently OutOfSync. `cluster/argocd/apps/longhorn.yaml` carries an
+`ignoreDifferences` entry for `/spec/preserveUnknownFields` on
+`CustomResourceDefinition` to stop the false diff; nothing in the chart's own
+values controls it.
 
 ## Snapshot is not backup
 
