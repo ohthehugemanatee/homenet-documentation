@@ -24,10 +24,41 @@ spec:
         runAsGroup: 65534
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # kubectl handles auth, retry.
+        - name: fetch
+          image: registry.k8s.io/kubectl:v1.29.0
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              kubectl get volumes.longhorn.io -n longhorn-system \
+                -o json --cache-dir=/data/kube-cache > /data/volumes.json
+              kubectl get backingimages.longhorn.io -n longhorn-system \
+                -o json --cache-dir=/data/kube-cache > /data/backingimages.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
       containers:
         - name: preflight
           image: python:3.12-alpine
-          command: ["python3", "/hook/preflight.py"]
+          command:
+            - python3
+            - /hook/preflight.py
+            - /data/volumes.json
+            - /data/backingimages.json
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -36,6 +67,9 @@ spec:
           volumeMounts:
             - name: hook
               mountPath: /hook
+              readOnly: true
+            - name: data
+              mountPath: /data
               readOnly: true
           resources:
             requests:
@@ -47,3 +81,5 @@ spec:
         - name: hook
           configMap:
             name: longhorn-preflight
+        - name: data
+          emptyDir: {}
