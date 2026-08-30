@@ -38,7 +38,9 @@ config.
 The `longhorn` StorageClass is entirely 1.7.2 default. The values pin it anyway,
 because `parameters` are immutable and every Longhorn-backed PVC uses the class.
 `staleReplicaTimeout` and `volumeBindingMode` are template constants in the
-chart, so nothing pins those.
+chart, so nothing pins those. 1.8 added `persistence.backupTargetName`,
+defaulting to `"default"`; pinned to `""` for the same reason, since adding it
+now would change the live, immutable `parameters`.
 
 The three classes in `cluster/StorageClass/` are untouched. The chart renders no
 StorageClass object, so it cannot duplicate them.
