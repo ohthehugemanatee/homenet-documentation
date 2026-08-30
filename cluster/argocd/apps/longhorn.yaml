@@ -1,0 +1,34 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn
+  namespace: argocd
+  # No finalizer, no uninstall.
+  annotations:
+    notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      ref: values
+    - chart: longhorn
+      repoURL: https://charts.longhorn.io
+      # Pin only, no bump.
+      targetRevision: 1.7.2
+      helm:
+        valueFiles:
+          - $values/cluster/helm/longhorn/values.yaml
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      path: cluster/argocd/hooks/longhorn
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+  # Manual sync, infra tier.
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      # CRDs exceed apply limit.
+      - ServerSideApply=true
