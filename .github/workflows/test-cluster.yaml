@@ -1245,12 +1245,33 @@ jobs:
             --overrides cluster/helm/loki/values.yaml \
             --passthrough loki
 
-      - name: Dry-run alloy
+      - name: Resolve the alloy chart pin
+        id: alloy-chart
         run: |
-          helm upgrade --install alloy grafana/alloy \
-            --namespace monitoring --create-namespace \
-            --dry-run \
-            -f cluster/helm/alloy/values.yaml
+          version=$(python3 -c '
+          import yaml
+          sources = yaml.safe_load(
+              open("cluster/argocd/apps/alloy.yaml"))["spec"]["sources"]
+          print(next(s["targetRevision"]
+                     for s in sources if s.get("chart") == "alloy"))
+          ')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run alloy
+        # Rendered to a file, not /dev/null: the next step reads it. Pinned to
+        # what ArgoCD deploys, so an assertion here says something about the
+        # cluster rather than about the chart's latest release.
+        run: |
+          helm template alloy grafana/alloy \
+            --version "${{ steps.alloy-chart.outputs.version }}" \
+            --namespace monitoring \
+            -f cluster/helm/alloy/values.yaml \
+            > /tmp/alloy.yaml
+
+      - name: Assert alloy tails pod logs from disk, not the apiserver
+        run: |
+          python3 .github/scripts/check_alloy_log_tailing.py \
+            --rendered /tmp/alloy.yaml
 
       - name: Dry-run kubernetes-event-exporter
         run: |
