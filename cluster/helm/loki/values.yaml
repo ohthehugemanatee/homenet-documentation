@@ -38,6 +38,18 @@ singleBinary:
     limits:
       memory: 512Mi
 
+# Sized for a 5Gi store.
+chunksCache:
+  allocatedMemory: 1024
+  allocatedCPU: 100m
+  # Loki-side buffer, not memcached.
+  writebackSizeLimit: 10MB
+
+resultsCache:
+  allocatedMemory: 256
+  allocatedCPU: 100m
+  writebackSizeLimit: 10MB
+
 sidecar:
   # k3s CA cert lacks Authority Key Identifier extension;
   # Python 3.13+ in the sidecar image rejects it.
@@ -57,8 +69,14 @@ write:
 test:
   enabled: false
 
+# Needs the disabled gateway.
+lokiCanary:
+  enabled: false
+
 monitoring:
-  selfMonitoring:
-    enabled: false
-  lokiCanary:
-    enabled: false
+  serviceMonitor:
+    enabled: true
+    interval: 60s
+    # Prometheus selects on this.
+    labels:
+      release: kube-prometheus-stack

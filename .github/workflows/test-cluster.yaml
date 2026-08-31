@@ -1189,13 +1189,38 @@ jobs:
           PY
           "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
 
+      - name: Resolve the loki chart pin
+        id: loki-chart
+        run: |
+          version=$(python3 -c '
+          import yaml
+          sources = yaml.safe_load(
+              open("cluster/argocd/apps/loki.yaml"))["spec"]["sources"]
+          print(next(s["targetRevision"]
+                     for s in sources if s.get("chart") == "loki"))
+          ')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Dry-run loki
         run: |
           helm upgrade --install loki \
             oci://ghcr.io/grafana-community/helm-charts/loki \
+            --version "${{ steps.loki-chart.outputs.version }}" \
             --namespace loki --create-namespace \
             --dry-run \
             -f cluster/helm/loki/values.yaml
+
+      - name: Assert loki values keys reach the chart
+        # `loki:` is Loki's own config, not chart structure.
+        run: |
+          helm show values \
+            oci://ghcr.io/grafana-community/helm-charts/loki \
+            --version "${{ steps.loki-chart.outputs.version }}" \
+            > /tmp/loki-chart-values.yaml
+          python3 .github/scripts/check_helm_values_keys.py \
+            --chart-values /tmp/loki-chart-values.yaml \
+            --overrides cluster/helm/loki/values.yaml \
+            --passthrough loki
 
       - name: Dry-run alloy
         run: |

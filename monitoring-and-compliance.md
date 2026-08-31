@@ -21,6 +21,7 @@ In-cluster (observability + GitOps)
 ├── Alertmanager      ← fires on PrometheusRules → Pushover
 ├── Grafana           ← dashboards for metrics (Prometheus) + logs (Loki)
 ├── Loki              ← log aggregation (monolithic, 7d retention)
+│   └── memcached     ← chunk + query-result caches, resized down from chart defaults
 ├── Alloy (DaemonSet) ← collects pod stdout/stderr → Loki
 ├── Promtail sidecars ← collects file-based logs from specific pods → Loki
 └── event-exporter   ← ships k8s Events → Loki (powers workload-debug dashboard)
@@ -358,9 +359,11 @@ helm upgrade --install kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f cluster/helm/kube-prometheus-stack/values.yaml
 
-# Deploy community Loki chart:
+# Deploy community Loki chart. --version must match targetRevision in
+# cluster/argocd/apps/loki.yaml, or the next ArgoCD sync rolls it back:
 helm upgrade --install loki \
   oci://ghcr.io/grafana-community/helm-charts/loki \
+  --version 17.4.11 \
   -n loki --create-namespace \
   -f cluster/helm/loki/values.yaml
 
