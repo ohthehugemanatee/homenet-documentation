@@ -38,20 +38,11 @@ singleBinary:
     limits:
       memory: 512Mi
 
-# Both caches stay on: they absorb chunk and query reads that would otherwise
-# hit the Longhorn volume, which is this cluster's tightest resource. Only the
-# sizing changes. Chart defaults allocate 8192MB + 1024MB, which it turns into
-# 9830Mi + 1229Mi of requests *and* limits at 500m CPU each; singleBinary's
-# volume caps the whole chunk store at 5Gi, so an 8GB chunk cache is larger
-# than the data it caches.
-#
-# persistence stays disabled (chart default). Enabling it moves the cache to
-# memcached extstore on disk, which is the opposite of the point.
+# Sized for a 5Gi store.
 chunksCache:
   allocatedMemory: 1024
   allocatedCPU: 100m
-  # Buffer inside the Loki process, not memcached. 500MB against singleBinary's
-  # 512Mi limit is an OOM; upstream's monolithic-values.yaml uses 10MB.
+  # Loki-side buffer, not memcached.
   writebackSizeLimit: 10MB
 
 resultsCache:
@@ -75,10 +66,17 @@ read:
 write:
   replicas: 0
 
-# The helm test hook only scrapes the canary below.
 test:
   enabled: false
 
-# Writes through loki-gateway, which gateway.enabled: false never creates.
+# Needs the disabled gateway.
 lokiCanary:
   enabled: false
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 60s
+    # Prometheus selects on this.
+    labels:
+      release: kube-prometheus-stack

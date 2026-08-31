@@ -1,21 +1,14 @@
 """Gate against Helm values overrides the chart no longer reads.
 
-Helm merges a values file into the chart's defaults without validating it. A
-key the chart renamed or dropped is silently ignored: `helm template` renders,
-the dry-run passes, kubeconform is happy, and the override quietly does
-nothing. `cluster/helm/loki/values.yaml` carried `monitoring.lokiCanary` long
-after the chart hoisted it to a top-level `lokiCanary`, so a canary we thought
-was off ran against a gateway we never deployed; `monitoring.selfMonitoring`
-went the same way when chart 9.0.0 dropped it.
+Helm merges a values file without validating it, so a key the chart renamed or
+dropped is ignored rather than rejected: the dry-run renders, kubeconform
+passes, and the override does nothing.
 
-A key is accepted when the chart's own `values.yaml` defines it, or when its
-nearest defined ancestor is an empty mapping or null. That is the chart's way
-of saying "put anything here" (`resources: {}`, `nodeSelector: {}`).
+A key is accepted when the chart's `values.yaml` defines it, or when its
+nearest defined ancestor is an empty mapping or null (`resources: {}`).
 
-Blocks named by --passthrough are skipped whole. Those are the values a chart
-copies into some other program's config file rather than reading itself, so
-chart defaults say nothing about which keys are valid; `loki:` is Loki's own
-config file.
+--passthrough blocks are skipped whole: a chart copies those into another
+program's config, so chart defaults say nothing about which keys are valid.
 
 problems() is pure; main() does the I/O.
 """
@@ -46,7 +39,7 @@ def problems(overrides, defaults, passthrough=()):
                 continue
 
             if default is None:
-                # A null default is the chart inviting arbitrary keys.
+                # Null: anything goes.
                 continue
 
             if not isinstance(default, dict):
@@ -57,7 +50,7 @@ def problems(overrides, defaults, passthrough=()):
 
             if key not in default:
                 if default == {}:
-                    # An empty mapping is the same invitation.
+                    # Empty mapping: same.
                     continue
                 found.append(
                     f'{dotted} is not defined by the chart; it is merged in '

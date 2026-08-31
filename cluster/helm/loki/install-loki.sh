@@ -1,7 +1,5 @@
 #!/bin/sh
-# Version comes from the ArgoCD Application, not a second copy here: an
-# unpinned install is what let the cluster drift eleven chart majors ahead of
-# what ArgoCD believed it had deployed.
+# Pin comes from the ArgoCD Application.
 set -eu
 
 app="$(dirname "$0")/../../argocd/apps/loki.yaml"

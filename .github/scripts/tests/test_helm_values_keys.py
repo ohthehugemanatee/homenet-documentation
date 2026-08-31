@@ -13,9 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from check_helm_values_keys import problems  # noqa: E402
 
-# Shaped like the loki chart: `monitoring` is a populated mapping (so an
-# unknown child is a defect), `resources` and `nodeSelector` are empty (so any
-# child is fine), and `loki` is the passthrough block.
+# Shaped like the loki chart.
 CHART = {
     'deploymentMode': 'Monolithic',
     'gateway': {'enabled': True},
@@ -60,8 +58,6 @@ class ProblemsTest(unittest.TestCase):
         self.assertEqual(problems(overrides, CHART), [])
 
     def test_children_of_an_empty_mapping_are_free_form(self):
-        # `resources: {}` and `nodeSelector: {}` are the chart's way of saying
-        # "arbitrary Kubernetes structure here".
         overrides = {'singleBinary': {
             'nodeSelector': {'kubernetes.io/arch': 'amd64'},
             'resources': {'requests': {'cpu': '100m'},
@@ -73,15 +69,12 @@ class ProblemsTest(unittest.TestCase):
                                   {'extra': None}), [])
 
     def test_passthrough_block_is_skipped_whole(self):
-        # `loki:` becomes Loki's config file. Chart defaults list a handful of
-        # its keys and say nothing about the hundreds of valid others.
         overrides = {'loki': {'limits_config': {'retention_period': '168h'},
                               'compactor': {'retention_enabled': True}}}
         self.assertEqual(len(problems(overrides, CHART)), 2)
         self.assertEqual(problems(overrides, CHART, passthrough=('loki',)), [])
 
     def test_passthrough_applies_only_at_the_top_level(self):
-        # A nested key that happens to be named `loki` is still chart structure.
         found = problems({'monitoring': {'loki': {'enabled': False}}}, CHART,
                          passthrough=('loki',))
         self.assertEqual(len(found), 1)

@@ -1191,10 +1191,6 @@ jobs:
 
       - name: Resolve the loki chart pin
         id: loki-chart
-        # Read it from the ArgoCD Application rather than restating it here.
-        # An unpinned dry-run tests whatever is newest, which is not what
-        # ArgoCD deploys, so a values key the pinned chart dropped renders
-        # green in CI.
         run: |
           version=$(python3 -c '
           import yaml
@@ -1215,9 +1211,7 @@ jobs:
             -f cluster/helm/loki/values.yaml
 
       - name: Assert loki values keys reach the chart
-        # helm merges an unknown key without complaining, so the dry-run above
-        # passes on an override the chart renamed or dropped. `loki:` is
-        # excluded because the chart copies it into Loki's own config file.
+        # `loki:` is Loki's own config, not chart structure.
         run: |
           helm show values \
             oci://ghcr.io/grafana-community/helm-charts/loki \

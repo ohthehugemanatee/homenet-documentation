@@ -460,30 +460,18 @@ Tracked: regenerate the k3s CA with AKI/SKI extensions to remove this workaround
 
 ## Loki memcached sizing
 
-The chart enables a chunk cache and a query-result cache by default, and their
-StatefulSets are gated only on `chunksCache.enabled` / `resultsCache.enabled`, not on
-`deploymentMode`. Monolithic Loki gets both.
+The chunk and query-result caches run under Monolithic Loki, sized well below chart
+defaults: 1024MB and 256MB, against defaults of 8192MB and 1024MB. They stay enabled
+because every hit is a read that skips the Longhorn volume.
 
-Keep them. Every cache hit is a read that does not go to the `longhorn-ephemeral`
-volume, and Longhorn read I/O over the home network is this cluster's tightest
-resource.
+Two settings read wrong at a glance:
 
-Resize them. Chart defaults allocate 8192MB and 1024MB, which the chart turns into
-9830Mi and 1229Mi of memory `requests` *and* `limits` at 500m CPU each, for a Loki
-capped at 512Mi whose entire chunk store fits in a 5Gi volume. `loki/values.yaml`
-allocates 1024MB and 256MB instead, which reserves 1229Mi and 307Mi at 100m CPU each.
+- `allocatedMemory` sets memcached's `-m` flag *and* the pod's memory request and
+  limit, as `round(allocatedMemory * 1.2)`.
+- `writebackSizeLimit` buffers inside the Loki process, not memcached, so its 500MB
+  default lands against `singleBinary.resources.limits.memory`. Both caches use 10MB.
 
-Two settings are easy to misread:
-
-- `allocatedMemory` is memcached's `-m` flag. The chart derives the pod's memory
-  request and limit from it as `round(allocatedMemory * 1.2)`, so changing it moves
-  both the cache size and the reservation together.
-- `writebackSizeLimit` is a buffer inside the **Loki** process, not memcached. The
-  500MB default lands against `singleBinary.resources.limits.memory`; both caches are
-  set to 10MB, matching upstream's `monolithic-values.yaml`.
-
-`persistence` stays disabled on both. Enabling it moves the cache into memcached
-extstore on a disk, which defeats the reason for keeping the caches.
+`persistence` stays off; extstore would put the cache back on a disk.
 
 ---
 
