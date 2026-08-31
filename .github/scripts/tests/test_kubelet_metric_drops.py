@@ -30,7 +30,8 @@ SPARED = (
 
 
 def drop_rule():
-    values = yaml.safe_load(open(VALUES))
+    with open(VALUES) as f:
+        values = yaml.safe_load(f)
     rules = values['kubelet']['serviceMonitor']['metricRelabelings']
     self_check = [r for r in rules if r.get('sourceLabels') == ['__name__']]
     return self_check[0]
