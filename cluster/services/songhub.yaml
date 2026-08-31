@@ -120,7 +120,7 @@ spec:
           # to reMarkable Cloud via rmapi. Shares the songhub-saved-tabs
           # volume with the songhub container above (same pod, so no NFS/RWX
           # needed) and never modifies the original tab files.
-          image: ghcr.io/ohthehugemanatee/remarkable-sync:v0.0.34
+          image: ghcr.io/ohthehugemanatee/remarkable-sync:v0.0.35
           env:
             - name: RMAPI_CONFIG
               value: /secrets/rmapi/rmapi.conf
