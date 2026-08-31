@@ -1,0 +1,85 @@
+---
+# See cluster/argocd/CLAUDE.md.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: longhorn-preflight
+  namespace: longhorn-system
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      name: longhorn-preflight
+    spec:
+      serviceAccountName: longhorn-preflight
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # kubectl handles auth, retry.
+        - name: fetch
+          image: alpine/kubectl:1.36.4
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              kubectl get volumes.longhorn.io -n longhorn-system \
+                -o json --cache-dir=/data/kube-cache > /data/volumes.json
+              kubectl get backingimages.longhorn.io -n longhorn-system \
+                -o json --cache-dir=/data/kube-cache > /data/backingimages.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      containers:
+        - name: preflight
+          image: python:3.12-alpine
+          command:
+            - python3
+            - /hook/preflight.py
+            - /data/volumes.json
+            - /data/backingimages.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: data
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: hook
+          configMap:
+            name: longhorn-preflight
+        - name: data
+          emptyDir: {}

@@ -137,26 +137,91 @@ jobs:
           done
           kubectl apply -f cluster/priorityClasses/
 
+      - name: Resolve pinned Longhorn chart version
+        run: |
+          # Pin read from Application.
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/longhorn.yaml"))
+          ver = next(s["targetRevision"] for s in app["spec"]["sources"]
+                     if s.get("chart") == "longhorn")
+          print(f"LONGHORN_VERSION={ver}")
+          PY
+
+      - name: Assert longhorn stays on the manual-sync infra tier
+        run: |
+          # Finalizer risks forced uninstall.
+          python3 - <<'PY'
+          import re, sys, yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/longhorn.yaml"))
+          sources = app["spec"]["sources"]
+          policy = app["spec"].get("syncPolicy", {})
+          errs = []
+          if "automated" in policy:
+              errs.append("syncPolicy.automated is set; longhorn must stay manual-sync")
+          if app["metadata"].get("finalizers"):
+              errs.append("finalizer present; an Application delete would run the chart's uninstall hook")
+          if "notifications.argoproj.io/subscribe.on-out-of-sync.pushover" \
+                  not in app["metadata"].get("annotations", {}):
+              errs.append("missing on-out-of-sync Pushover annotation required of manual-sync apps")
+          chart = next((s for s in sources if s.get("chart") == "longhorn"), None)
+          if chart is None:
+              errs.append("no longhorn chart source found")
+          elif not re.fullmatch(r"\d+\.\d+\.\d+", str(chart.get("targetRevision", ""))):
+              errs.append(f"chart version {chart.get('targetRevision')!r} is not an exact pin")
+          if not any(s.get("path") == "cluster/argocd/hooks/longhorn" for s in sources):
+              errs.append("hooks/longhorn missing from spec.sources; the readiness gate would not run")
+          if "ServerSideApply=true" not in policy.get("syncOptions", []):
+              errs.append("ServerSideApply=true required; Longhorn CRDs exceed the client-side apply limit")
+          ignores = app["spec"].get("ignoreDifferences", [])
+          preserve_unknown_ignored = any(
+              i.get("kind") == "CustomResourceDefinition"
+              and "/spec/preserveUnknownFields" in i.get("jsonPointers", [])
+              for i in ignores)
+          if not preserve_unknown_ignored:
+              errs.append("missing ignoreDifferences for CRD /spec/preserveUnknownFields; "
+                          "the chart's CRDs would stay OutOfSync forever")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
       - name: Install Longhorn CRDs (schema only, no controllers)
         # auth can-i needs registered CRDs.
+        # Chart carries CRDs directly.
         run: |
-          REF=$(grep -o 'longhorn/[0-9a-f]\{40\}/deploy' cluster/longhorn/install.sh \
-            | cut -d/ -f2)
-          echo "longhorn ref: ${REF}"
-          curl -fsSL \
-            "https://raw.githubusercontent.com/longhorn/longhorn/${REF}/deploy/longhorn.yaml" \
-            -o /tmp/longhorn.yaml
+          helm repo add longhorn https://charts.longhorn.io
+          helm repo update
+          helm template longhorn longhorn/longhorn \
+            --version "${LONGHORN_VERSION}" \
+            --namespace longhorn-system \
+            --kube-version 1.29.0 \
+            -f cluster/helm/longhorn/values.yaml > /tmp/longhorn.yaml
           python3 - <<'PY' > /tmp/longhorn-crds.yaml
           import yaml
           docs = [d for d in yaml.safe_load_all(open('/tmp/longhorn.yaml'))
                   if d and d.get('kind') == 'CustomResourceDefinition']
-          assert docs, 'no CRDs found in the pinned longhorn.yaml'
+          assert docs, 'no CRDs found in the rendered chart'
           print(yaml.dump_all(docs))
           PY
           kubectl apply --server-side -f /tmp/longhorn-crds.yaml
           kubectl wait --for condition=established --timeout=60s \
             crd/recurringjobs.longhorn.io crd/backuptargets.longhorn.io \
             crd/volumes.longhorn.io crd/settings.longhorn.io
+
+      - name: Run the Longhorn PreSync gate
+        # The unit tests import preflight.py and never start the Job, so a
+        # fetch image with no shell passed CI and killed the live sync.
+        run: |
+          kubectl apply -k cluster/argocd/hooks/longhorn
+          kubectl wait --for=condition=complete --timeout=180s \
+            -n longhorn-system job/longhorn-preflight || {
+              kubectl describe -n longhorn-system job/longhorn-preflight
+              kubectl logs -n longhorn-system job/longhorn-preflight \
+                --all-containers --prefix
+              exit 1; }
+          kubectl logs -n longhorn-system job/longhorn-preflight \
+            | grep -q 'Longhorn is ready to upgrade.'
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
@@ -1084,6 +1149,7 @@ jobs:
             https://kubernetes-sigs.github.io/node-feature-discovery/charts
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo add jetstack https://charts.jetstack.io
+          helm repo add longhorn https://charts.longhorn.io
           helm repo update
 
       - name: Dry-run argocd
@@ -1182,6 +1248,29 @@ jobs:
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-basic/values.yaml > /dev/null
+
+      - name: Resolve pinned Longhorn chart version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/longhorn.yaml"))
+          ver = next(s["targetRevision"] for s in app["spec"]["sources"]
+                     if s.get("chart") == "longhorn")
+          print(f"LONGHORN_VERSION={ver}")
+          PY
+
+      - name: Dry-run longhorn and diff the render against live cluster state
+        # Longhorn's StorageClass is not a chart object: the chart renders it
+        # into a ConfigMap that longhorn-manager applies. `helm template` with
+        # no cluster to read from falls back to a kubeVersion the chart
+        # rejects, so pass the one the rest of CI validates against.
+        run: |
+          helm template longhorn longhorn/longhorn \
+            --version "${LONGHORN_VERSION}" \
+            --namespace longhorn-system \
+            --kube-version 1.29.0 \
+            -f cluster/helm/longhorn/values.yaml > /tmp/longhorn-render.yaml
+          python3 .github/scripts/check_longhorn_render.py /tmp/longhorn-render.yaml
 
       - name: Resolve pinned cert-manager chart version
         run: |

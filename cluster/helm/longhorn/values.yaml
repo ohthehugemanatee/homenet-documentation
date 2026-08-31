@@ -1,0 +1,31 @@
+---
+defaultSettings:
+  backupCompressionMethod: gzip
+  concurrentAutomaticEngineUpgradePerNodeLimit: 5
+  defaultDataLocality: best-effort
+  defaultReplicaCount: 2
+  detachManuallyAttachedVolumesWhenCordoned: true
+  disableRevisionCounter: true
+  nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+  nodeDrainPolicy: allow-if-replica-is-stopped
+  orphanAutoDeletion: true
+  priorityClass: longhorn-critical
+  removeSnapshotsDuringFilesystemTrim: true
+  replicaAutoBalance: best-effort
+  v2DataEngineHugepageLimit: 1024
+
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 3
+  defaultFsType: ext4
+  defaultDataLocality: disabled
+  reclaimPolicy: Delete
+  disableRevisionCounter: "true"
+  removeSnapshotsDuringFilesystemTrim: ignored
+  dataEngine: v1
+  # Keeps StorageClass immutable.
+  backupTargetName: ""
+
+preUpgradeChecker:
+  jobEnabled: true
+  upgradeVersionCheck: true

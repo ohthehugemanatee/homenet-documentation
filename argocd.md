@@ -13,7 +13,7 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Media | auto | yes | yes | plex, tautulli, radarr, sonarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
 | Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade |
 | Stateful | manual | no | no | nextcloud, collabora |
-| Infrastructure | manual | no | no | cert-manager, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
+| Infrastructure | manual | no | no | cert-manager, longhorn, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 
 **system-upgrade note:** The `system-upgrade` Application is auto-sync. ArgoCD sync waves handle resource ordering automatically: the `plans.upgrade.cattle.io` CRD (wave −1) is established before the controller Deployment (wave 0), which must be ready before the server-plan and agent-plan `Plan` CRs (wave 1). `SYSTEM_UPGRADE_JOB_PRIVILEGED=true` is set by design — upgrade Jobs must replace the k3s binary on the host.
@@ -59,10 +59,18 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 4. Add notification annotations per `cluster/argocd/CLAUDE.md` conventions.
 5. Commit and push; the root app-of-apps picks it up automatically.
 
+## Sync hooks
+
+`cluster/argocd/hooks/<app>/` holds `PreSync`/`PostSync`/`SyncFail` Jobs for an app, built by kustomize and carried into the app as an extra entry in `spec.sources`.
+
+`hooks/longhorn/` gates the Longhorn upgrade chain: it reads `volumes.longhorn.io` and `backingimages.longhorn.io` over the in-cluster API and exits non-zero on a faulted volume or a backing image with a failed disk file, which aborts the sync before the upgrade starts. Longhorn cannot be rolled back once a minor upgrade completes, so the check runs on the sync rather than as an operator step that can be skipped.
+
+A detached volume reports robustness `unknown` because no engine is running to evaluate its replicas; the gate reads robustness only as a defect when it is `faulted`, so idle volumes do not block a sync.
+
 ## Helm-sourced Applications
 
-Monitoring stack and NFS provisioner use ArgoCD multi-source: the chart comes from an upstream registry, values come from this git repo via `$values` ref. Pin chart versions in `spec.sources[].targetRevision`.
+Monitoring stack, NFS provisioner, cert-manager and Longhorn use ArgoCD multi-source: the chart comes from an upstream registry, values come from this git repo via `$values` ref. Pin chart versions in `spec.sources[].targetRevision`.
 
 ## Relationship to install.sh scripts
 
-The `install.sh` / `install-*.sh` scripts in `cluster/helm/` and `cluster/longhorn/` are bootstrap tools. Their secret-creation portions are necessary: secrets are not in git, so they must run before the first sync. Do not use their `helm upgrade` / `kubectl apply` portions for ongoing management: ArgoCD owns deployed state and self-heal will fight them (ADR-0003).
+The `install.sh` / `install-*.sh` scripts in `cluster/helm/` are bootstrap tools. Their secret-creation portions are necessary: secrets are not in git, so they must run before the first sync. Do not use their `helm upgrade` / `kubectl apply` portions for ongoing management: ArgoCD owns deployed state and self-heal will fight them (ADR-0003).
