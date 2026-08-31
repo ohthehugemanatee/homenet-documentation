@@ -35,6 +35,15 @@ class DigTest(unittest.TestCase):
     def test_scalar_midway_is_missing_not_a_crash(self):
         self.assertIs(dig({'a': 1}, ('a', 'b')), MISSING)
 
+    def test_index_reaches_a_list_element(self):
+        self.assertEqual(dig({'a': [{'b': 1}]}, ('a', 0, 'b')), 1)
+
+    def test_index_past_the_end_is_missing(self):
+        self.assertIs(dig({'a': []}, ('a', 0)), MISSING)
+
+    def test_index_into_a_dict_is_missing_not_a_crash(self):
+        self.assertIs(dig({'a': {'b': 1}}, ('a', 0)), MISSING)
+
 
 class ProblemsTest(unittest.TestCase):
     def test_matching_override_and_render_is_clean(self):
@@ -79,6 +88,17 @@ class RealSettingsTest(unittest.TestCase):
         self.assertIn('prometheus.prometheusSpec.scrapeInterval', paths)
         self.assertIn('prometheus.prometheusSpec.retentionSize', paths)
         self.assertIn('grafana.persistence.storageClassName', paths)
+
+    def test_the_shipped_table_covers_the_kubelet_drop(self):
+        from check_monitoring_io_settings import SETTINGS as shipped
+        paths = {'.'.join(path) for path, _, _ in shipped}
+        self.assertIn('kubelet.serviceMonitor.metricRelabelings', paths)
+
+    def test_a_list_index_in_a_rendered_path_formats_in_the_message(self):
+        settings = ((('a', 'b'), 'ServiceMonitor', ('spec', 'endpoints', 0, 'x')),)
+        found = problems(overrides(), [{'kind': 'ServiceMonitor', 'spec': {}}],
+                         settings)
+        self.assertIn('spec.endpoints.0.x', found[0])
 
 
 if __name__ == '__main__':
