@@ -36,6 +36,7 @@ spec:
   task: snapshot-cleanup
   groups:
     - default
+    - ephemeral
   retain: 0
   concurrency: 1
 ---
@@ -49,5 +50,6 @@ spec:
   task: filesystem-trim
   groups:
     - default
+    - ephemeral
   retain: 0
   concurrency: 1
