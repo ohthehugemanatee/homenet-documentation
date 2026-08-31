@@ -16,8 +16,8 @@ kubectl apply -f cluster/longhorn/backup-target.yaml
 | Job | Task | Cron (UTC) | Retain | Concurrency | Group |
 | --- | --- | --- | --- | --- | --- |
 | `daily-snapshots2` | `snapshot` | `33 4 * * ?` | 7 | 1 | `default` |
-| `snapshot-cleanup` | `snapshot-cleanup` | `3 3 * * *` | 0 | 1 | `default` |
-| `fs-trim` | `filesystem-trim` | `0 5 */6 * *` | 0 | 1 | `default` |
+| `snapshot-cleanup` | `snapshot-cleanup` | `3 3 * * *` | 0 | 1 | `default`, `ephemeral` |
+| `fs-trim` | `filesystem-trim` | `0 5 */6 * *` | 0 | 1 | `default`, `ephemeral` |
 | `backups` | `backup` | `0 5 * * 1` | 4 | 1 | `default` |
 
 `retain` applies to `snapshot` and `backup` only; it reads 0 elsewhere. Nodes and
@@ -126,22 +126,30 @@ leaves a volume created on a Tuesday with no durable copy for six days.
 
 ## Coverage
 
-All four jobs select `groups: [default]`, and Longhorn stamps
-`recurring-job-group.longhorn.io/default: enabled` on each volume at creation.
-All 21 carry it, so every Longhorn volume is covered with no manual labelling.
-Removing the label does not opt a volume out: `datastore.FixupRecurringJob` runs
-on both `CreateVolume` and `UpdateVolume`, and re-adds `default` to any volume
-carrying zero job or group labels. Excluding a volume means giving it a
-different group, via the `recurringJobSelector` StorageClass parameter.
+Every job selects `groups: [default]`, and Longhorn stamps
+`recurring-job-group.longhorn.io/default: enabled` on each volume created with
+no job or group label of its own. Removing that label does not opt a volume out:
+`datastore.FixupRecurringJob` runs on both `CreateVolume` and `UpdateVolume` and
+re-adds `default` to any volume carrying zero labels. Excluding a volume means
+giving it a different group, via the `recurringJobSelector` StorageClass
+parameter.
 
-Those 21 are every Longhorn-backed PVC: ten stateful app volumes (`duplicacy`,
-`its-mytabs`, `mariadb`, `nextcloud-www`, `ombi`, `plex`, `radarr`, `sonarr`,
-`songhub`, `unifi-db`), three `/config` volumes migrated off NFS (`jackett`,
-`nzbget`, `delugevpn`), `nextcloud-previews`, `nextcloud-mcp`,
-`calibre` (#268), and four monitoring volumes (`loki`, `prometheus`, `grafana`,
-`alertmanager`). Those four plus `nextcloud-previews` are regenerable scratch,
-snapshotted daily anyway. Narrowing that changes behaviour. Plex transcode was
-the exception and is now an `emptyDir` (#277).
+`longhorn-ephemeral` does exactly that, selecting `ephemeral` (#298). Its three
+volumes — `loki`, `prometheus`, `alertmanager` — get `snapshot-cleanup` and
+`fs-trim`, which are node-local, and neither `daily-snapshots2` nor `backups`.
+Seven retained snapshots and a weekly copy to shoebox buy nothing on data the
+class exists to declare regenerable, and both cost the Longhorn I/O this cluster
+runs out of first. `recurringJobSelector` applies at volume creation, so an
+existing volume keeps whatever label it already carries until relabelled.
+
+The other 18 Longhorn-backed PVCs carry `default`: ten stateful app volumes
+(`duplicacy`, `its-mytabs`, `mariadb`, `nextcloud-www`, `ombi`, `plex`,
+`radarr`, `sonarr`, `songhub`, `unifi-db`), three `/config` volumes migrated off
+NFS (`jackett`, `nzbget`, `delugevpn`), `nextcloud-previews`, `nextcloud-mcp`,
+`calibre` (#268), and `grafana`, which holds users and API keys that no sidecar
+rebuilds. `nextcloud-previews` is regenerable scratch on
+`longhorn-ephemeral-fast` and still carries `default`. Plex transcode was the
+other exception and is now an `emptyDir` (#277).
 
 ## Audit, 23 Aug 2026
 

@@ -17,7 +17,7 @@ In-cluster (observability + GitOps)
 ├── ArgoCD            ← GitOps: reconciles cluster state against git repo
 │                        drift alerts → Pushover (independent of Alertmanager)
 │                        UI at argocd.vert (mobile-friendly)
-├── Prometheus        ← scrapes metrics from nodes + pods (15d retention)
+├── Prometheus        ← scrapes metrics from nodes + pods (60s, 15d/20GiB retention)
 ├── Alertmanager      ← fires on PrometheusRules → Pushover
 ├── Grafana           ← dashboards for metrics (Prometheus) + logs (Loki)
 ├── Loki              ← log aggregation (monolithic, 7d retention)
