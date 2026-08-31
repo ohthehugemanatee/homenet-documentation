@@ -358,9 +358,11 @@ helm upgrade --install kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f cluster/helm/kube-prometheus-stack/values.yaml
 
-# Deploy community Loki chart:
+# Deploy community Loki chart. --version must match targetRevision in
+# cluster/argocd/apps/loki.yaml, or the next ArgoCD sync rolls it back:
 helm upgrade --install loki \
   oci://ghcr.io/grafana-community/helm-charts/loki \
+  --version 18.11.7 \
   -n loki --create-namespace \
   -f cluster/helm/loki/values.yaml
 

@@ -54,11 +54,10 @@ read:
 write:
   replicas: 0
 
+# The helm test hook only scrapes the canary below.
 test:
   enabled: false
 
-monitoring:
-  selfMonitoring:
-    enabled: false
-  lokiCanary:
-    enabled: false
+# Writes through loki-gateway, which gateway.enabled: false never creates.
+lokiCanary:
+  enabled: false
