@@ -514,37 +514,3 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
 # Check Prometheus logs
 kubectl logs -n monitoring -l app.kubernetes.io/name=prometheus --tail=50
 ```
-
-### Check TSDB cardinality
-
-Series count drives TSDB write rate, memory, and rule-evaluation time. No
-`metricRelabelings` are configured anywhere in the stack, so a scrape target that
-starts emitting a high-cardinality histogram shows up here first.
-
-```bash
-kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090 &
-
-# Total live series.
-curl -s 'localhost:9090/api/v1/query?query=prometheus_tsdb_head_series' \
-  | jq -r '.data.result[0].value[1]'
-
-# Biggest metric names in the head block. Defaults to 10 without `limit`.
-curl -s 'localhost:9090/api/v1/status/tsdb?limit=20' \
-  | jq -r '.data.seriesCountByMetricName[] | "\(.value)\t\(.name)"'
-
-# Labels with the most distinct values — the other half of a cardinality problem.
-curl -s 'localhost:9090/api/v1/status/tsdb?limit=20' \
-  | jq -r '.data.labelValueCountByLabelName[] | "\(.value)\t\(.name)"'
-
-# Which scrape job each metric arrives on, which is what a metricRelabelings
-# drop rule has to name. This one walks every series and is expensive — expect
-# it to take seconds and to push Prometheus toward its memory limit.
-curl -s --data-urlencode 'query=topk(20, count by (job, __name__) ({__name__=~".+"}))' \
-  localhost:9090/api/v1/query \
-  | jq -r '.data.result[] | "\(.value[1])\t\(.metric.job)\t\(.metric.__name__)"'
-```
-
-k3s runs the apiserver, etcd and the kubelet in one process sharing one
-Prometheus registry, so the `kubelet` and `apiserver` jobs both return the full
-`apiserver_*` and `etcd_*` metric families. Reading the last query, expect the
-same metric name under both jobs.
