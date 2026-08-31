@@ -35,6 +35,8 @@ SETTINGS = (
      ('spec', 'storage', 'volumeClaimTemplate', 'spec', 'storageClassName')),
     (('grafana', 'persistence', 'storageClassName'),
      'PersistentVolumeClaim', ('spec', 'storageClassName')),
+    (('kubelet', 'serviceMonitor', 'metricRelabelings'),
+     'ServiceMonitor', ('spec', 'endpoints', 0, 'metricRelabelings')),
 )
 
 MISSING = object()
@@ -43,6 +45,11 @@ MISSING = object()
 def dig(node, path):
     """Return the value at `path`, or MISSING if any step is absent."""
     for key in path:
+        if isinstance(key, int) and isinstance(node, list):
+            if key >= len(node):
+                return MISSING
+            node = node[key]
+            continue
         if not isinstance(node, dict) or key not in node:
             return MISSING
         node = node[key]
@@ -76,9 +83,10 @@ def problems(overrides, rendered, settings=SETTINGS):
         got = [dig(doc, rendered_path) for doc in docs]
         if want not in got:
             shown = [None if g is MISSING else g for g in got]
+            rendered_dotted = '.'.join(str(p) for p in rendered_path)
             found.append(
                 f'{dotted} is set to {want!r} but {kind}.'
-                f'{".".join(rendered_path)} rendered as {shown!r}; the chart '
+                f'{rendered_dotted} rendered as {shown!r}; the chart '
                 f'is not reading that key')
 
     return found

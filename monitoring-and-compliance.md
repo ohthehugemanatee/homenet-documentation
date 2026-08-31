@@ -384,6 +384,9 @@ default alerts are suppressed via `defaultRules.disabled` in
 the server process, so they have no scrape targets and the alerts are false
 positives.
 
+k3s combines kubelet and apiserver; `kubelet.serviceMonitor.metricRelabelings`
+drops the duplicate `apiserver_.*`/`etcd_.*` families to deduplicate.
+
 Note: Alertmanager lives in-cluster and cannot alert if the entire cluster is down.
 
 ---

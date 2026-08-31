@@ -97,6 +97,14 @@ kubeScheduler:
 kubeEtcd:
   enabled: false
 
+# kubelet duplicates apiserver families
+kubelet:
+  serviceMonitor:
+    metricRelabelings:
+      - sourceLabels: [__name__]
+        regex: "(apiserver|etcd)_.*"
+        action: drop
+
 # defaultRules still ships the *Down alerts for these components even with
 # their scrape jobs disabled above; on k3s they have no targets and fire as
 # false positives. Disable them by name.
