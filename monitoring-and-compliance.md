@@ -458,23 +458,6 @@ Tracked: regenerate the k3s CA with AKI/SKI extensions to remove this workaround
 
 ---
 
-## Loki memcached sizing
-
-The chunk and query-result caches run under Monolithic Loki, sized well below chart
-defaults: 1024MB and 256MB, against defaults of 8192MB and 1024MB. They stay enabled
-because every hit is a read that skips the Longhorn volume.
-
-Two settings read wrong at a glance:
-
-- `allocatedMemory` sets memcached's `-m` flag *and* the pod's memory request and
-  limit, as `round(allocatedMemory * 1.2)`.
-- `writebackSizeLimit` buffers inside the Loki process, not memcached, so its 500MB
-  default lands against `singleBinary.resources.limits.memory`. Both caches use 10MB.
-
-`persistence` stays off; extstore would put the cache back on a disk.
-
----
-
 ## Troubleshooting the observability stack
 
 ### Logs not appearing in Grafana
