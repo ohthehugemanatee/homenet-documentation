@@ -362,7 +362,7 @@ helm upgrade --install kube-prometheus-stack \
 # cluster/argocd/apps/loki.yaml, or the next ArgoCD sync rolls it back:
 helm upgrade --install loki \
   oci://ghcr.io/grafana-community/helm-charts/loki \
-  --version 18.11.7 \
+  --version 17.4.11 \
   -n loki --create-namespace \
   -f cluster/helm/loki/values.yaml
 

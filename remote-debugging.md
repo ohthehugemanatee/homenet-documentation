@@ -45,9 +45,9 @@ forwarder and kubeconfig are built by hand (ADR-0004).
 
 `claude-remote-debug` is bound to the built-in `view` ClusterRole: `get`/`list`/`watch`
 on most resources, no `secrets` access at all, and no `create` verb (so no `exec`,
-no `attach`, no writes). There is no logging backend (Loki isn't deployed) — `kubectl
-logs` reads directly from the API server, which is why this design exposes the API
-server rather than Prometheus/Grafana.
+no `attach`, no writes). `kubectl logs` reads directly from the API server rather
+than from Loki, which is why this design exposes the API server rather than
+Prometheus/Grafana.
 
 **`view` also grants cluster-wide `get`/`list` on ConfigMaps** — don't use ConfigMaps
 for secret-adjacent data, since anything in one is now readable from a Claude Code
@@ -184,8 +184,8 @@ kubectl rollout restart deployment/kubernetes-mcp-server -n default
 
 ## Out of scope (by design)
 
-- A logging backend for remote debugging — Loki is not deployed; `kubectl logs`
-  via the API server is the only log path.
+- Querying Loki for remote debugging — Loki runs in the `loki` namespace, but this
+  path does not reach it; `kubectl logs` via the API server is the only log path.
 - Prometheus/Grafana exposure — Grafana already has a public ingress with no
   additional gate; this design deliberately does not extend that pattern further.
 

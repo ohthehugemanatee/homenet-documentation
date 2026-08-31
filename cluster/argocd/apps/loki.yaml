@@ -14,8 +14,9 @@ spec:
     - chart: loki
       repoURL: ghcr.io/grafana-community/helm-charts
       # Single source of truth for the pin. install-loki.sh and the CI dry-run
-      # both read it from here.
-      targetRevision: 18.11.7
+      # both read it from here. Chart 18.x refactors monitoring.*; that upgrade
+      # is its own change.
+      targetRevision: 17.4.11
       helm:
         valueFiles:
           - $values/cluster/helm/loki/values.yaml
