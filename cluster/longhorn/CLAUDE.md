@@ -1,7 +1,7 @@
 # cluster/longhorn/CLAUDE.md — Longhorn install + recurring jobs
 
 ArgoCD deploys Longhorn from `cluster/argocd/apps/longhorn.yaml`, a Helm
-Application pinned to chart 1.8.2. This directory holds the `RecurringJob` CRs
+Application pinned to chart 1.9.2. This directory holds the `RecurringJob` CRs
 and the `BackupTarget`. Both are applied by hand and adopted by name; ArgoCD
 manages neither. StorageClasses are in `cluster/StorageClass/`. The chart
 values and the live capture behind them are in `cluster/helm/longhorn/`.

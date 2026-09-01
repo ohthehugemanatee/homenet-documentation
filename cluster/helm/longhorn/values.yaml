@@ -8,7 +8,7 @@ defaultSettings:
   disableRevisionCounter: true
   nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
   nodeDrainPolicy: allow-if-replica-is-stopped
-  orphanAutoDeletion: true
+  orphanResourceAutoDeletion: replica-data
   priorityClass: longhorn-critical
   removeSnapshotsDuringFilesystemTrim: true
   replicaAutoBalance: best-effort
@@ -21,7 +21,7 @@ persistence:
   defaultDataLocality: disabled
   reclaimPolicy: Delete
   disableRevisionCounter: "true"
-  removeSnapshotsDuringFilesystemTrim: ignored
+  unmapMarkSnapChainRemoved: ignored
   dataEngine: v1
   # Keeps StorageClass immutable.
   backupTargetName: ""
