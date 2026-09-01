@@ -8,15 +8,15 @@ are not defined here but are listed below for the full picture.
 
 | Class | Replicas | Locality | Disk | Reclaim | Data on scale-down/drain | Intended use |
 | --- | --- | --- | --- | --- | --- | --- |
-| `longhorn-ephemeral` | 1 | `strict-local` | any | `Delete` | **Preserved** | Regenerable-but-expensive scratch, co-located with the pod. Consumers: Loki chunks, Prometheus TSDB, Alertmanager state. |
+| `longhorn-ephemeral` | 1 | `strict-local` | any | `Delete` | **Preserved** | Regenerable-but-expensive scratch, co-located with the pod. Selects the `ephemeral` recurring-job group, so its volumes are trimmed but never snapshotted or backed up. Consumers: Loki chunks, Prometheus TSDB, Alertmanager state. |
 | `longhorn-ephemeral-fast` | 1 | `strict-local` | NVMe (`diskSelector`/`nodeSelector: nvme`) | `Retain` | **Preserved** | Same as `-ephemeral` but needs NVMe throughput. Consumer: `nextcloud-previews`. |
-| `longhorn-performance` | 2 | `best-effort` | any | `Delete` | **Preserved** | Durable data wanting replication plus read locality. `WaitForFirstConsumer`. Currently unused. |
+| `longhorn-performance` | 2 | `best-effort` | any | `Delete` | **Preserved** | Durable data wanting replication plus read locality. `WaitForFirstConsumer`. Consumer: Grafana. |
 
 ## Cluster defaults (not defined in this directory)
 
 | Class | Replicas | Provisioner | Intended use |
 | --- | --- | --- | --- |
-| `longhorn` (default) | 3 | Longhorn | General durable data. Consumers: Grafana, unifi-db. |
+| `longhorn` (default) | 3 | Longhorn | General durable data. Consumer: unifi-db. |
 | `longhorn-static` | 3 | Longhorn | Pre-provisioned durable volumes for stateful app data: `nextcloud-www`, Plex/Radarr/Sonarr/Duplicacy DBs. |
 | `local-path` | — | k3s `local-path` | Node-local, unreplicated, fastest. MariaDB data dirs. |
 | `nfs-client` | — | nfs-subdir-provisioner | Volumes backed by shoebox NFS. |

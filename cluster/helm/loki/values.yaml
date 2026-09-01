@@ -1,0 +1,82 @@
+deploymentMode: Monolithic
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 168h
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: "longhorn-ephemeral"
+    size: 5Gi
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# Sized for a 5Gi store.
+chunksCache:
+  allocatedMemory: 1024
+  allocatedCPU: 100m
+  # Loki-side buffer, not memcached.
+  writebackSizeLimit: 10MB
+
+resultsCache:
+  allocatedMemory: 256
+  allocatedCPU: 100m
+  writebackSizeLimit: 10MB
+
+sidecar:
+  # k3s CA cert lacks Authority Key Identifier extension;
+  # Python 3.13+ in the sidecar image rejects it.
+  # Tracked: regenerate k3s CA with AKI/SKI extensions.
+  skipTlsVerify: true
+
+gateway:
+  enabled: false
+
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+test:
+  enabled: false
+
+# Needs the disabled gateway.
+lokiCanary:
+  enabled: false
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 60s
+    # Prometheus selects on this.
+    labels:
+      release: kube-prometheus-stack

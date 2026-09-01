@@ -6,9 +6,15 @@ in `README.md` here — keep the two in sync.
 
 ## Classes defined here
 
-- `longhorn-ephemeral` — 1 replica, `strict-local`, reclaim `Delete`.
+- `longhorn-ephemeral` — 1 replica, `strict-local`, reclaim `Delete`,
+  `recurringJobSelector` → `ephemeral` (no snapshots, no backups).
 - `longhorn-ephemeral-fast` — as above + NVMe `diskSelector`/`nodeSelector`, reclaim `Retain`.
 - `longhorn-performance` — 2 replicas, `best-effort`, `WaitForFirstConsumer`.
+
+`parameters` is immutable on a StorageClass, so changing any of the above means
+deleting and recreating the class. Bound PVs and PVCs reference it by name and
+keep working across that. `recurringJobSelector` applies only at volume
+creation, so it never reaches a volume that already exists.
 
 ## "Ephemeral" does NOT mean ephemeral storage
 

@@ -8,6 +8,12 @@ parameters:
   fromBackup: ""
   fsType: ext4
   numberOfReplicas: "1"
+  # Longhorn stamps the `default` group onto any volume created with no job or
+  # group label, which schedules daily snapshots and a weekly backup to shoebox
+  # against data this class exists to declare regenerable. Naming a group here
+  # is the only way to opt out; `ephemeral` carries trim and snapshot-cleanup
+  # but neither of those two.
+  recurringJobSelector: '[{"name":"ephemeral","isGroup":true}]'
   staleReplicaTimeout: "10"
 provisioner: driver.longhorn.io
 reclaimPolicy: Delete

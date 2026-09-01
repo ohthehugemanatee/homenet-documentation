@@ -132,7 +132,7 @@ jobs:
 
       - name: Seed cluster state (namespaces, priority classes)
         run: |
-          for ns in argocd collabora unifi octoprint monitoring longhorn-system dns-bg-check; do
+          for ns in argocd collabora unifi octoprint loki monitoring longhorn-system dns-bg-check; do
             kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
           done
           kubectl apply -f cluster/priorityClasses/
@@ -1158,12 +1158,35 @@ jobs:
             --namespace argocd \
             -f cluster/helm/argocd/values.yaml > /dev/null
 
+      - name: Resolve the kube-prometheus-stack chart pin
+        id: kps-chart
+        run: |
+          version=$(python3 -c '
+          import yaml
+          sources = yaml.safe_load(
+              open("cluster/argocd/apps/kube-prometheus-stack.yaml"))["spec"]["sources"]
+          print(next(s["targetRevision"]
+                     for s in sources if s.get("chart") == "kube-prometheus-stack"))
+          ')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Dry-run kube-prometheus-stack
+        # Rendered to a file, not /dev/null: the next step reads it. Pinned to
+        # what ArgoCD deploys, so an assertion here says something about the
+        # cluster rather than about the chart's latest release.
         run: |
           helm template kube-prometheus-stack \
             oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+            --version "${{ steps.kps-chart.outputs.version }}" \
             --namespace monitoring \
-            -f cluster/helm/kube-prometheus-stack/values.yaml > /dev/null
+            -f cluster/helm/kube-prometheus-stack/values.yaml \
+            > /tmp/kube-prometheus-stack.yaml
+
+      - name: Assert the monitoring stack's I/O settings reach the chart
+        run: |
+          python3 .github/scripts/check_monitoring_io_settings.py \
+            --overrides cluster/helm/kube-prometheus-stack/values.yaml \
+            --rendered /tmp/kube-prometheus-stack.yaml
 
       - name: Cache amtool binary
         id: cache-amtool
@@ -1189,12 +1212,66 @@ jobs:
           PY
           "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
 
-      - name: Dry-run alloy
+      - name: Resolve the loki chart pin
+        id: loki-chart
         run: |
-          helm upgrade --install alloy grafana/alloy \
-            --namespace monitoring --create-namespace \
+          version=$(python3 -c '
+          import yaml
+          sources = yaml.safe_load(
+              open("cluster/argocd/apps/loki.yaml"))["spec"]["sources"]
+          print(next(s["targetRevision"]
+                     for s in sources if s.get("chart") == "loki"))
+          ')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run loki
+        run: |
+          helm upgrade --install loki \
+            oci://ghcr.io/grafana-community/helm-charts/loki \
+            --version "${{ steps.loki-chart.outputs.version }}" \
+            --namespace loki --create-namespace \
             --dry-run \
-            -f cluster/helm/alloy/values.yaml
+            -f cluster/helm/loki/values.yaml
+
+      - name: Assert loki values keys reach the chart
+        # `loki:` is Loki's own config, not chart structure.
+        run: |
+          helm show values \
+            oci://ghcr.io/grafana-community/helm-charts/loki \
+            --version "${{ steps.loki-chart.outputs.version }}" \
+            > /tmp/loki-chart-values.yaml
+          python3 .github/scripts/check_helm_values_keys.py \
+            --chart-values /tmp/loki-chart-values.yaml \
+            --overrides cluster/helm/loki/values.yaml \
+            --passthrough loki
+
+      - name: Resolve the alloy chart pin
+        id: alloy-chart
+        run: |
+          version=$(python3 -c '
+          import yaml
+          sources = yaml.safe_load(
+              open("cluster/argocd/apps/alloy.yaml"))["spec"]["sources"]
+          print(next(s["targetRevision"]
+                     for s in sources if s.get("chart") == "alloy"))
+          ')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run alloy
+        # Rendered to a file, not /dev/null: the next step reads it. Pinned to
+        # what ArgoCD deploys, so an assertion here says something about the
+        # cluster rather than about the chart's latest release.
+        run: |
+          helm template alloy grafana/alloy \
+            --version "${{ steps.alloy-chart.outputs.version }}" \
+            --namespace monitoring \
+            -f cluster/helm/alloy/values.yaml \
+            > /tmp/alloy.yaml
+
+      - name: Assert alloy tails pod logs from disk, not the apiserver
+        run: |
+          python3 .github/scripts/check_alloy_log_tailing.py \
+            --rendered /tmp/alloy.yaml
 
       - name: Dry-run kubernetes-event-exporter
         run: |

@@ -17,10 +17,11 @@ In-cluster (observability + GitOps)
 ├── ArgoCD            ← GitOps: reconciles cluster state against git repo
 │                        drift alerts → Pushover (independent of Alertmanager)
 │                        UI at argocd.vert (mobile-friendly)
-├── Prometheus        ← scrapes metrics from nodes + pods (15d retention)
+├── Prometheus        ← scrapes metrics from nodes + pods (60s, 15d/20GiB retention)
 ├── Alertmanager      ← fires on PrometheusRules → Pushover
 ├── Grafana           ← dashboards for metrics (Prometheus) + logs (Loki)
 ├── Loki              ← log aggregation (monolithic, 7d retention)
+│   └── memcached     ← chunk + query-result caches, resized down from chart defaults
 ├── Alloy (DaemonSet) ← collects pod stdout/stderr → Loki
 ├── Promtail sidecars ← collects file-based logs from specific pods → Loki
 └── event-exporter   ← ships k8s Events → Loki (powers workload-debug dashboard)
@@ -360,9 +361,11 @@ helm upgrade --install kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f cluster/helm/kube-prometheus-stack/values.yaml
 
-# Deploy community Loki chart:
+# Deploy community Loki chart. --version must match targetRevision in
+# cluster/argocd/apps/loki.yaml, or the next ArgoCD sync rolls it back:
 helm upgrade --install loki \
   oci://ghcr.io/grafana-community/helm-charts/loki \
+  --version 17.4.11 \
   -n loki --create-namespace \
   -f cluster/helm/loki/values.yaml
 
@@ -382,6 +385,9 @@ default alerts are suppressed via `defaultRules.disabled` in
 `cluster/helm/kube-prometheus-stack/values.yaml`: k3s embeds those components in
 the server process, so they have no scrape targets and the alerts are false
 positives.
+
+k3s combines kubelet and apiserver; `kubelet.serviceMonitor.metricRelabelings`
+drops the duplicate `apiserver_.*`/`etcd_.*` families to deduplicate.
 
 Note: Alertmanager lives in-cluster and cannot alert if the entire cluster is down.
 

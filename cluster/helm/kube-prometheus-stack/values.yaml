@@ -6,7 +6,11 @@ grafana:
     # Tracked: regenerate k3s CA with AKI/SKI extensions.
     skipTlsVerify: true
   persistence:
+    # Dashboards and datasources come from the sidecar and additionalDataSources
+    # below, so only users and API keys are unreconstructible. Two replicas with
+    # read locality, not the 3-replica cluster default this fell through to.
     enabled: true
+    storageClassName: longhorn-performance
   ingress:
     enabled: true
     hosts:
@@ -41,7 +45,10 @@ alertmanager:
     storage:
       volumeClaimTemplate:
         spec:
-          storageClassName: "longhorn-performance"
+          # Silences and the notification log are regenerable: losing them
+          # re-fires undelivered notifications. Cheaper than replicating every
+          # alert transition over the network.
+          storageClassName: "longhorn-ephemeral"
           resources:
             requests:
               storage: 1Gi
@@ -90,6 +97,14 @@ kubeScheduler:
 kubeEtcd:
   enabled: false
 
+# kubelet duplicates apiserver families
+kubelet:
+  serviceMonitor:
+    metricRelabelings:
+      - sourceLabels: [__name__]
+        regex: "(apiserver|etcd)_.*"
+        action: drop
+
 # defaultRules still ships the *Down alerts for these components even with
 # their scrape jobs disabled above; on k3s they have no targets and fire as
 # false positives. Disable them by name.
@@ -101,7 +116,15 @@ defaultRules:
 
 prometheus:
   prometheusSpec:
+    # Halves samples per second across every target at once. The default rules
+    # all range over 5m or more, so each still sees five samples per window.
+    scrapeInterval: 60s
     retention: 15d
+    # Time-based retention alone lets series growth fill the 30Gi volume, and a
+    # full Longhorn volume is a worse failure than a short retention window.
+    # WAL and m-mapped chunks count toward this total but are never evicted, so
+    # the cap needs headroom well below the volume size.
+    retentionSize: 20GiB
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -114,6 +137,8 @@ prometheus:
     resources:
       requests:
         cpu: 200m
-        memory: 512Mi
-      limits:
         memory: 1Gi
+      limits:
+        # 1Gi OOMKilled the pod whenever an apiserver burnrate rule evaluated
+        # over its 3d range.
+        memory: 2Gi
