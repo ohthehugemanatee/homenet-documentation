@@ -90,12 +90,17 @@ alloy:
   securityContext:
     runAsUser: 0
 
+  # Sized per ADR-0006. The alloy binary maps a 273 MB executable text segment,
+  # so any limit at or below that guarantees the kernel evicts code pages it
+  # then has to refault. At 256Mi the Pi control planes thrashed at ~84k
+  # refaults/s and saturated the USB disk backing /var/lib/kubelet. Steady-state
+  # usage with the text resident is ~350Mi.
   resources:
     requests:
       cpu: 50m
-      memory: 128Mi
+      memory: 512Mi
     limits:
-      memory: 256Mi
+      memory: 512Mi
 
   # NODE_NAME is referenced by the discovery field selector above to scope log
   # collection to pods on this node. Populated from the pod's own spec.nodeName.
