@@ -24,7 +24,7 @@ settings:
   disable-revision-counter: "true"
   node-down-pod-deletion-policy: delete-both-statefulset-and-deployment-pod
   node-drain-policy: allow-if-replica-is-stopped
-  orphan-auto-deletion: "true"
+  orphan-resource-auto-deletion: replica-data
   priority-class: longhorn-critical
   remove-snapshots-during-filesystem-trim: "true"
   replica-auto-balance: best-effort

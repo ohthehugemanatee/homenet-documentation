@@ -8,11 +8,11 @@ FROM golang:1.26-alpine AS rmapi-builder
 # .github/workflows/build-remarkable-sync-image.yaml. ddvk/rmapi is the
 # maintained fork; upstream juruen/rmapi is archived.
 # Builder must be >= the Go version ddvk/rmapi's go.mod requires (1.23 as of
-# v0.0.34) - GOTOOLCHAIN=local in this image means it won't auto-download a
+# v0.0.35) - GOTOOLCHAIN=local in this image means it won't auto-download a
 # newer toolchain, so a too-old builder fails the build outright rather than
 # just warning. Bump this alongside RMAPI_REF if a future ref raises its
 # go.mod requirement further.
-ARG RMAPI_REF=v0.0.34
+ARG RMAPI_REF=v0.0.35
 
 RUN apk add --no-cache git
 RUN git clone --branch "${RMAPI_REF}" --depth 1 https://github.com/ddvk/rmapi /src/rmapi \

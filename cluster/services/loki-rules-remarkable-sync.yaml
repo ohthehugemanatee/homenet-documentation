@@ -1,0 +1,32 @@
+# Alerts on failed remarkable-sync uploads.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-rules-remarkable-sync
+  namespace: loki
+  labels:
+    loki_rule: "1"
+data:
+  remarkable-sync.yaml: |
+    groups:
+      - name: remarkable-sync
+        interval: 5m
+        rules:
+          - alert: RemarkableSyncUploadsFailing
+            # or vector(0): matches during total outage.
+            expr: |
+              sum(count_over_time({namespace="default", container="remarkable-sync"}
+                  |= "rmapi put" |= "failed (exit" [6h])) > 0
+              and
+              (sum(count_over_time({namespace="default", container="remarkable-sync"}
+                  |= "synced " [6h])) or vector(0)) == 0
+            for: 30m
+            labels:
+              severity: warning
+              namespace: default
+              pod: songhub-0
+            annotations:
+              summary: >-
+                remarkable-sync has failed every reMarkable upload for 6 hours
+                and completed none. Check `kubectl logs -n default songhub-0
+                -c remarkable-sync`.

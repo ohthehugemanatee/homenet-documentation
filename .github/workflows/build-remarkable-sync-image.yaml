@@ -11,7 +11,7 @@ name: Build reMarkable sync image
       rmapi_ref:
         description: 'Upstream ddvk/rmapi git ref to build (tag preferred over branch)'
         required: true
-        default: v0.0.34
+        default: v0.0.35
 
 permissions:
   contents: read
