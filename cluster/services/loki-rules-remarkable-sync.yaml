@@ -1,25 +1,11 @@
-# Loki ruler alert for the remarkable-sync sidecar in cluster/services/songhub.yaml.
-#
-# The sidecar's probes track heartbeat freshness, which proves the sync loop is
-# iterating - the right contract for a probe, and deliberately not widened to
-# cover upload success. Nothing else surfaced a failing upload, so when
-# reMarkable Cloud began rejecting every write with HTTP 400 on 2026-08-17 the
-# pod stayed 2/2 Running and the outage ran unnoticed for 13 days. This rule is
-# what surfaces it now.
-#
-# Alloy already ships this container's stdout to Loki with namespace/pod/
-# container labels (cluster/helm/alloy/values.yaml), so no exporter or scrape
-# target is involved - the rule reads log lines the sidecar already writes.
-# Those lines are an interface: the literal strings matched below are asserted
-# in cluster/Dockerfiles/remarkable-sync/tests/test_upload_failure.py so a
-# reword fails CI instead of silently disabling this alert.
+# Alerts on failed remarkable-sync uploads.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: loki-rules-remarkable-sync
   namespace: loki
   labels:
-    loki_rule: "1"  # picked up by the loki chart's ruler sidecar
+    loki_rule: "1"
 data:
   remarkable-sync.yaml: |
     groups:
@@ -27,15 +13,7 @@ data:
         interval: 5m
         rules:
           - alert: RemarkableSyncUploadsFailing
-            # Fires only when uploads are failing AND none are getting
-            # through, so a single transient rmapi error stays quiet while
-            # the loop is still draining its queue.
-            #
-            # Drop `or vector(0)` from the success side and this alert
-            # stops working during a total outage: that selector then matches
-            # no lines, `and` against an empty vector yields empty, and the
-            # rule stays silent through exactly the failure it exists to
-            # catch. Same idiom as grafana-homelab-health.yaml.
+            # or vector(0): matches during total outage.
             expr: |
               sum(count_over_time({namespace="default", container="remarkable-sync"}
                   |= "rmapi put" |= "failed (exit" [6h])) > 0
@@ -45,11 +23,6 @@ data:
             for: 30m
             labels:
               severity: warning
-              # Set explicitly because the aggregation drops stream labels, and
-              # Alertmanager's pushover receiver builds its "Debug in Grafana"
-              # link from .CommonLabels.namespace / .CommonLabels.pod
-              # (cluster/helm/kube-prometheus-stack/values.yaml). songhub is a
-              # single-replica StatefulSet, so the pod name is stable.
               namespace: default
               pod: songhub-0
             annotations:

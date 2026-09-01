@@ -57,24 +57,11 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
   or `rm -f /app/saved-tabs/.remarkable-sync-state/*.synced` to force
   everything to re-upload (creates duplicate documents on reMarkable Cloud
   next to the old ones - delete the stale copies there manually).
-- **A green pod does not mean uploads are succeeding, by design.** The
-  probes check that the sync loop is alive (heartbeat file freshness), not
-  that `rmapi put` is succeeding. That is the contract: the container is
-  healthy when it can process its queue, whether or not the items in the
-  queue succeed. A persistent auth failure (`rmapi.conf` expired) or a
-  reMarkable API outage keeps the loop iterating and the heartbeat fresh,
-  and the pod stays 2/2 Running throughout.
-- **`RemarkableSyncUploadsFailing` is what surfaces a failing upload.** A
-  Loki ruler alert (`cluster/services/loki-rules-remarkable-sync.yaml`)
-  fires to Pushover when the sidecar has logged upload failures and no
-  successes for six hours. Alloy already ships this container's stdout to
-  Loki, so the alert reads log lines the sync loop already writes - there
-  is no exporter or scrape target involved.
-- **The log wording is an interface.** That alert matches the literal
-  strings `rmapi put` / `failed (exit` and `synced `. Rewording either log
-  line without updating the rule disables the alert silently, leaving
-  nothing to catch a stalled sync. `tests/test_upload_failure.py`
-  asserts both strings so a reword fails CI instead.
-- **A failing upload is always retried.** Unlike a malformed tab, an upload
-  error writes no marker, so the tab is picked up again on the next cycle
-  and a backlog drains by itself once the cause is fixed.
+- **A green pod does not mean uploads are succeeding.** The readiness/
+  liveness probes only check that the sync loop is alive (heartbeat file
+  freshness), not that `rmapi put` is actually succeeding. A persistent
+  auth failure (e.g. `rmapi.conf` expired) or reMarkable API outage will
+  not fail the probes - the loop keeps iterating and touching the
+  heartbeat even while every upload fails. Check `kubectl logs -n default
+  songhub-0 -c remarkable-sync` to confirm tabs are actually landing on
+  the tablet, don't rely on pod status alone.

@@ -334,8 +334,6 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 
 Grafana/Prometheus configured together in `cluster/helm/kube-prometheus-stack/values.yaml` with alertmanager under `alertmanager.config`. Loki is added from `cluster/helm/loki/values.yaml`. Alloy (log collector DaemonSet) is configured in `cluster/helm/alloy/values.yaml`. Kubernetes Events are shipped to Loki by event-exporter (`cluster/helm/kubernetes-event-exporter/values.yaml`). Each chart directory has an install script.
 
-Alert rules live in two places, by data source. Metric alerts are PrometheusRules (`cluster/services/probe-alerts.yaml`); log alerts are Loki ruler groups shipped as labeled ConfigMaps (`cluster/services/loki-rules-*.yaml`), which the Loki chart's ruler sidecar collects. Both route to the same Alertmanager, so both reach Pushover the same way. Neither is under an ArgoCD app - apply them with `kubectl apply -f <file>` after a change.
-
 Pushover credentials are stored in a pre-created K8s Secret (not in the values file).
 
 Easy deployment:
@@ -398,9 +396,8 @@ Note: Alertmanager lives in-cluster and cannot alert if the entire cluster is do
 Pushover notifications carry a **Debug in Grafana** button. Alertmanager builds the URL
 from the alert's labels in the `pushover_configs` receiver
 (`cluster/helm/kube-prometheus-stack/values.yaml`), so it covers every alert carrying
-`namespace`/`pod` labels — `homelab.pod_health` (`cluster/services/probe-alerts.yaml`),
-`remarkable-sync` (`cluster/services/loki-rules-remarkable-sync.yaml`, which sets both labels
-explicitly because its aggregation drops stream labels), and upstream alerts alike:
+`namespace`/`pod` labels — `homelab.pod_health` (`cluster/services/probe-alerts.yaml`)
+and upstream alerts alike:
 
 ```
 https://grafana.berlin.vertesi.com/d/workload-debug?var-namespace={{ .CommonLabels.namespace }}&var-pod={{ .CommonLabels.pod }}
