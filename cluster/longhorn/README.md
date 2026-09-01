@@ -1,6 +1,6 @@
 # Longhorn
 
-Longhorn v1.8.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+Longhorn v1.9.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
 (chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
 in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
 `backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
@@ -25,7 +25,7 @@ longhorn-manager run UTC.
 
 ## Chart values
 
-`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.8.2
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.9.2
 values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
 cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
 chart and fails when the two part.
@@ -40,7 +40,10 @@ because `parameters` are immutable and every Longhorn-backed PVC uses the class.
 `staleReplicaTimeout` and `volumeBindingMode` are template constants in the
 chart, so nothing pins those. 1.8 added `persistence.backupTargetName`,
 defaulting to `"default"`; pinned to `""` for the same reason, since adding it
-now would change the live, immutable `parameters`.
+now would change the live, immutable `parameters`. 1.9 renamed
+`persistence.removeSnapshotsDuringFilesystemTrim` to
+`persistence.unmapMarkSnapChainRemoved`, matching the StorageClass field it
+feeds; same value, no behavior change.
 
 The three classes in `cluster/StorageClass/` are untouched. The chart renders no
 StorageClass object, so it cannot duplicate them.
@@ -53,6 +56,12 @@ built-in default, which is what the chart falls back to for each `~` in its
 1.8 the chart stopped templating `backup-target` into
 `longhorn-default-setting`, so `values.yaml` records the other twelve and
 `backup-target.yaml`'s `BackupTarget` CR is `backup-target`'s only source.
+1.9 replaced the boolean `orphan-auto-deletion` with the string
+`orphan-resource-auto-deletion`, a semicolon-separated list of orphan
+resource types to clean up automatically. `replica-data` reproduces the old
+setting's behavior; the new `instance` type (orphaned engine/replica
+processes) is a separate 1.9 feature and stays off, since nothing here asked
+for it.
 
 | Setting | 1.7.2 default | Live |
 | --- | --- | --- |
@@ -64,7 +73,7 @@ built-in default, which is what the chart falls back to for each `~` in its
 | `detach-manually-attached-volumes-when-cordoned` | `false` | `true` |
 | `node-down-pod-deletion-policy` | `do-nothing` | `delete-both-statefulset-and-deployment-pod` |
 | `node-drain-policy` | `block-if-contains-last-replica` | `allow-if-replica-is-stopped` |
-| `orphan-auto-deletion` | `false` | `true` |
+| `orphan-resource-auto-deletion` | *(empty)* | `replica-data` |
 | `priority-class` | *(empty)* | `longhorn-critical` |
 | `remove-snapshots-during-filesystem-trim` | `false` | `true` |
 | `replica-auto-balance` | `disabled` | `best-effort` |
