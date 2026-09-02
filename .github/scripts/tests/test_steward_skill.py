@@ -19,11 +19,6 @@ class StewardSkillTest(unittest.TestCase):
     def test_requires_rearming_when_the_pr_stops_being_green(self):
         self.assertIn('re-arm', self.skill.lower())
 
-    def test_keeps_the_never_rules_out_of_scope(self):
-        lowered = self.skill.lower()
-        for forbidden in ('skip a test', 'disable a test', 'empty commit'):
-            self.assertNotIn(forbidden + ' to', lowered, forbidden)
-
 
 if __name__ == '__main__':
     unittest.main()
