@@ -15,6 +15,7 @@
 - [ ] **Dependency Check**: Are all new packages real, secure, and approved? (no hallucinated dependencies)
 - [ ] **Context Check**: Did the AI take a dangerous shortcut (e.g., `eval()`, `--no-verify`, disabled auth) that violates our security posture?
 - [ ] **Drift Check**: Did the AI change security-critical code (auth, crypto, RBAC, network policy) outside the PR's declared scope?
+- [ ] **Comment Budget Check**: Do added comments, docstrings, and doc lines state non-obvious invariants only, or do they narrate the change? (compare added comment lines against added code lines)
 
 ## Part 3: Security & Privacy Review
 
