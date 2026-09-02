@@ -12,7 +12,6 @@ defaultSettings:
   priorityClass: longhorn-critical
   removeSnapshotsDuringFilesystemTrim: true
   replicaAutoBalance: best-effort
-  v2DataEngineHugepageLimit: 1024
 
 persistence:
   defaultClass: true

@@ -28,4 +28,3 @@ settings:
   priority-class: longhorn-critical
   remove-snapshots-during-filesystem-trim: "true"
   replica-auto-balance: best-effort
-  v2-data-engine-hugepage-limit: "1024"
