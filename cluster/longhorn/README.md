@@ -1,6 +1,6 @@
 # Longhorn
 
-Longhorn v1.9.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+Longhorn v1.10.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
 (chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
 in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
 `backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
@@ -25,7 +25,7 @@ longhorn-manager run UTC.
 
 ## Chart values
 
-`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.9.2
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.10.2
 values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
 cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
 chart and fails when the two part.
@@ -50,7 +50,7 @@ StorageClass object, so it cannot duplicate them.
 
 ## Settings
 
-Thirteen of the 88 `settings.longhorn.io` CRs sit off the Longhorn 1.7.2
+Twelve of the 88 `settings.longhorn.io` CRs sit off the Longhorn 1.7.2
 built-in default, which is what the chart falls back to for each `~` in its
 `defaultSettings`. `values.yaml` recorded all thirteen through 1.7.2; from
 1.8 the chart stopped templating `backup-target` into
@@ -61,7 +61,12 @@ built-in default, which is what the chart falls back to for each `~` in its
 resource types to clean up automatically. `replica-data` reproduces the old
 setting's behavior; the new `instance` type (orphaned engine/replica
 processes) is a separate 1.9 feature and stays off, since nothing here asked
-for it.
+for it. 1.10 removed `v2DataEngineHugepageLimit` from the chart entirely,
+splitting hugepage config into an enable flag and a per-engine memory size;
+longhorn-manager migrates the live value into the new
+`data-engine-memory-size` setting on upgrade and deletes the old CR, so
+`values.yaml` now records eleven. Neither new setting applies here — this
+cluster runs `v1DataEngine` only.
 
 | Setting | 1.7.2 default | Live |
 | --- | --- | --- |
@@ -77,9 +82,8 @@ for it.
 | `priority-class` | *(empty)* | `longhorn-critical` |
 | `remove-snapshots-during-filesystem-trim` | `false` | `true` |
 | `replica-auto-balance` | `disabled` | `best-effort` |
-| `v2-data-engine-hugepage-limit` | `2048` | `1024` |
 
-`disable-revision-counter: true` is a fourteenth entry in the rendered
+`disable-revision-counter: true` is a thirteenth entry in the rendered
 ConfigMap, already at its built-in default. The chart writes it regardless.
 
 Two rows differ from the StorageClass by design. `default-data-locality` is
