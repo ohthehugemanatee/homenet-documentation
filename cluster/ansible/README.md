@@ -69,12 +69,12 @@ ansible-playbook -i inventory.yaml --ask-vault-pass \
 | x86 media drivers | apt |
 | Hostname | `ansible.builtin.hostname` |
 | `/etc/hosts` | `templates/hosts.j2` |
-| Kernel modules | `/etc/modules-load.d/k3s.conf` (`br_netfilter`, `overlay`) |
+| Kernel modules | `/etc/modules-load.d/k3s.conf` (`br_netfilter`, `overlay`, plus `zram` when the cushion is on) |
 | Kernel parameters | `/etc/sysctl.d/99-k3s.conf` |
 | ARM cgroup cmdline | `/boot/firmware/cmdline.txt` |
 | NTP | `/etc/systemd/timesyncd.conf` |
 | Security updates | `/etc/apt/apt.conf.d/50unattended-upgrades` |
-| Swap disabled | `fstab` + `swapoff` |
+| Swap disabled | `fstab` + `swapoff`, unless `node_state_zram_enabled` keeps a zram device |
 | Journald volatile | `/etc/systemd/journald.conf` |
 | Multipath blacklist | `/etc/multipath.conf` |
 | k3s service running | `systemd` |

@@ -38,6 +38,15 @@
           - "'br_netfilter' in (modules_content.content | b64decode)"
           - "'overlay' in (modules_content.content | b64decode)"
 
+    - name: Assert zram module loads on boot only when the cushion is enabled
+      ansible.builtin.assert:
+        that: >-
+          ('zram' in (modules_content.content | b64decode))
+          == (node_state_zram_enabled | default(false) | bool)
+        fail_msg: >-
+          zram modules-load entry must be present iff node_state_zram_enabled;
+          without it zramswap.service races its own modprobe at boot
+
     - name: Stat sysctl config
       ansible.builtin.stat:
         path: /etc/sysctl.d/99-k3s.conf
@@ -57,6 +66,15 @@
         that:
           - "'net.ipv4.ip_forward = 1' in (sysctl_content.content | b64decode)"
           - "'net.bridge.bridge-nf-call-iptables = 1' in (sysctl_content.content | b64decode)"
+
+    - name: Assert swappiness matches the zram cushion setting
+      ansible.builtin.assert:
+        that: >-
+          ('vm.swappiness = 100' in (sysctl_content.content | b64decode))
+          == (node_state_zram_enabled | default(false) | bool)
+        fail_msg: >-
+          swappiness 0 with zram enabled strands the cushion: the kernel can
+          only reclaim page cache, which thrashes executable text
 
     - name: Stat NFS mount options config
       ansible.builtin.stat:
