@@ -30,8 +30,9 @@ node_state_kubelet_eviction_minimum_reclaim: "memory.available=100Mi"
 node_state_k3s_memory_high: "3G"
 
 # zram compressed-RAM swap cushion to avoid the hard OOM/thrash wall on low-RAM
-# nodes. Opt-in (default off); when on, kubelet gets fail-swap-on=false and the
-# blanket swapoff is scoped to leave zram alone. Enable per-group/host.
+# nodes. Opt-in (default off); when on, kubelet gets fail-swap-on=false, the
+# blanket swapoff is scoped to leave zram alone, and vm.swappiness rises to 100
+# so reclaim reaches zram before page cache. Enable per-group/host.
 node_state_zram_enabled: false
 node_state_zram_percent: 50
 node_state_zram_algorithm: "zstd"

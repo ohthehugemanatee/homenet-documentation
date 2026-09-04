@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-node-memory
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack  # required for Prometheus operator to discover this rule
+spec:
+  groups:
+    - name: homelab.node_memory
+      rules:
+        - alert: HomelabControlPlaneSwapMissing
+          # node-exporter keys on instance, kube_node_role on node; label_replace
+          # aligns them so the node set follows cluster state rather than a list.
+          expr: >
+            (
+              node_memory_SwapTotal_bytes
+              * on(instance) group_left(nodename) node_uname_info
+            ) == 0
+            and on(nodename) label_replace(
+              kube_node_role{role="control-plane"}, "nodename", "$1", "node", "(.*)"
+            )
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: >-
+              Control-plane node {{ $labels.nodename }} has no swap, so the zram
+              cushion is inactive and reclaim falls entirely on page cache.
+              Check zramswap.service.
+
+        - alert: HomelabNodeMemoryThrashing
+          # PSI "full": share of wall time in which every task is stalled on
+          # memory. Healthy nodes stay under 0.03.
+          expr: rate(node_pressure_memory_stalled_seconds_total[5m]) > 0.2
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: >-
+              Node {{ $labels.instance }} is fully memory-stalled
+              {{ $value | humanizePercentage }} of the time. Page cache is being
+              evicted and refaulted; expect the node to stop serving.

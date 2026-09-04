@@ -18,5 +18,11 @@ fs.inotify.max_user_watches = 524288
 # File descriptor limits
 fs.file-max = 2097152
 
+{% if node_state_zram_enabled | bool %}
+# zram swap is the only reclaim target that spares page cache on these low-RAM
+# nodes; 0 here would strand the cushion and thrash executable text instead.
+vm.swappiness = 100
+{% else %}
 # Disable swap pressure (belt-and-suspenders alongside swapoff)
 vm.swappiness = 0
+{% endif %}

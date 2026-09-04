@@ -13,6 +13,12 @@ defaultSettings:
   removeSnapshotsDuringFilesystemTrim: true
   replicaAutoBalance: best-effort
 
+metrics:
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack  # matches the Prometheus serviceMonitorSelector
+
 persistence:
   defaultClass: true
   defaultClassReplicaCount: 3
