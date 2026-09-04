@@ -856,6 +856,7 @@ jobs:
             ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
             ! -name "probe-alerts.yaml" \
+            ! -name "node-memory-alerts.yaml" \
             ! -name "recurring-jobs.yaml" \
             ! -name "backup-target.yaml" \
             | sort)
