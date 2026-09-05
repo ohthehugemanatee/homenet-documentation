@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: starloom-configfile
+  namespace: default
+data:
+  # The image ships /config/config.yaml, which the volume below masks.
+  # webui_dir has no built-in default and the root handler is registered only
+  # when it is set, so without this the app serves an API with no web UI.
+  config.yaml: |
+    # ":8080" would route through the auto-port picker, which can land on any
+    # free port in 8000-8999. An explicit host:port skips that branch.
+    http_addr: "0.0.0.0:8080"
+    db_driver: sqlite
+    webui_dir: /usr/share/starapp/webui
+    show_footer: true
+
+---
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: starloom
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      run: starloom
+  replicas: 1
+  serviceName: starloom
+  volumeClaimTemplates:
+    - metadata:
+        name: starloom-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 1Gi
+  template:
+    metadata:
+      labels:
+        run: starloom
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: starloom
+          image: ghcr.io/jamesread/starloom:1.7.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # The entrypoint runs sql-migrate against ${DB_PATH} before the app
+            # runs the same migration set in-process. Unset, it would migrate an
+            # anonymous temp database instead of the real one.
+            - name: DB_PATH
+              value: /config/starapp.db
+            - name: TZ
+              value: "Europe/Berlin"
+          volumeMounts:
+            - name: starloom-config
+              mountPath: /config
+            # Nested inside the volume mount above; kubelet orders mounts by
+            # path depth, so this file lands inside /config.
+            - name: starloom-configfile
+              mountPath: /config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          # Upstream registers no health route. / is the SPA, but it is not a
+          # static asset here: the root handler exists only when webui_dir
+          # resolves, so this probe fails in exactly the masked-config case.
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 12   # ~60s: Go binary plus one migration pass
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 15
+            failureThreshold: 3
+      volumes:
+        - name: starloom-configfile
+          configMap:
+            name: starloom-configfile
+        - name: tmp
+          emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: starloom
+  namespace: default
+  labels:
+    run: starloom
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+  selector:
+    run: starloom
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: starloom
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+spec:
+  rules:
+  - host: stars.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: starloom
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - stars.berlin.vertesi.com
