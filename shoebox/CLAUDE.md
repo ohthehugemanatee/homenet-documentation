@@ -1,6 +1,6 @@
 # shoebox/CLAUDE.md — external Ansible runner
 
-Shoebox is the always-on NFS host. It runs Semaphore UI in Docker to **schedule** the playbooks in `cluster/ansible/` against the k3s cluster. It cannot move into the cluster (observer paradox: the cluster dies during upgrades, so the scheduler can't drive uncordon). See `@ansible-scheduler.md` for the architecture; Ansible foundation (ansible-lint, vault, Galaxy preference) lives in the root `CLAUDE.md`.
+Shoebox is the always-on NFS host. It runs Semaphore UI in Docker to **schedule** the playbooks in `cluster/ansible/` against the k3s cluster. It cannot move into the cluster (observer paradox: the cluster dies during upgrades, so the scheduler can't drive uncordon). See `monitoring-and-compliance.md` for the architecture; the universal `ansible-lint` step and the vault rule are in the root `CLAUDE.md`, the Galaxy-collection preference in `cluster/ansible/CLAUDE.md`.
 
 ## Layout
 

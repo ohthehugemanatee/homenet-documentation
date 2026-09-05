@@ -22,14 +22,14 @@ New advisory findings need either a justified entry in `.github/agentic-review-e
 
 ```sh
 kubeconform -summary -strict -ignore-missing-schemas -cache ~/.cache/kubeconform cluster/
-kube-score score cluster/**/*.yaml
+kube-score score $(git ls-files 'cluster/*.yaml')
 polaris audit --audit-path cluster/
-hadolint $(git ls-files 'cluster/Dockerfiles/**')   # if any Dockerfile changed
+hadolint $(git ls-files 'cluster/Dockerfiles/*Dockerfile')   # if any Dockerfile changed
 ```
 
 **For a new workload**, extend `.github/workflows/test-cluster.yaml` with an apply + `kubectl wait --for=condition=Ready` step (test-first), then reproduce locally:
 
 ```sh
-k3d cluster create homenet-test --config .github/k3d-config.yaml
+k3d cluster create ci --wait --no-lb
 # then re-run the workflow's apply/install steps; watch the wait pass
 ```

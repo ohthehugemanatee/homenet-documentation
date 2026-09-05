@@ -7,7 +7,7 @@ Raw Kubernetes YAML (not Helm). Foundation (namespace, resource requests, storag
 - Multi-resource files are normal.
 - Naming: lowercase kebab-case.
 - `Service.spec.selector` must match `Deployment.spec.template.metadata.labels`. Mismatches silently break routing.
-- Per-service subdirectory when a service has >2 resources (see `octoprint/`, `unifi/`); flat single file otherwise.
+- Per-service subdirectory when a service has >2 resources (see `unifi/`); flat single file otherwise.
 
 ## Health probes — REQUIRED on every container
 
