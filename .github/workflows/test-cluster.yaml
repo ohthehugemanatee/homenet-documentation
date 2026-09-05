@@ -838,6 +838,53 @@ jobs:
             || { echo "FAILED: /config is not on the volumeClaimTemplate"; exit 1; }
           echo "tautulli health and config volume OK"
 
+      - name: Deploy starloom (real smoke test)
+        run: |
+          kubectl apply -f cluster/services/starloom.yaml
+          kubectl -n default rollout status statefulset/starloom --timeout=300s
+
+      - name: Diagnose starloom failure
+        if: failure()
+        run: |
+          kubectl -n default describe pod -l run=starloom
+          echo "=== logs ==="
+          kubectl -n default logs -l run=starloom --tail=200 || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify starloom serves its web UI and keeps /config on its own PVC
+        run: |
+          # 8006: 8000-8002 are the nextcloud-mcp forwards, 8003 plex-mcp,
+          # 8004 traefik, 8005 tautulli.
+          kubectl -n default port-forward svc/starloom 8006:8080 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 15); do
+            curl -fsS http://127.0.0.1:8006/metrics >/dev/null 2>&1 && break
+            sleep 2
+          done
+          # The app picks a random port in 8000-8999 unless http_addr names one
+          # explicitly, so reaching :8080 at all is the assertion here.
+          curl -fsS http://127.0.0.1:8006/metrics | grep -q '^# TYPE' \
+            || { echo "FAILED: /metrics not served on 8080"; exit 1; }
+
+          # The image ships /config/config.yaml and the Longhorn volume masks
+          # it. Without the ConfigMap remount, webui_dir is empty, main.go skips
+          # the root handler, and the app serves an API with no UI.
+          kubectl -n default logs statefulset/starloom | grep -q 'serving web UI' \
+            || { echo "FAILED: web UI not registered — config.yaml is masked"; exit 1; }
+          CODE=$(curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:8006/)
+          echo "web UI: $CODE"
+          [ "$CODE" = "200" ] || { echo "FAILED: expected 200 from /, got $CODE"; exit 1; }
+
+          # The static shape assertion below reads the manifest; this proves the
+          # claim actually bound in a live cluster.
+          CLAIM=$(kubectl -n default get pod starloom-0 -o jsonpath='{.spec.volumes[?(@.name=="starloom-config")].persistentVolumeClaim.claimName}')
+          echo "config claim: $CLAIM"
+          [ "$CLAIM" = "starloom-config-starloom-0" ] \
+            || { echo "FAILED: /config is not on the volumeClaimTemplate"; exit 1; }
+          echo "starloom web UI and config volume OK"
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -870,7 +917,8 @@ jobs:
           # the ombi shape. SQLite in WAL mode does not work over NFS (#241), so
           # each app joins this set in the PR that converts it. radarr/sonarr are
           # deliberately absent: they overlay only /db and keep /config on NFS.
-          CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn", "tautulli"}
+          CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn", "tautulli",
+                                "starloom"}
           failed = 0
           for app in sorted(CONFIG_ON_LONGHORN):
               bad = 0
