@@ -181,6 +181,16 @@ jobs:
           if not preserve_unknown_ignored:
               errs.append("missing ignoreDifferences for CRD /spec/preserveUnknownFields; "
                           "the chart's CRDs would stay OutOfSync forever")
+          conversion_ignored = any(
+              i.get("kind") == "CustomResourceDefinition"
+              and "/spec/conversion" in i.get("jsonPointers", [])
+              for i in ignores)
+          if not conversion_ignored:
+              errs.append("missing ignoreDifferences for CRD /spec/conversion; "
+                          "a sync would strip the conversion webhook longhorn-manager owns")
+          if "RespectIgnoreDifferences=true" not in policy.get("syncOptions", []):
+              errs.append("RespectIgnoreDifferences=true required; without it "
+                          "ignoreDifferences is not honoured during sync")
           for e in errs:
               print(f"FAILED: {e}")
           sys.exit(1 if errs else 0)

@@ -119,15 +119,29 @@ API server is `kubectl`'s problem, not the readiness check's.
 
 the fetch initContainer needs a shell. we use `alpine/kubectl`, not the upstream distroless one.
 
-### CRDs stay OutOfSync on one field
+### Two CRD fields ArgoCD must not manage
 
-The chart sets `spec.preserveUnknownFields: false` on 7 of its 22 CRDs. The
-Kubernetes API server accepts only `false` there and drops the field from the
-stored object, so it never round-trips and ArgoCD reports those 7 as
-permanently OutOfSync. `cluster/argocd/apps/longhorn.yaml` carries an
-`ignoreDifferences` entry for `/spec/preserveUnknownFields` on
-`CustomResourceDefinition` to stop the false diff; nothing in the chart's own
-values controls it.
+`cluster/argocd/apps/longhorn.yaml` carries one `ignoreDifferences` entry on
+`CustomResourceDefinition`, covering two paths.
+
+The Kubernetes API server accepts only `false` for
+`spec.preserveUnknownFields` and drops the field from the stored object, so it
+never round-trips and any CRD setting it reads as permanently OutOfSync. Chart
+1.10.2 sets it on none of its 22 CRDs, so the `/spec/preserveUnknownFields`
+pointer guards nothing at this pin. It stays because `test-cluster.yaml`
+asserts it.
+
+The same entry covers `/spec/conversion`. The chart emits no `conversion` key
+on any CRD; longhorn-manager writes the whole block at runtime from the
+`longhorn-webhook-ca` Secret, so its `caBundle` is per-cluster generated PKI
+that cannot live in git. A sync that omits the field while longhorn-manager
+owns part of it leaves `webhookClientConfig` behind with no `strategy`, and the
+API server rejects the CRD.
+
+`RespectIgnoreDifferences=true` makes that second pointer effective. Plain
+`ignoreDifferences` only affects sync status; the sync stage still applies the
+desired state as written. With the option set, ArgoCD pre-patches the live
+values for both ignored paths into the desired state before applying.
 
 ## Snapshot is not backup
 
