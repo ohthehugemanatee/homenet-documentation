@@ -1,6 +1,6 @@
 # Longhorn
 
-Longhorn v1.10.2, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+Longhorn v1.11.3, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
 (chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
 in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
 `backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
@@ -25,7 +25,7 @@ longhorn-manager run UTC.
 
 ## Chart values
 
-`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.10.2
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.11.3
 values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
 cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
 chart and fails when the two part.
@@ -130,7 +130,7 @@ diff.
 at runtime from the `longhorn-webhook-ca` Secret and the chart emits none, so
 the `caBundle` is per-cluster PKI that cannot live in git. A sync that manages
 it leaves `webhookClientConfig` with no `strategy`, which the API server
-rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.10.2
+rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.11.3
 sets it on none of its 22 CRDs; it stays because `test-cluster.yaml` asserts it.
 
 ## Snapshot is not backup
