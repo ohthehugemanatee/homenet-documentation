@@ -1400,6 +1400,14 @@ jobs:
             -f cluster/helm/longhorn/values.yaml > /tmp/longhorn-render.yaml
           python3 .github/scripts/check_longhorn_render.py /tmp/longhorn-render.yaml
 
+      - name: Assert longhorn values keys reach the chart
+        run: |
+          helm show values longhorn/longhorn \
+            --version "${LONGHORN_VERSION}" > /tmp/longhorn-chart-values.yaml
+          python3 .github/scripts/check_helm_values_keys.py \
+            --chart-values /tmp/longhorn-chart-values.yaml \
+            --overrides cluster/helm/longhorn/values.yaml
+
       - name: Resolve pinned cert-manager chart version
         run: |
           python3 - <<'PY' >> "$GITHUB_ENV"
