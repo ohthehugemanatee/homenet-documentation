@@ -26,15 +26,19 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: longhorn-system
-  # Server always drops this.
   ignoreDifferences:
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
       jsonPointers:
+        # Server always drops this.
         - /spec/preserveUnknownFields
+        # longhorn-manager owns it; the chart emits none.
+        - /spec/conversion
   # Manual sync, infra tier.
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
       # CRDs exceed apply limit.
       - ServerSideApply=true
+      # Without this, ignoreDifferences is diff-only.
+      - RespectIgnoreDifferences=true
