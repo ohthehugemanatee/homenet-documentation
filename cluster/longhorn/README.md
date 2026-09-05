@@ -121,27 +121,17 @@ the fetch initContainer needs a shell. we use `alpine/kubectl`, not the upstream
 
 ### Two CRD fields ArgoCD must not manage
 
-`cluster/argocd/apps/longhorn.yaml` carries one `ignoreDifferences` entry on
-`CustomResourceDefinition`, covering two paths.
+`cluster/argocd/apps/longhorn.yaml` ignores `/spec/conversion` and
+`/spec/preserveUnknownFields` on `CustomResourceDefinition`, with
+`RespectIgnoreDifferences=true` so the entry binds the sync and not just the
+diff.
 
-The Kubernetes API server accepts only `false` for
-`spec.preserveUnknownFields` and drops the field from the stored object, so it
-never round-trips and any CRD setting it reads as permanently OutOfSync. Chart
-1.10.2 sets it on none of its 22 CRDs, so the `/spec/preserveUnknownFields`
-pointer guards nothing at this pin. It stays because `test-cluster.yaml`
-asserts it.
-
-The same entry covers `/spec/conversion`. The chart emits no `conversion` key
-on any CRD; longhorn-manager writes the whole block at runtime from the
-`longhorn-webhook-ca` Secret, so its `caBundle` is per-cluster generated PKI
-that cannot live in git. A sync that omits the field while longhorn-manager
-owns part of it leaves `webhookClientConfig` behind with no `strategy`, and the
-API server rejects the CRD.
-
-`RespectIgnoreDifferences=true` makes that second pointer effective. Plain
-`ignoreDifferences` only affects sync status; the sync stage still applies the
-desired state as written. With the option set, ArgoCD pre-patches the live
-values for both ignored paths into the desired state before applying.
+`/spec/conversion` is the one that matters: longhorn-manager writes the block
+at runtime from the `longhorn-webhook-ca` Secret and the chart emits none, so
+the `caBundle` is per-cluster PKI that cannot live in git. A sync that manages
+it leaves `webhookClientConfig` with no `strategy`, which the API server
+rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.10.2
+sets it on none of its 22 CRDs; it stays because `test-cluster.yaml` asserts it.
 
 ## Snapshot is not backup
 
