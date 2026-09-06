@@ -1,3 +1,10 @@
+resources:
+  requests:
+    cpu: 200m
+    memory: 1Gi
+  limits:
+    memory: 1Gi
+
 collabora:
   extra_params: --o:ssl.enable=false --o:ssl.termination=true
   aliasgroups:
