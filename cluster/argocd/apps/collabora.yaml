@@ -16,9 +16,7 @@ spec:
       # Pin read by CI's helm dry-run.
       targetRevision: 1.3.2
       helm:
-        # Without this the release takes the Application's name and the chart's
-        # fullname helper yields collabora-collabora-online, orphaning the
-        # IngressRoute's reference to the collabora-online Service.
+        # Without it the fullname helper yields collabora-collabora-online.
         releaseName: collabora-online
         valueFiles:
           - $values/cluster/helm/collabora/values.yaml

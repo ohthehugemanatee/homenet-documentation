@@ -9,18 +9,14 @@ collabora:
     enabled: true
     secretName: collabora-online-admin
 
-  # Replicas must share one WOPI proof key, or discovery fetched from one pod
-  # fails validation against a request served by another. The chart's own
-  # generator re-runs `genPrivateKey` on every `helm template`, so under ArgoCD
-  # it would rotate the key on each render; the secret is created out of band.
+  # Shared across replicas; the chart's generator re-keys on every render.
   proofKeysSecretRef: collabora-online-wopi-proof
 
 ingress:
   enabled: false
 
 autoscaling:
-  # Memory sits at ~2/3 of request under ADR-0006 sizing, so the chart default
-  # of 50 never stops asking for replicas.
+  # ADR-0006 sizing puts memory at ~2/3 of request; 50 would never stop scaling.
   targetMemoryUtilizationPercentage: 70
 
 resources:
