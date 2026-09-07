@@ -71,18 +71,15 @@ occ config:app:set richdocuments wopi_allowlist --value="10.42.0.0/16"
 occ richdocuments:activate-config
 ```
 
-`wopi_allowlist` names the hosts allowed to make WOPI calls back into Nextcloud, so it carries
-the pod CIDR, not the Collabora hostname. `collabora.aliasgroups` in `values.yaml` is the
-mirror image: the Nextcloud origin this server accepts documents from.
+`wopi_allowlist` gates who may call Nextcloud's WOPI endpoints, and the address it matches is
+never a Collabora pod. The callback goes to Nextcloud's own public hostname, so it re-enters
+through the ingress, and `trusted_proxies` covers `10.0.0.0/8`, which contains the pod network:
+Nextcloud reads `X-Forwarded-For` and takes the rightmost entry that is not itself trusted. On
+the in-cluster path nothing in that header qualifies, so the match falls back to the ingress
+pod's own address, which the CIDR covers. A callback that leaves the cluster and returns
+through Cloudflare carries a public address that it does not cover, and that address moves
+because cloudflare-ddns maintains it, so keep the callback inside the cluster. A denial is
+logged with the address Nextcloud saw.
 
-The address it matches is never a Collabora pod. The WOPI callback goes to Nextcloud's own
-public hostname, so the call re-enters through the ingress, and Nextcloud's `trusted_proxies`
-covers `10.0.0.0/8`, which contains the pod network. Nextcloud therefore reads
-`X-Forwarded-For` and takes the rightmost entry that is not itself trusted. On the in-cluster
-path nothing in that header qualifies, so the match falls back to the ingress pod's own
-address and the CIDR above covers it. A callback that leaves the cluster and returns through
-Cloudflare carries a public address that the CIDR does not cover, and the site's public
-address moves, since cloudflare-ddns maintains it. Keep the callback inside the cluster.
-
-`occ config:app:get richdocuments wopi_allowlist` reports what the running deployment uses,
-and a denial is logged with the address Nextcloud saw.
+`collabora.aliasgroups` in `values.yaml` is the mirror image: the Nextcloud origin this server
+accepts documents from.
