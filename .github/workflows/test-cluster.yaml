@@ -1209,6 +1209,7 @@ jobs:
           helm repo add nextcloud-mcp https://cbcoutinho.github.io/helm-charts
           helm repo add jetstack https://charts.jetstack.io
           helm repo add longhorn https://charts.longhorn.io
+          helm repo add collabora https://collaboraonline.github.io/online/
           helm repo update
 
       - name: Dry-run argocd
@@ -1303,6 +1304,35 @@ jobs:
             --chart-values /tmp/loki-chart-values.yaml \
             --overrides cluster/helm/loki/values.yaml \
             --passthrough loki
+
+      - name: Resolve the collabora-online chart pin
+        id: collabora-chart
+        run: |
+          version=$(python3 -c '
+          import yaml
+          sources = yaml.safe_load(
+              open("cluster/argocd/apps/collabora.yaml"))["spec"]["sources"]
+          print(next(s["targetRevision"]
+                     for s in sources if s.get("chart") == "collabora-online"))
+          ')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run collabora-online
+        run: |
+          helm upgrade --install collabora-online collabora/collabora-online \
+            --version "${{ steps.collabora-chart.outputs.version }}" \
+            --namespace collabora --create-namespace \
+            --dry-run \
+            -f cluster/helm/collabora/values.yaml
+
+      - name: Assert collabora values keys reach the chart
+        run: |
+          helm show values collabora/collabora-online \
+            --version "${{ steps.collabora-chart.outputs.version }}" \
+            > /tmp/collabora-chart-values.yaml
+          python3 .github/scripts/check_helm_values_keys.py \
+            --chart-values /tmp/collabora-chart-values.yaml \
+            --overrides cluster/helm/collabora/values.yaml
 
       - name: Resolve the alloy chart pin
         id: alloy-chart
