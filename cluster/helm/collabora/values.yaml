@@ -1,27 +1,31 @@
+collabora:
+  # ssl.termination: TLS ends at traefik, coolwsd speaks plain HTTP behind it.
+  extra_params: --o:ssl.enable=false --o:ssl.termination=true
+  # WOPI host allowlist: the Nextcloud origin that may drive this server.
+  aliasgroups:
+    - host: "https://germany.vertesi.com:443"
+
+  existingSecret:
+    enabled: true
+    secretName: collabora-online-admin
+
+  # Replicas must share one WOPI proof key, or discovery fetched from one pod
+  # fails validation against a request served by another. The chart's own
+  # generator re-runs `genPrivateKey` on every `helm template`, so under ArgoCD
+  # it would rotate the key on each render; the secret is created out of band.
+  proofKeysSecretRef: collabora-online-wopi-proof
+
+ingress:
+  enabled: false
+
+autoscaling:
+  # Memory sits at ~2/3 of request under ADR-0006 sizing, so the chart default
+  # of 50 never stops asking for replicas.
+  targetMemoryUtilizationPercentage: 70
+
 resources:
   requests:
     cpu: 200m
     memory: 1Gi
   limits:
     memory: 1Gi
-
-collabora:
-  extra_params: --o:ssl.enable=false --o:ssl.termination=true
-  aliasgroups:
-    - host: "https://germany.vertesi.com:443"
-
-  # External hostname:port of the server running coolwsd.
-  # If empty, it's derived from the request (please set it if this doesn't work).
-  # May be specified when behind a reverse-proxy or when the hostname is not reachable directly.
-  # server_name: null
-
-  # existingSecret:
-  #   enabled: false
-  #   secretName: ""
-  #   usernameKey: "username"
-  #   passwordKey: "password"
-  # password: examplepass
-  # username: admin
-
-ingress:
-  enabled: false

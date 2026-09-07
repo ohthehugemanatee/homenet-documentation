@@ -7,10 +7,24 @@ metadata:
     notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
 spec:
   project: default
-  source:
-    repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
-    targetRevision: HEAD
-    path: cluster/helm/collabora
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      ref: values
+    - chart: collabora-online
+      repoURL: https://collaboraonline.github.io/online/
+      # Pin read by CI's helm dry-run.
+      targetRevision: 1.3.2
+      helm:
+        # Without this the release takes the Application's name and the chart's
+        # fullname helper yields collabora-collabora-online, orphaning the
+        # IngressRoute's reference to the collabora-online Service.
+        releaseName: collabora-online
+        valueFiles:
+          - $values/cluster/helm/collabora/values.yaml
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      path: cluster/services/collabora
   destination:
     server: https://kubernetes.default.svc
     namespace: collabora

@@ -1,9 +1,8 @@
 # cluster/helm/CLAUDE.md — values overrides for upstream charts
 
-This directory holds **values overrides for upstream charts, NOT chart sources.** Two carve-outs:
+This directory holds **values overrides for upstream charts, NOT chart sources.** One carve-out:
 
 - `argocd/` — ArgoCD GitOps controller. `bootstrap.sh` is a one-time install; after bootstrap ArgoCD manages itself and all other workloads.
-- `collabora/` — hand-built chart (Collabora Online).
 
 CI installs the upstream chart and applies the local `values.yaml`.
 
