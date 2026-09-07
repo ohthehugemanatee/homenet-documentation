@@ -74,3 +74,10 @@ occ richdocuments:activate-config
 `wopi_allowlist` names the hosts allowed to make WOPI calls back into Nextcloud, so it carries
 the pod CIDR, not the Collabora hostname. `collabora.aliasgroups` in `values.yaml` is the
 mirror image: the Nextcloud origin this server accepts documents from.
+
+The address it matches is the last hop, traefik or cloudflared, not a Collabora pod: the WOPI
+callback URL is Nextcloud's own public hostname, so the call re-enters through the ingress.
+Once the ingress is listed in `trusted_proxies`, Nextcloud matches `X-Forwarded-For` instead
+and the allowlist needs whatever that header carries, a Cloudflare edge address for a call
+that left the cluster. Adding `trusted_proxies` without revisiting this stops document editing,
+and the denial is logged with the address it saw.
