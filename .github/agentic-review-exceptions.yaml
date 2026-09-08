@@ -923,9 +923,9 @@ exceptions:
       shoebox/openbao/README.md Security notes. The LAN is private;
       all traffic is internal to shoebox (Semaphore reaches OpenBao via
       host LAN IP). Remote operator access requires SSH tunnel per the
-      README. Mitigating TLS adds a self-signed cert + VAULT_CACERT
-      mount into Semaphore; deferred until TLS is added as a future
-      hardening step.
+      README. Deferred to #328, which issues a Let's Encrypt cert for
+      shoebox.berlin.vertesi.com; that needs no VAULT_CACERT mount, so
+      the earlier self-signed reasoning no longer applies.
 
   - pattern: "Recreate openbao handler redundant / same command as Start task"
     files:
@@ -935,15 +935,6 @@ exceptions:
       for compose-file changes (recreate) vs config-only changes (restart).
       The handler's second docker compose up -d is idempotent and harmless;
       removing it would conflict with that earlier request. Accepted.
-
-  - pattern: "shoebox inventory IP placeholder / 192.168.1.10"
-    files:
-      - cluster/ansible/inventory.yaml
-    reason: >-
-      Intentional. The placeholder documents the required field and
-      tells operators exactly what to fill in. An assert in pre_tasks
-      would add complexity for a one-time first-run setup step in a
-      homelab. The comment "update to actual shoebox IP" is the prompt.
 
   - pattern: "secret/k3s/* glob in ansible-read.hcl broader than needed"
     files:
