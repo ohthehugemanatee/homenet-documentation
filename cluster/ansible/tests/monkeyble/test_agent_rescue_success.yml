@@ -86,7 +86,30 @@ monkeyble_scenarios:
                     spec:
                       replicas: 1
 
+      # Assert the rendered annotation keys: Ansible does not template mapping
+      # keys, so a role default used as one reaches the API as a literal string.
+      # Monkeyble templates a tested task's args from extra_vars alone (role
+      # defaults are out of its reach), hence every var the task reads is here.
       - task: "Record pre-drain replica count on StatefulSet"
+        extra_vars:
+          item:
+            namespace: default
+            name: nextcloud
+          cordon_drain_ss:
+            spec:
+              replicas: 1
+          cordon_drain_node_name: testnode
+          cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
+          cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
+          k8s_kubeconfig: /tmp/monkeyble-kubeconfig
+        test_input:
+          - assert_dict_equal:
+              arg_name: definition
+              expected:
+                metadata:
+                  annotations:
+                    homenet.vertesi.com/pre-drain-replicas: "1"
+                    homenet.vertesi.com/pre-drain-node: testnode
         mock:
           config:
             hpe.monkeyble.monkeyble_module:

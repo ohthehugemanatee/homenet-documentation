@@ -39,9 +39,10 @@
     name: "{{ item.metadata.name }}"
     definition:
       metadata:
-        annotations:
-          "{{ cordon_drain_replicas_annotation }}": null
-          "{{ cordon_drain_node_annotation }}": null
+        # Keys are not templated (see scale_down_one.yml); null removes them.
+        annotations: >-
+          {{ {cordon_drain_replicas_annotation: none,
+              cordon_drain_node_annotation: none} }}
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
   become: false
