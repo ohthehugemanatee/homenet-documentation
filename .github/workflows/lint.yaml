@@ -125,6 +125,25 @@ jobs:
       - name: Run shellcheck
         run: find cluster shoebox -name "*.sh" -exec shellcheck {} +
 
+  hostnames:
+    name: Retired hostnames and subnets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # @todo: Widen path list during old domain cleanup Issue https://github.com/ohthehugemanatee/homenet-documentation/issues/332
+      - name: Reject the retired .vert TLD
+        run: |
+          if grep -rn '\.vert\b' shoebox/openbao/ cluster/ansible/inventory.yaml; then
+            echo "::error::.vert is retired; hosts are under berlin.vertesi.com"
+            exit 1
+          fi
+      - name: Reject 192.168.0.0/16 addresses in the inventory
+        run: |
+          if grep -n '192\.168\.' cluster/ansible/inventory.yaml; then
+            echo "::error::the LAN is 10.10.10.0/24; 192.168.x.x is a stale placeholder"
+            exit 1
+          fi
+
   github-scripts:
     name: GitHub Actions helper scripts
     runs-on: ubuntu-latest

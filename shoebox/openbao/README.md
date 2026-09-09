@@ -35,7 +35,7 @@ docker exec openbao bao status  # verify
 ## KV engine and initial secrets
 
 ```sh
-export VAULT_ADDR=http://shoebox.vert:8200
+export VAULT_ADDR=http://shoebox.berlin.vertesi.com:8200
 export VAULT_TOKEN=<root-token>  # create a scoped token before regular use
 
 bao secrets enable -path=secret kv
@@ -90,21 +90,17 @@ bao operator rekey -init -key-shares=3 -key-threshold=2
 # supply current unseal keys one at a time when prompted
 ```
 
-### k3s encryption key rotation
-
-See `cluster/ansible/enable-k3s-encryption.yaml` header comment for the
-three-step rotation procedure (add new key → re-encrypt all Secrets → remove old key).
-
 ---
 
 ## Security notes
 
 - **Port binding**: OpenBao listens on `0.0.0.0:8200` because Semaphore runs as a Docker
-  container and needs to reach OpenBao via the host's LAN IP (`shoebox.vert:8200`).
+  container and needs to reach OpenBao at `shoebox.berlin.vertesi.com:8200` on the LAN.
   Binding to `127.0.0.1` would break Semaphore connectivity. Port 8201 (Raft peer) is
   NOT published — single-node deployment only.
 - **TLS**: Disabled; tokens transit the private LAN in cleartext. The LAN is private and
   Semaphore's network is local. Remote operator access should use SSH tunnel
-  (`ssh -L 8200:localhost:8200 shoebox`).
+  (`ssh -L 8200:localhost:8200 shoebox`). A Let's Encrypt cert for
+  `shoebox.berlin.vertesi.com` is tracked in #328.
 - Future hardening: co-locate Semaphore and OpenBao on the same Docker network so
-  `127.0.0.1` binding becomes viable; enable TLS with self-signed cert.
+  `127.0.0.1` binding becomes viable.
