@@ -130,9 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # set -e is exempt for `!`-inverted commands, so grep is asserted
-      # explicitly. Path list widens as the remaining .vert routes and docs are
-      # cleaned up; a repo-wide ban would fail today on cluster/services.
+      # @todo: Widen path list during old domain cleanup Issue https://github.com/ohthehugemanatee/homenet-documentation/issues/332
       - name: Reject the retired .vert TLD
         run: |
           if grep -rn '\.vert\b' shoebox/openbao/ cluster/ansible/inventory.yaml; then

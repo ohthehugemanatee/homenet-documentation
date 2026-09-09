@@ -919,13 +919,7 @@ exceptions:
       - shoebox/openbao/docker-compose.yaml
       - cluster/ansible/deploy-openbao.yaml
     reason: >-
-      Conscious tradeoff, documented in config.hcl comments and
-      shoebox/openbao/README.md Security notes. The LAN is private;
-      all traffic is internal to shoebox (Semaphore reaches OpenBao via
-      host LAN IP). Remote operator access requires SSH tunnel per the
-      README. Deferred to #328, which issues a Let's Encrypt cert for
-      shoebox.berlin.vertesi.com; that needs no VAULT_CACERT mount, so
-      the earlier self-signed reasoning no longer applies.
+      TLS deferred to Issue #328.
 
   - pattern: "Recreate openbao handler redundant / same command as Start task"
     files:
