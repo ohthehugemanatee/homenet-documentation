@@ -1,12 +1,14 @@
 ---
-# Scenario: upgrade health check fails, auto-rebuild also fails.
-# Expected: CRITICAL Pushover alert fires, failure flag set.
+# Scenario: upgrade health check fails, and the control-plane nodes report two
+# different k3s versions.
+# Expected: the rebuild refuses before the uninstall, so the node keeps a working
+# k3s, and the CRITICAL Pushover alert fires.
 monkeyble_scenarios:
-  agent_rescue_failure:
+  agent_rescue_version_split:
     tasks_to_test: >-
-      {{ monkeyble_scenarios.agent_rescue_failure.pre_tasks
+      {{ monkeyble_scenarios.agent_rescue_version_split.pre_tasks
          + monkeyble_shared_tasks
-         + monkeyble_scenarios.agent_rescue_failure.post_tasks }}
+         + monkeyble_scenarios.agent_rescue_version_split.post_tasks }}
     pre_tasks:
       # ── Mock infrastructure tasks that require a real cluster ──────────────
 
@@ -134,31 +136,14 @@ monkeyble_scenarios:
                 resources:
                   - status:
                       nodeInfo:
-                        kubeletVersion: "v1.31.5+k3s1"
+                        kubeletVersion: "v1.31.6+k3s1"
                   - status:
                       nodeInfo:
                         kubeletVersion: "v1.31.5+k3s1"
 
-      # ── Rescue path: rebuild fails → inner rescue fires ───────────────────
-      - task: "Uninstall k3s agent"
-        mock:
-          config:
-            hpe.monkeyble.monkeyble_module:
-              consider_changed: true
-              result_dict:
-                rc: 0
-
-      # Use ansible.builtin.fail as the mock module to trigger a real failure.
-      - task: "Reinstall k3s agent"
-        should_fail: true
-        mock:
-          config:
-            ansible.builtin.fail:
-              msg: "Mocked k3s reinstall failure (CI test)"
-
       # ── Key assertions ────────────────────────────────────────────────────
-      # Alert CRITICAL is the last task in the inner rescue, so matching it in the
-      # run output proves the unconditional diagnostic tasks before it also ran.
+      # The version assert aborts the block before the uninstall, so run-tests.sh
+      # additionally asserts the uninstall task never appears in the run output.
       # Only the collector is mocked: the debug that consumes it runs for real, so
       # run-tests.sh can assert the collected text actually reaches the run log.
       # Listing that debug here would defeat the check, because monkeyble templates

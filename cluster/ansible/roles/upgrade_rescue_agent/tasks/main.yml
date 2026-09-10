@@ -10,6 +10,39 @@
 
 - name: Attempt automatic node rebuild
   block:
+    # Read before any teardown, so an undeterminable version fails while the
+    # node still has a working k3s.
+    - name: Read the k3s version the servers are running
+      kubernetes.core.k8s_info:
+        kind: Node
+        label_selectors:
+          - "node-role.kubernetes.io/control-plane"
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: upgrade_rescue_agent_servers
+
+    - name: Collect the distinct server k3s versions
+      ansible.builtin.set_fact:
+        upgrade_rescue_agent_server_versions: >-
+          {{ upgrade_rescue_agent_servers.resources
+             | map(attribute='status.nodeInfo.kubeletVersion')
+             | unique | list }}
+
+    # Refuse rather than pick: version strings do not sort correctly across a
+    # two-digit minor (v1.9.0 sorts above v1.31.0), and an agent must never run
+    # ahead of a server.
+    - name: Require one server version before rebuilding
+      ansible.builtin.assert:
+        that:
+          - upgrade_rescue_agent_server_versions | length == 1
+        success_msg: "Rebuilding on k3s {{ upgrade_rescue_agent_server_versions | first }}"
+        fail_msg: >-
+          Control-plane nodes report
+          {{ upgrade_rescue_agent_server_versions | join(', ') | default('no version', true) }}.
+          Refusing to guess which version the rebuilt agent should join.
+
     - name: Uninstall k3s agent
       ansible.builtin.shell:
         cmd: /usr/local/bin/k3s-agent-uninstall.sh
@@ -26,6 +59,7 @@
       environment:
         K3S_URL: "{{ k3s_api_server_url }}"
         K3S_TOKEN: "{{ k3s_token }}"
+        INSTALL_K3S_VERSION: "{{ upgrade_rescue_agent_server_versions | first }}"
       changed_when: true
       no_log: true
 
