@@ -100,16 +100,18 @@ run_failing_scenario() {
 
 # ── Scenario 1: health check fails, rebuild succeeds → WARNING sent ──────────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
-run_scenario "agent_rescue_success" \
+run_scenario_expecting "agent_rescue_success" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_success.yml" \
+  "TASK \[upgrade_rescue_agent : Alert WARNING" \
   "--limit" "agents"
 
 # ── Scenario 2: health check fails, rebuild also fails → CRITICAL sent ───────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
-run_scenario "agent_rescue_failure" \
+run_scenario_expecting "agent_rescue_failure" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_failure.yml" \
+  "TASK \[upgrade_rescue_agent : Alert CRITICAL" \
   "--limit" "agents"
 
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
