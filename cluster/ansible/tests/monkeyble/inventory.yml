@@ -11,6 +11,9 @@ all:
           ansible_host: localhost
           ansible_python_interpreter: "{{ ansible_playbook_python }}"
           ansible_hostname: testnode
+          # Gathered facts outrank inventory host vars, so ansible_hostname is
+          # the runner's. Pin the name cordon_drain matches annotations against.
+          cordon_drain_node_name: testnode
           cluster_role: agent
     multimasters:
       hosts:
