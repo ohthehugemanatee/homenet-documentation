@@ -113,6 +113,7 @@ run_scenario_expecting "agent_rescue_failure" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_failure.yml" \
   "TASK \[upgrade_rescue_agent : Alert CRITICAL" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
