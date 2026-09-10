@@ -155,10 +155,20 @@ monkeyble_scenarios:
                 rc: 0
 
       # Key assertion (#338c): the annotation-nulling definition renders correctly.
+      # extra_vars must cover every var this looped task's module args touch (not
+      # just the asserted arg_name) -- see the same requirement on "Record pre-drain
+      # replica count on StatefulSet" above -- or monkeyble fails to intercept the
+      # task and the real kubernetes.core.k8s module runs against a nonexistent
+      # kubeconfig.
       - task: "Clear pre-drain annotations after restore"
         extra_vars:
+          item:
+            metadata:
+              namespace: default
+              name: nextcloud
           cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
           cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
+          k8s_kubeconfig: /tmp/monkeyble-kubeconfig
         test_input:
           - assert_dict_equal:
               arg_name: definition
