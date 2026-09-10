@@ -86,10 +86,6 @@ monkeyble_scenarios:
                     spec:
                       replicas: 1
 
-      # Assert the rendered annotation keys: Ansible does not template mapping
-      # keys, so a role default used as one reaches the API as a literal string.
-      # Monkeyble templates a tested task's args from extra_vars alone (role
-      # defaults are out of its reach), hence every var the task reads is here.
       - task: "Record pre-drain replica count on StatefulSet"
         extra_vars:
           item:

@@ -16,8 +16,6 @@
     name: "{{ item.name }}"
     definition:
       metadata:
-        # Ansible templates mapping values but not mapping keys, so the whole
-        # annotations dict has to be built inside one expression.
         annotations: >-
           {{ {cordon_drain_replicas_annotation: cordon_drain_ss.spec.replicas | string,
               cordon_drain_node_annotation: cordon_drain_node_name} }}

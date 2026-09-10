@@ -39,7 +39,6 @@
     name: "{{ item.metadata.name }}"
     definition:
       metadata:
-        # Keys are not templated (see scale_down_one.yml); null removes them.
         annotations: >-
           {{ {cordon_drain_replicas_annotation: none,
               cordon_drain_node_annotation: none} }}
