@@ -140,7 +140,25 @@ monkeyble_scenarios:
             ansible.builtin.fail:
               msg: "Mocked k3s reinstall failure (CI test)"
 
-      # ── Key assertion ─────────────────────────────────────────────────────
+      # ── Key assertions ────────────────────────────────────────────────────
+      # Alert CRITICAL is the last task in the inner rescue, so matching it in the
+      # run output proves the unconditional diagnostic tasks before it also ran.
+      # Only the collector is mocked: the debug that consumes it runs for real, so
+      # run-tests.sh can assert the collected text actually reaches the run log.
+      # Listing that debug here would defeat the check, because monkeyble templates
+      # a listed task's args before the register it reads is set.
+      - task: "Collect k3s-agent state for the failure report"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout_lines:
+                  - "failed"
+                  - "--- systemctl status ---"
+                  - "Active: failed (Result: exit-code)"
+
       - task: "Alert CRITICAL — upgrade and rebuild both failed"
         should_be_skipped: false   # assert it ran (not skipped)
         mock:
