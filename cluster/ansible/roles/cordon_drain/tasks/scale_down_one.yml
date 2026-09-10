@@ -16,9 +16,9 @@
     name: "{{ item.name }}"
     definition:
       metadata:
-        annotations:
-          "{{ cordon_drain_replicas_annotation }}": "{{ cordon_drain_ss.spec.replicas | string }}"
-          "{{ cordon_drain_node_annotation }}": "{{ cordon_drain_node_name }}"
+        annotations: >-
+          {{ {cordon_drain_replicas_annotation: cordon_drain_ss.spec.replicas | string,
+              cordon_drain_node_annotation: cordon_drain_node_name} }}
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
   become: false

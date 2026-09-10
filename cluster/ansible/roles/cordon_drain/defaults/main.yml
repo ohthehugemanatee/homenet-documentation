@@ -11,6 +11,8 @@ cordon_drain_scale_down_single_replica: true
 cordon_drain_node_name: "{{ ansible_hostname }}"
 
 # Annotations used to remember pre-drain replica counts across the reboot.
+# Ansible templates mapping values but not mapping keys, so tasks build the whole
+# annotations dict inside one expression instead of using these as YAML keys.
 cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
 cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
 
