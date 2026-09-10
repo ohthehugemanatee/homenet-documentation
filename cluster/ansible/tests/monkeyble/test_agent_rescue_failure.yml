@@ -285,8 +285,10 @@ monkeyble_scenarios:
                 rc: 0
 
       # ── Trigger rescue: simulate NRestarts > 3 ───────────────────────────
+      # should_fail is deliberately absent: monkeyble ends the run at exit 0 on
+      # an expected failure unless the failing task's immediate parent block has
+      # a rescue, and import_role puts this playbook's rescue out of its reach.
       - task: "Verify k3s not in restart loop"
-        should_fail: true
         mock:
           config:
             hpe.monkeyble.monkeyble_module:
@@ -296,6 +298,14 @@ monkeyble_scenarios:
                 rc: 0
 
       # ── Rescue path: rebuild fails → inner rescue fires ───────────────────
+      - task: "Uninstall k3s agent"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
       # Use ansible.builtin.fail as the mock module to trigger a real failure.
       - task: "Reinstall k3s agent"
         should_fail: true
