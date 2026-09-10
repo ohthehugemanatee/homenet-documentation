@@ -116,6 +116,15 @@ run_scenario_expecting "agent_rescue_failure" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
+# ── Scenario 2b: health check passes first try → k3s_health's own restore runs ──
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario_expecting "agent_upgrade_success" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_agent_upgrade_success.yml" \
+  "TASK \[cordon_drain : Clear pre-drain annotations after restore\]" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
+  "--limit" "agents"
+
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
 echo ""
 echo "══════════════════════════════════════════════"
