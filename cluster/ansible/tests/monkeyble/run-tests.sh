@@ -104,6 +104,7 @@ run_scenario_expecting "agent_rescue_success" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_success.yml" \
   "TASK \[upgrade_rescue_agent : Alert WARNING" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
 # ── Scenario 2: health check fails, rebuild also fails → CRITICAL sent ───────
