@@ -178,6 +178,22 @@ monkeyble_scenarios:
                 rc: 0
 
       # ── Rescue path: rebuild succeeds ─────────────────────────────────────
+      # ── Rescue path: version pin read from the servers before any teardown ──
+      - task: "Read the k3s version the servers are running"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - status:
+                      nodeInfo:
+                        kubeletVersion: "v1.31.5+k3s1"
+                  - status:
+                      nodeInfo:
+                        kubeletVersion: "v1.31.5+k3s1"
+
       - task: "Uninstall k3s agent"
         mock:
           config:
