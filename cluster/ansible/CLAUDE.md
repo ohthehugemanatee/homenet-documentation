@@ -32,6 +32,7 @@ Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` 
 
 - `tests/monkeyble/` — `hpe.monkeyble` mocks of kubectl/apt/systemctl. `run-tests.sh` is the scenario registry; a new scenario is registered there. It runs `cross_play_abort` with the monkeyble callback disabled, because that scenario tests Ansible flow rather than task assertions.
 - `molecule/default/` — Docker (`ubuntu2204-ansible`) converge + idempotence + verify of `node_state`. Uses `--skip-tags molecule-notest` to skip x86 media + multipath removal.
+- `tests/test-collections-requirements.sh` — asserts the Galaxy pins CI and Semaphore install from stay in agreement.
 
 **Test-first contract for Ansible changes:** any change touching a role MUST add or update either a monkeyble scenario (control flow / assertions) or a molecule verify step (converged state). Re-run both before commit.
 
@@ -39,8 +40,13 @@ Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` 
 
 ```sh
 ansible-lint cluster/ansible
+bash cluster/ansible/tests/test-collections-requirements.sh
 bash cluster/ansible/tests/monkeyble/run-tests.sh
 cd cluster/ansible && molecule test
 ```
 
 If existing scenarios don't cover your change, add one — per the root rule on extending the test frameworks. Prefer a Galaxy collection from `requirements.yaml` over hand-rolled `command:` / `shell:`.
+
+## Galaxy collections
+
+`requirements.yaml` is the single source of truth for collection pins. `collections/requirements.yml` is a symlink to it on the path Semaphore searches (`<playbook_dir>/collections/requirements.yml`), so the scheduled runs install the same pins CI does rather than the collections bundled in the Semaphore image. Deleting the symlink silently falls back to those bundled versions.

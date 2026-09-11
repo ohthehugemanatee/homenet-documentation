@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.whl
+
+# Written by Semaphore next to the collections requirements file it installs from.
+cluster/ansible/collections/requirements.yml.md5
