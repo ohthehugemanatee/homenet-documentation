@@ -1,5 +1,9 @@
 collections:
   - ansible.posix
   - community.crypto
-  - kubernetes.core
+  # 2.4.2, bundled with the ansible 9.4.0 app Semaphore runs, splats `duration`
+  # into ResourceTimeout and raises TypeError instead of reporting a k8s_scale
+  # wait timeout. Fixed in 3.0.0.
+  - name: kubernetes.core
+    version: ">=3.0.0"
   - hpe.monkeyble
