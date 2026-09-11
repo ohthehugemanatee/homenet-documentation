@@ -1,0 +1,45 @@
+---
+# Restore a single annotated StatefulSet. Called from restore.yml in a loop.
+# Expects `item` to be the StatefulSet resource carrying this node's pre-drain
+# annotations.
+
+# The annotations live on the StatefulSet, but an operator-managed StatefulSet
+# has its replica count reconciled from the object that owns it, so that is what
+# has to be scaled back. scale_down_one.yml resolves the target the same way.
+- name: Resolve the object to restore
+  vars:
+    cordon_drain_controller: >-
+      {{ item.metadata.ownerReferences | default([])
+         | selectattr('controller', 'defined') | selectattr('controller')
+         | list | first | default({}) }}
+  ansible.builtin.set_fact:
+    cordon_drain_restore_target:
+      api_version: "{{ cordon_drain_controller.apiVersion | default('apps/v1') }}"
+      kind: "{{ cordon_drain_controller.kind | default('StatefulSet') }}"
+      name: "{{ cordon_drain_controller.name | default(item.metadata.name) }}"
+
+- name: Scale StatefulSet back to pre-drain replica count
+  kubernetes.core.k8s_scale:
+    api_version: "{{ cordon_drain_restore_target.api_version }}"
+    kind: "{{ cordon_drain_restore_target.kind }}"
+    namespace: "{{ item.metadata.namespace }}"
+    name: "{{ cordon_drain_restore_target.name }}"
+    replicas: "{{ (item.metadata.annotations | default({}))[cordon_drain_replicas_annotation] | int }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+
+- name: Clear pre-drain annotations after restore
+  kubernetes.core.k8s:
+    state: patched
+    kind: StatefulSet
+    namespace: "{{ item.metadata.namespace }}"
+    name: "{{ item.metadata.name }}"
+    definition:
+      metadata:
+        annotations: >-
+          {{ {cordon_drain_replicas_annotation: none,
+              cordon_drain_node_annotation: none} }}
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
