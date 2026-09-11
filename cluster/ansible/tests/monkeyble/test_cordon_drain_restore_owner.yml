@@ -1,0 +1,215 @@
+---
+# Scenario: the annotated workload is a StatefulSet generated and owned by an
+# operator, as kube-prometheus-stack's alertmanager is.
+# Expected: restore scales the owning custom resource back, since the operator
+# reconciles the StatefulSet's own replica count straight back from the CR.
+monkeyble_scenarios:
+  cordon_drain_restore_owner:
+    tasks_to_test: >-
+      {{ monkeyble_scenarios.cordon_drain_restore_owner.pre_tasks
+         + monkeyble_shared_tasks
+         + monkeyble_scenarios.cordon_drain_restore_owner.post_tasks }}
+    pre_tasks:
+      # ── Mock infrastructure tasks that require a real cluster ──────────────
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      - task: "Cordon node before drain"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # ── cordon_drain scale_down: no single-replica workloads on this node ────
+      # Empty cluster state — scale-down itself is not this scenario's focus
+      # (agent_rescue_success already covers it); the restore fixture below
+      # stands in for a StatefulSet drained and annotated in an earlier run.
+      - task: "Find single-replica Longhorn StorageClasses"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Find PersistentVolumeClaims on single-replica Longhorn StorageClasses"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "List pods scheduled on this node"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Get StatefulSets"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      # Assert scale-down was skipped (no targets discovered).
+      - task: "Record pre-drain replica count on StatefulSet"
+        should_be_skipped: true
+
+      - task: "Scale StatefulSet to zero"
+        should_be_skipped: true
+
+      - task: "Drain node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+    post_tasks:
+      # ── k3s_health role: health check passes on the first try ────────────
+
+      - task: "Wait for k3s-agent to become active"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "active"
+                rc: 0
+
+      - task: "Uncordon node"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Verify node is Ready"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                rc: 0
+
+      # failed_when: k3s_health_restarts.stdout | int > 3 evaluates False with
+      # stdout="0" — no rescue, straight through to k3s_health's own restore
+      # include (cordon_drain restore.yml), never upgrade_rescue_agent's.
+      - task: "Verify k3s not in restart loop"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "0"
+                rc: 0
+
+      # ── cordon_drain restore: scale the guarded workload back up ─────────────
+      # StatefulSet default/nextcloud carries this node's pre-drain annotations
+      # (as if drained and scaled down in this same run, or an earlier one —
+      # restore doesn't care which), so restore must scale it back and clear them.
+      - task: "Get StatefulSets for restore"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      namespace: monitoring
+                      name: alertmanager-kps-alertmanager
+                      ownerReferences:
+                        - kind: Alertmanager
+                          name: kps-alertmanager
+                          apiVersion: monitoring.coreos.com/v1
+                          controller: true
+                      annotations:
+                        homenet.vertesi.com/pre-drain-node: testnode
+                        homenet.vertesi.com/pre-drain-replicas: "1"
+                    spec:
+                      replicas: 0
+
+      - task: "Resolve the object to restore"
+        should_be_skipped: false
+
+      # Key assertion: restore scales the CR, not the StatefulSet the operator
+      # would reconcile straight back to the CR's count.
+      - task: "Scale StatefulSet back to pre-drain replica count"
+        should_be_skipped: false
+        extra_vars:
+          item:
+            metadata:
+              namespace: monitoring
+              name: alertmanager-kps-alertmanager
+              annotations:
+                homenet.vertesi.com/pre-drain-replicas: "1"
+          cordon_drain_restore_target:
+            api_version: monitoring.coreos.com/v1
+            kind: Alertmanager
+            name: kps-alertmanager
+          cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
+          k8s_kubeconfig: /tmp/monkeyble-kubeconfig
+        test_input:
+          - assert_equal:
+              arg_name: kind
+              expected: Alertmanager
+          - assert_equal:
+              arg_name: name
+              expected: kps-alertmanager
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # Key assertion (#338c): the annotation-nulling definition renders correctly.
+      # extra_vars must cover every var this looped task's module args touch (not
+      # just the asserted arg_name) -- see the same requirement on "Record pre-drain
+      # replica count on StatefulSet" above -- or monkeyble fails to intercept the
+      # task and the real kubernetes.core.k8s module runs against a nonexistent
+      # kubeconfig.
+      - task: "Clear pre-drain annotations after restore"
+        extra_vars:
+          item:
+            metadata:
+              namespace: monitoring
+              name: alertmanager-kps-alertmanager
+          cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
+          cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
+          k8s_kubeconfig: /tmp/monkeyble-kubeconfig
+        test_input:
+          - assert_dict_equal:
+              arg_name: definition
+              expected:
+                metadata:
+                  annotations:
+                    homenet.vertesi.com/pre-drain-replicas: null
+                    homenet.vertesi.com/pre-drain-node: null
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0

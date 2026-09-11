@@ -125,6 +125,15 @@ run_scenario_expecting "agent_upgrade_success" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
+# ── Scenario 2c: operator-owned workload → restore the owning CR ────────────
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario_expecting "cordon_drain_restore_owner" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_cordon_drain_restore_owner.yml" \
+  "TASK \[cordon_drain : Resolve the object to restore\]" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
+  "--limit" "agents"
+
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
 echo ""
 echo "══════════════════════════════════════════════"
