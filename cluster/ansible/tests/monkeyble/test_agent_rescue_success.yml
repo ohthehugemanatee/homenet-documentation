@@ -90,14 +90,27 @@ monkeyble_scenarios:
                     spec:
                       replicas: 1
 
+      # No ownerReferences on this StatefulSet, so the target resolves to itself.
+      - task: "Read the pre-drain replica count from that object"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - spec:
+                      replicas: 1
+
       - task: "Record pre-drain replica count on StatefulSet"
         extra_vars:
           item:
             namespace: default
             name: nextcloud
-          cordon_drain_ss:
-            spec:
-              replicas: 1
+          cordon_drain_target_obj:
+            resources:
+              - spec:
+                  replicas: 1
           cordon_drain_node_name: testnode
           cordon_drain_replicas_annotation: homenet.vertesi.com/pre-drain-replicas
           cordon_drain_node_annotation: homenet.vertesi.com/pre-drain-node
@@ -120,12 +133,32 @@ monkeyble_scenarios:
       # Assert discovery actually selected the workload (loop not empty).
       - task: "Scale StatefulSet to zero"
         should_be_skipped: false
+        extra_vars:
+          item:
+            namespace: default
+            name: nextcloud
+          cordon_drain_target:
+            api_version: apps/v1
+            kind: StatefulSet
+            name: nextcloud
+          k8s_kubeconfig: /tmp/monkeyble-kubeconfig
         mock:
           config:
             hpe.monkeyble.monkeyble_module:
               consider_changed: true
               result_dict:
                 rc: 0
+
+      - task: "Wait for the StatefulSet's pods to terminate"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - status:
+                      replicas: 0
 
       - task: "Drain node"
         mock:
