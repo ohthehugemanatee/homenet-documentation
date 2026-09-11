@@ -1,0 +1,107 @@
+---
+# Scenario: the drain fails, so the run never reaches the health checks.
+# Expected: no rebuild is attempted and k3s is left running on the node, with a
+# CRITICAL Pushover alert naming the failing task.
+monkeyble_scenarios:
+  agent_pre_health_failure:
+    # apt_upgrade and node_state never run: the drain fails before them, so the
+    # shared mocks are not concatenated here.
+    tasks_to_test: >-
+      {{ monkeyble_scenarios.agent_pre_health_failure.pre_tasks
+         + monkeyble_scenarios.agent_pre_health_failure.post_tasks }}
+    pre_tasks:
+      # ── Mock infrastructure tasks that require a real cluster ──────────────
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      - task: "Cordon node before drain"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      # ── cordon_drain scale_down: no single-replica workloads on this node ────
+      # Empty cluster state → no scale-down targets; discovery must run, but
+      # annotate/scale tasks must be skipped (empty loop).
+      - task: "Find single-replica Longhorn StorageClasses"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Find PersistentVolumeClaims on single-replica Longhorn StorageClasses"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "List pods scheduled on this node"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Get StatefulSets"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      # Assert scale-down was skipped (no targets discovered).
+      - task: "Record pre-drain replica count on StatefulSet"
+        should_be_skipped: true
+
+      - task: "Scale StatefulSet to zero"
+        should_be_skipped: true
+
+      # Use ansible.builtin.fail as the mock module to trigger a real failure.
+      # should_fail is deliberately absent: it makes monkeyble end the run at the
+      # failing task, and the play's rescue is what this scenario is testing.
+      - task: "Drain node"
+        mock:
+          config:
+            ansible.builtin.fail:
+              msg: "Mocked drain failure (CI test)"
+
+    post_tasks:
+      # ── Key assertions ────────────────────────────────────────────────────
+      # The rebuild block is gated off rather than aborted, so its tasks still
+      # appear in the output as skipped. Assert the skip, including on the task
+      # that would tear down a working k3s.
+      - task: "Read the k3s version the servers are running"
+        should_be_skipped: true
+
+      - task: "Uninstall k3s agent"
+        should_be_skipped: true
+
+      - task: "Reinstall k3s agent"
+        should_be_skipped: true
+
+      - task: "Alert CRITICAL — upgrade failed before health checks"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false

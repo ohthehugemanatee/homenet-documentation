@@ -1,4 +1,11 @@
 ---
+# Set before the first check so it holds even if that check is what fails. The
+# agent rescue reads it to tell a broken node from a failure that never got far
+# enough to break one.
+- name: Mark health checks as started
+  ansible.builtin.set_fact:
+    k3s_health_checks_started: true
+
 - name: "Wait for {{ k3s_svc }} to become active"  # noqa: command-instead-of-module name[template]
   ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
   register: k3s_health_status

@@ -5,7 +5,7 @@ Playbooks here provision the k3s nodes' OS (apt, sysctl, k3s service, NTP, iSCSI
 ## Playbook contracts
 
 - **`node-state.yaml`** — fully idempotent; converges packages, kernel modules, sysctl, NTP, iSCSI, swap and journald, and hardens the low-RAM (4 GB Pi) control-plane nodes with kubelet memory reservations and a soft `MemoryHigh` drop-in on `k3s.service`. Safe to re-run. Two opt-in flags change what it does: `node_state_zram_enabled` (zram swap cushion; also skips the blanket `swapoff`) and `node_state_usb_offload_enabled` (auto-derived from `cluster_role`), which symlinks the k3s, Longhorn, kubelet and pod-log directories onto `/mnt/usb`. The offload only manages symlink state when `/mnt/usb` is mounted and the path is absent or already a symlink — it never clobbers a populated dir, so the live data move (stop k3s, rsync) stays manual.
-- **`rolling-upgrade.yaml`** — `apt dist-upgrade` + reboot + health check + uncordon; `serial: 1`; agents → multimasters → masters (first-master last); rescue path on health failure.
+- **`rolling-upgrade.yaml`** — `apt dist-upgrade` + reboot + health check + uncordon; `serial: 1`; agents → multimasters → masters (first-master last); rescue path on health failure. The agent rebuild only fires once `k3s_health` has started, so a failure before it alerts and leaves k3s running rather than reinstalling a node that was never broken.
 - **`rolling-release-upgrade.yaml`** — Ubuntu major-version `do-release-upgrade`; same serial/rescue pattern as `rolling-upgrade.yaml`.
 - **`k3s-agent.yaml`** — legacy one-time bootstrap for a fresh node; **NOT idempotent**. Requires `--ask-become-pass --ask-vault-pass` and `k3s_token` / `usb_disk` / `cluster_role` vars. Mounts the USB disk, then delegates to `node_state` for OS convergence (including USB offload symlinks).
 - **`migrate-config-to-longhorn.yaml`** — moves one app's `/config` from the `app-configs` NFS PVC onto a Longhorn volume (#241). Operates on cluster workloads, not node OS (ADR-0005); requires a phase tag (`-t stage` before the manifest PR merges, `-t resume` after, `-t rollback` after a revert) and `-e app=<name>`. An app whose pod seeds several directories on one volume passes `migrate_sources` and `migrate_scale_targets` (README has calibre's invocation); the default is one source and one Deployment. Preflight derives the target PVC name from the app's `volumeClaimTemplate` in `cluster/services/<app>.yaml` and refuses to run against an unconverted manifest, so it must run from a checkout of the converting branch.
@@ -25,7 +25,7 @@ Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` 
 
 - All upgrade plays read/write state under `/var/lib/ansible-upgrade/` on the shoebox host (not in repo).
 - A persistent failure flag (`rolling-upgrade-failed`) **aborts subsequent plays** in the same run — agents-fail blocks multimasters-then-masters. Clearing the flag is the rescue path's job; never clear it silently.
-- **Pushover alerts:** `WARNING` when an auto-rebuild succeeded; `CRITICAL` for unrecovered failures (CP failure, agent rebuild failed). New rescue paths follow this severity contract.
+- **Pushover alerts:** `WARNING` when an auto-rebuild succeeded; `CRITICAL` for unrecovered failures (CP failure, agent rebuild failed, agent failure before `k3s_health` ran). New rescue paths follow this severity contract.
 - **kubectl from playbooks:** `delegate_to: localhost` with `$KUBECONFIG` set to shoebox's kubeconfig. Never run kubectl on the target node.
 
 ## Tests (`tests/` + `molecule/`)
