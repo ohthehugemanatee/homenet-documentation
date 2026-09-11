@@ -156,6 +156,14 @@ run_scenario_expecting "agent_upgrade_success" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
+# ── Scenario 2d: failure before health checks → no rebuild, k3s left alone ──
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario_expecting "agent_pre_health_failure" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_agent_pre_health_failure.yml" \
+  "TASK \[upgrade_rescue_agent : Alert CRITICAL — upgrade failed before health checks\]" \
+  "--limit" "agents"
+
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
 echo ""
 echo "══════════════════════════════════════════════"

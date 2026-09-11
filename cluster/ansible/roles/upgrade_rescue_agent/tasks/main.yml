@@ -8,7 +8,34 @@
   become: false
   failed_when: false  # must not abort rescue — alert tasks below must still run
 
+# A failure before k3s_health means the node's k3s was never disturbed: the
+# cluster, apt or node config failed, and uninstalling a working k3s cannot fix
+# any of them. Alert and leave the node cordoned for an operator.
+- name: Alert CRITICAL — upgrade failed before health checks
+  ansible.builtin.uri:
+    url: https://api.pushover.net/1/messages.json
+    method: POST
+    timeout: 10
+    body_format: form-urlencoded
+    body:
+      token: "{{ pushover_app_token }}"
+      user: "{{ pushover_user_key }}"
+      message: >-
+        CRITICAL: {{ inventory_hostname }} upgrade failed
+        at task '{{ ansible_failed_task.name | default('unknown') }}'
+        before health checks ran. No rebuild attempted, k3s left running.
+        Node DRAINED. Manual fix required.
+      priority: "2"
+      retry: "300"
+      expire: "3600"
+  delegate_to: localhost
+  become: false
+  no_log: true
+  changed_when: false
+  when: not (k3s_health_checks_started | default(false) | bool)
+
 - name: Attempt automatic node rebuild
+  when: k3s_health_checks_started | default(false) | bool
   block:
     # Read before any teardown, so an undeterminable version fails while the
     # node still has a working k3s.
