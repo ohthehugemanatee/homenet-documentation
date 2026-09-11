@@ -25,6 +25,17 @@ jobs:
       - name: Run Semaphore encryption-key validator tests
         run: bash shoebox/tests/test-validate-semaphore-key.sh
 
+  collection-pins:
+    name: Ansible collection pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run collection requirements tests
+        run: bash cluster/ansible/tests/test-collections-requirements.sh
+
   monkeyble:
     name: Monkeyble rescue-logic tests
     runs-on: ubuntu-latest

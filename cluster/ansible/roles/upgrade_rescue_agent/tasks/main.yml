@@ -89,6 +89,31 @@
       changed_when: false
 
   rescue:
+    # The reinstall above is no_log (K3S_TOKEN in its environment), so nothing it
+    # printed reaches the run log. Node journald is Storage=volatile, so the run
+    # log is the only record that survives a reboot.
+    - name: Collect k3s-agent state for the failure report
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -o pipefail
+          systemctl is-active k3s-agent || true
+          echo '--- systemctl status ---'
+          systemctl status k3s-agent --no-pager --lines=0 || true
+          echo '--- journal (last 50) ---'
+          journalctl -u k3s-agent --no-pager --lines=50 || true
+          echo '--- k3s mounts still present ---'
+          mount | grep -E '/var/lib/kubelet|/run/k3s' || true
+      register: upgrade_rescue_agent_diagnostics
+      changed_when: false
+      failed_when: false      # must not mask the rebuild failure being reported
+      ignore_unreachable: true
+
+    - name: Report k3s-agent state
+      ansible.builtin.debug:
+        msg: "{{ upgrade_rescue_agent_diagnostics.stdout_lines
+                 | default(['node unreachable, no diagnostics collected']) }}"
+
     - name: Alert CRITICAL — upgrade and rebuild both failed
       ansible.builtin.uri:
         url: https://api.pushover.net/1/messages.json
@@ -100,7 +125,9 @@
           user: "{{ pushover_user_key }}"
           message: >-
             CRITICAL: {{ inventory_hostname }} upgrade+rebuild failed
-            at task '{{ ansible_failed_task.name | default('unknown') }}'.
+            at task '{{ ansible_failed_task.name | default('unknown') }}';
+            k3s-agent is
+            {{ (upgrade_rescue_agent_diagnostics.stdout_lines | default(['unknown']))[0] }}.
             Node DRAINED. Manual fix required.
           priority: "2"
           retry: "300"
