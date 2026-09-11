@@ -3,12 +3,41 @@
 # Expects `item` with .namespace and .name keys, and `cordon_drain_statefulsets`
 # already registered from the parent.
 
-- name: Record pre-drain replica count on StatefulSet
+# An operator-managed StatefulSet is reconciled back to the replica count on its
+# owning custom resource, so patching the StatefulSet is undone within seconds.
+# The owner holds the replica count that sticks. Restore re-derives this the same
+# way in restore.yml.
+- name: Resolve the object holding this StatefulSet's replica count
   vars:
     cordon_drain_ss: >-
       {{ cordon_drain_statefulsets.resources
          | selectattr('metadata.namespace', 'equalto', item.namespace)
          | selectattr('metadata.name', 'equalto', item.name) | first }}
+    cordon_drain_controller: >-
+      {{ cordon_drain_ss.metadata.ownerReferences | default([])
+         | selectattr('controller', 'defined') | selectattr('controller')
+         | list | first | default({}) }}
+  ansible.builtin.set_fact:
+    cordon_drain_target:
+      api_version: "{{ cordon_drain_controller.apiVersion | default('apps/v1') }}"
+      kind: "{{ cordon_drain_controller.kind | default('StatefulSet') }}"
+      name: "{{ cordon_drain_controller.name | default(item.name) }}"
+
+- name: Read the pre-drain replica count from that object
+  kubernetes.core.k8s_info:
+    api_version: "{{ cordon_drain_target.api_version }}"
+    kind: "{{ cordon_drain_target.kind }}"
+    namespace: "{{ item.namespace }}"
+    name: "{{ cordon_drain_target.name }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_target_obj
+
+# Annotations stay on the StatefulSet: restore discovers work by listing
+# StatefulSets, and an owner CR is not necessarily listable by that query.
+- name: Record pre-drain replica count on StatefulSet
   kubernetes.core.k8s:
     state: patched
     kind: StatefulSet
@@ -17,7 +46,8 @@
     definition:
       metadata:
         annotations: >-
-          {{ {cordon_drain_replicas_annotation: cordon_drain_ss.spec.replicas | string,
+          {{ {cordon_drain_replicas_annotation:
+                (cordon_drain_target_obj.resources | first).spec.replicas | string,
               cordon_drain_node_annotation: cordon_drain_node_name} }}
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
@@ -25,12 +55,31 @@
 
 - name: Scale StatefulSet to zero
   kubernetes.core.k8s_scale:
-    kind: StatefulSet
+    api_version: "{{ cordon_drain_target.api_version }}"
+    kind: "{{ cordon_drain_target.kind }}"
     namespace: "{{ item.namespace }}"
-    name: "{{ item.name }}"
+    name: "{{ cordon_drain_target.name }}"
     replicas: 0
-    wait: true
-    wait_timeout: "{{ cordon_drain_scale_wait }}"
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
   become: false
+
+# k8s_scale picks its wait predicate by kind and falls back to a bare existence
+# check for anything it does not know, so waiting on a custom resource proves
+# nothing. The drain needs the volume detached, which is what zero StatefulSet
+# replicas means.
+- name: Wait for the StatefulSet's pods to terminate
+  kubernetes.core.k8s_info:
+    kind: StatefulSet
+    namespace: "{{ item.namespace }}"
+    name: "{{ item.name }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_scaled_ss
+  until: >-
+    (cordon_drain_scaled_ss.resources | length) == 0 or
+    ((cordon_drain_scaled_ss.resources | first).status.replicas | default(0) | int) == 0
+  retries: "{{ ((cordon_drain_scale_wait | int) / 10) | round | int }}"
+  delay: 10

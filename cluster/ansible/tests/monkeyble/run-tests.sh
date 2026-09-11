@@ -156,6 +156,15 @@ run_scenario_expecting "agent_upgrade_success" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
+# ── Scenario 2d: operator-owned workload → scale down the owning CR ─────────
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario_expecting "cordon_drain_scaledown_owner" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_cordon_drain_scaledown_owner.yml" \
+  "TASK \[cordon_drain : Read the pre-drain replica count from that object\]" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
+  "--limit" "agents"
+
 # ── Scenario 2c: operator-owned workload → restore the owning CR ────────────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario_expecting "cordon_drain_restore_owner" \
