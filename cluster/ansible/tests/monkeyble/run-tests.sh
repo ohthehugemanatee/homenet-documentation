@@ -57,10 +57,17 @@ run_scenario() {
 # marked `should_fail` (monkeyble treats the expected failure as a pass, so the
 # playbook still exits 0), and any scenario whose assertions would pass vacuously
 # if the tasks never ran at all.
-# run_scenario_expecting <name> <playbook> <vars_file> <expected regex> [extra args...]
+# Every expected regex must match. Regexes are the arguments before the first one
+# starting with '-'; the rest are passed through to ansible-playbook.
+# run_scenario_expecting <name> <playbook> <vars_file> <expected regex>... [extra args...]
 run_scenario_expecting() {
-  local name=$1 playbook=$2 vars_file=$3 expected=$4
-  shift 4
+  local name=$1 playbook=$2 vars_file=$3
+  shift 3
+  local -a expected_patterns=()
+  while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    expected_patterns+=("$1")
+    shift
+  done
   banner "$name"
   local output
   output=$(_play "$name" "$playbook" "$vars_file" "$@") || {
@@ -69,10 +76,13 @@ run_scenario_expecting() {
     exit 1
   }
   echo "$output"
-  if ! grep -Eq "$expected" <<<"$output"; then
-    echo "  ERROR: ${name} passed, but the expected evidence is missing: ${expected}"
-    exit 1
-  fi
+  local pattern
+  for pattern in "${expected_patterns[@]}"; do
+    if ! grep -Eq "$pattern" <<<"$output"; then
+      echo "  ERROR: ${name} passed, but the expected evidence is missing: ${pattern}"
+      exit 1
+    fi
+  done
   echo "  PASSED: ${name}"
 }
 
@@ -113,6 +123,8 @@ run_scenario_expecting "agent_rescue_failure" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_failure.yml" \
   "TASK \[upgrade_rescue_agent : Alert CRITICAL" \
+  "TASK \[upgrade_rescue_agent : Report k3s-agent state\]" \
+  "Active: failed \(Result: exit-code\)" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
