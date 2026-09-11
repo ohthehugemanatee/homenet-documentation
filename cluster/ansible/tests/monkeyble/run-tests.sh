@@ -57,8 +57,9 @@ run_scenario() {
 # marked `should_fail` (monkeyble treats the expected failure as a pass, so the
 # playbook still exits 0), and any scenario whose assertions would pass vacuously
 # if the tasks never ran at all.
-# Every expected regex must match. Regexes are the arguments before the first one
-# starting with '-'; the rest are passed through to ansible-playbook.
+# Every expected regex must match, except one prefixed '!', which must not.
+# Regexes are the arguments before the first one starting with '-'; the rest are
+# passed through to ansible-playbook.
 # run_scenario_expecting <name> <playbook> <vars_file> <expected regex>... [extra args...]
 run_scenario_expecting() {
   local name=$1 playbook=$2 vars_file=$3
@@ -78,7 +79,12 @@ run_scenario_expecting() {
   echo "$output"
   local pattern
   for pattern in "${expected_patterns[@]}"; do
-    if ! grep -Eq "$pattern" <<<"$output"; then
+    if [[ $pattern == '!'* ]]; then
+      if grep -Eq "${pattern#!}" <<<"$output"; then
+        echo "  ERROR: ${name} passed, but forbidden evidence is present: ${pattern#!}"
+        exit 1
+      fi
+    elif ! grep -Eq "$pattern" <<<"$output"; then
       echo "  ERROR: ${name} passed, but the expected evidence is missing: ${pattern}"
       exit 1
     fi
@@ -114,6 +120,7 @@ run_scenario_expecting "agent_rescue_success" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_rescue_success.yml" \
   "TASK \[upgrade_rescue_agent : Alert WARNING" \
+  "Rebuilding on k3s v1\.31\.5\+k3s1" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
@@ -125,6 +132,18 @@ run_scenario_expecting "agent_rescue_failure" \
   "TASK \[upgrade_rescue_agent : Alert CRITICAL" \
   "TASK \[upgrade_rescue_agent : Report k3s-agent state\]" \
   "Active: failed \(Result: exit-code\)" \
+  "Rebuilding on k3s v1\.31\.5\+k3s1" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
+  "--limit" "agents"
+
+# ── Scenario 2c: servers disagree on k3s version → refuse before teardown ───
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario_expecting "agent_rescue_version_split" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_agent_rescue_version_split.yml" \
+  "Refusing to guess which version the rebuilt agent should join" \
+  "TASK \[upgrade_rescue_agent : Alert CRITICAL" \
+  "!TASK \[upgrade_rescue_agent : Uninstall k3s agent\]" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
