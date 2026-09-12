@@ -361,6 +361,12 @@ run_scenario "migrate_rollback" \
 # The role's owner/group defaults (root) assume it runs privileged on the real
 # host; this harness runs as whoever invoked it, so override to that user —
 # otherwise ansible.builtin.copy's chown to root fails for a non-root runner.
+# ansible-playbook's default callback does not print a command task's stdout,
+# so the reload command touches a marker file instead of echoing — the marker
+# is evidence a plain "changed:" grep on stdout would not be. Ansible's plain
+# `-e key=value` parser itself splits on whitespace (so "touch /path" becomes
+# two bogus vars), so a reload command with an argument must go through the
+# single-var JSON form instead.
 TLS_CERT_COMMON_ARGS=(
   "-e" "tls_cert_secret=shoebox-tls"
   "-e" "tls_cert_namespace=default"
@@ -368,7 +374,6 @@ TLS_CERT_COMMON_ARGS=(
   "-e" "tls_cert_owner=$(id -un)"
   "-e" "tls_cert_group=$(id -gn)"
   "-e" "tls_cert_min_days=30"
-  "-e" "tls_cert_reload_command=/bin/echo TLS_CERT_RELOAD_FIRED"
   "--limit" "shoebox"
 )
 
@@ -376,13 +381,19 @@ TLS_CERT_COMMON_ARGS=(
 # the reload command fires. ansible.builtin.copy does not create missing
 # parent directories, so the destination must exist first.
 mkdir -p "${STATE_DIR}/tls-cert-reload"
-run_scenario_expecting "tls_cert_delivers_and_reloads" \
+RELOAD_MARKER="${STATE_DIR}/tls-cert-reload/RELOAD_FIRED"
+run_scenario "tls_cert_delivers_and_reloads" \
   "${SCRIPT_DIR}/test-tls-cert.yaml" \
   "${SCRIPT_DIR}/test_tls_cert_delivers_and_reloads.yml" \
-  "TLS_CERT_RELOAD_FIRED" \
   "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-reload/tls.crt" \
   "-e" "tls_cert_dest_key=${STATE_DIR}/tls-cert-reload/tls.key" \
+  "-e" "{\"tls_cert_reload_command\": \"/usr/bin/touch ${RELOAD_MARKER}\"}" \
   "${TLS_CERT_COMMON_ARGS[@]}"
+if [[ ! -f "$RELOAD_MARKER" ]]; then
+  echo "  ERROR: tls_cert_delivers_and_reloads passed, but the reload command never ran"
+  exit 1
+fi
+echo "  PASSED: tls_cert_delivers_and_reloads ran the reload command"
 
 # Scenario: the destination already holds the exact cert and key the Secret
 # would deliver (seeded below from the same fixture) — copy's checksum
@@ -390,14 +401,20 @@ run_scenario_expecting "tls_cert_delivers_and_reloads" \
 mkdir -p "${STATE_DIR}/tls-cert-unchanged"
 install -m 0600 "${SCRIPT_DIR}/fixtures/tls-cert-valid.crt" "${STATE_DIR}/tls-cert-unchanged/tls.crt"
 install -m 0600 "${SCRIPT_DIR}/fixtures/tls-cert-valid.key" "${STATE_DIR}/tls-cert-unchanged/tls.key"
+UNCHANGED_RELOAD_MARKER="${STATE_DIR}/tls-cert-unchanged/RELOAD_FIRED"
 run_scenario_expecting "tls_cert_skips_reload_unchanged" \
   "${SCRIPT_DIR}/test-tls-cert.yaml" \
   "${SCRIPT_DIR}/test_tls_cert_skips_reload_unchanged.yml" \
   "TASK \[tls_cert : Deliver the certificate\]" \
-  "!TLS_CERT_RELOAD_FIRED" \
   "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-unchanged/tls.crt" \
   "-e" "tls_cert_dest_key=${STATE_DIR}/tls-cert-unchanged/tls.key" \
+  "-e" "{\"tls_cert_reload_command\": \"/usr/bin/touch ${UNCHANGED_RELOAD_MARKER}\"}" \
   "${TLS_CERT_COMMON_ARGS[@]}"
+if [[ -f "$UNCHANGED_RELOAD_MARKER" ]]; then
+  echo "  ERROR: tls_cert_skips_reload_unchanged ran the reload command, but the delivered cert was unchanged"
+  exit 1
+fi
+echo "  PASSED: tls_cert_skips_reload_unchanged did not run the reload command"
 
 # Scenario: a short-dated fixture (combined/Pi-hole format) fails the run
 # rather than delivering quietly.
@@ -412,7 +429,7 @@ run_failing_scenario "tls_cert_short_dated_fails" \
   "-e" "tls_cert_owner=$(id -un)" \
   "-e" "tls_cert_group=$(id -gn)" \
   "-e" "tls_cert_min_days=30" \
-  "-e" "tls_cert_reload_command=/bin/echo TLS_CERT_RELOAD_FIRED" \
+  "-e" "tls_cert_reload_command=/bin/true" \
   "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-short/combined.pem" \
   "--limit" "shoebox"
 
