@@ -148,6 +148,32 @@ to `/var/lib/ansible-upgrade/pre-upgrade.txt` **on the node**. This file is fore
 only — it tells you what changed after a failure, but no automated rollback reads it.
 Package-level apt downgrade is not the recovery path (see agent rescue below).
 
+### Drain refused: Longhorn still rebuilding
+
+Before cordoning, `cordon_drain` waits for every Longhorn volume with a replica on
+the target node to report healthy. Past `cordon_drain_longhorn_wait` (900s) the play
+fails with:
+
+```
+Longhorn still reports pvc-xxxxxxxx degraded after 900s. Draining nuc2 would take
+the last healthy replica with it, so the node has been left uncordoned.
+```
+
+The node is still schedulable and k3s was never touched, which is what the CRITICAL
+alert's "Node still schedulable" reports. Find what is not rebuilding:
+
+```bash
+kubectl -n longhorn-system get volumes.longhorn.io \
+  -o custom-columns=NAME:.metadata.name,STATE:.status.state,ROBUSTNESS:.status.robustness
+kubectl -n longhorn-system get engines.longhorn.io -o json | jq -r '.items[]
+  | select(.status.rebuildStatus != null and .status.rebuildStatus != {})
+  | [.spec.volumeName, (.status.rebuildStatus | tostring)] | @tsv'
+```
+
+A volume mid-rebuild needs more time: clear the failure flag and re-run with
+`--limit <node>`. A `faulted` volume needs an operator before any node upgrade
+continues.
+
 ### Agent nodes
 
 On any task failure after drain, the rescue block:

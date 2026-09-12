@@ -35,6 +35,10 @@
 # on Longhorn's instance-manager PodDisruptionBudget are scaled down before the
 # drain and restored after the node is healthy — handled by the cordon_drain /
 # k3s_health roles. No manual scaling needed.
+#
+# cordon_drain also waits, before cordoning, for Longhorn to finish rebuilding the
+# volumes with a replica on the node; past that bound the play fails while the node
+# is still schedulable.
 
 - name: Check all nodes for pending work
   hosts: "{{ target | default('agents:!ubuntu:multimasters:masters') }}"

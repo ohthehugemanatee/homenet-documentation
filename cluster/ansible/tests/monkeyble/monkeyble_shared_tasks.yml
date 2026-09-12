@@ -1,9 +1,38 @@
 ---
-# Mocks for apt_upgrade + node_state role tasks shared by every rolling-upgrade.yaml
-# agent scenario: pure OS-config plumbing, not the logic under test in any of them.
-# Concatenated into each scenario's tasks_to_test via Jinja so this block exists in
-# exactly one place (#338).
+# Mocks for the cordon_drain pre-cordon gate and the apt_upgrade + node_state role
+# tasks shared by every rolling-upgrade.yaml agent scenario: pure plumbing, not the
+# logic under test in any of them. Concatenated into each scenario's tasks_to_test
+# via Jinja so this block exists in exactly one place (#338).
 monkeyble_shared_tasks:
+  # ── cordon_drain wait_longhorn: a replica here, on a healthy volume, so the
+  # gate is exercised and passes through. drain_gate_degraded_volume is where
+  # the refusal is under test.
+  - task: "List Longhorn replicas on this node"
+    mock:
+      config:
+        hpe.monkeyble.monkeyble_module:
+          consider_changed: false
+          result_dict:
+            resources:
+              - metadata:
+                  name: pvc-healthy-r-9c2a
+                spec:
+                  nodeID: testnode
+                  volumeName: pvc-healthy
+
+  - task: "Wait for those volumes to report healthy"
+    mock:
+      config:
+        hpe.monkeyble.monkeyble_module:
+          consider_changed: false
+          result_dict:
+            resources:
+              - metadata:
+                  name: pvc-healthy
+                status:
+                  state: attached
+                  robustness: healthy
+
   # ── Mock upgrade_check role tasks — nothing under test upstream of the
   # upgrade block, and every scenario here exercises the "there is something
   # to upgrade" path, so the simulated dist-upgrade must report changed.

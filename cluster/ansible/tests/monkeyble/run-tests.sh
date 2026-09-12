@@ -198,6 +198,20 @@ run_scenario_expecting "agent_pre_health_failure" \
   "TASK \[upgrade_rescue_agent : Alert CRITICAL — upgrade failed before health checks\]" \
   "--limit" "agents"
 
+# ── Scenario 2f: volume on the node still degraded → refuse before the cordon ──
+# The wait bound is two seconds here; the default would hold CI for fifteen minutes.
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario_expecting "drain_gate_degraded_volume" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_drain_gate_degraded_volume.yml" \
+  "Longhorn still reports pvc-degraded degraded" \
+  "TASK \[upgrade_rescue_agent : Alert CRITICAL — upgrade failed before health checks\]" \
+  "!pvc-elsewhere" \
+  "!TASK \[cordon_drain : Cordon node before drain\]" \
+  "-e" "cordon_drain_longhorn_wait=2" \
+  "-e" "cordon_drain_longhorn_poll=1" \
+  "--limit" "agents"
+
 # ── Scenario 3: cross-play abort — agents failure flag stops multimasters ────
 echo ""
 echo "══════════════════════════════════════════════"

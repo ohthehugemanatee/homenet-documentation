@@ -15,6 +15,14 @@ Playbooks here provision the k3s nodes' OS (apt, sysctl, k3s service, NTP, iSCSI
 
 Roles compose into the rolling playbooks — **do not duplicate role logic inline** in a playbook. `ls roles/` for the current set.
 
+### Longhorn rebuild gate
+
+A node holding the last healthy replica of an attached volume cannot satisfy its own `instance-manager` PDB either, and in a `serial: 1` rollout that is the normal state right after the previous node rebooted: its replicas are stale and Longhorn is rebuilding them. A 30Gi volume does not rebuild inside the drain's 300s timeout, so the drain fails against a cluster that is behaving correctly (#370).
+
+`cordon_drain` waits before it cordons. It lists the Longhorn `Replica` CRs whose `spec.nodeID` is the target node, then polls those volumes until none is both `attached` and not `healthy`, bounded by `cordon_drain_longhorn_wait` (900s, re-checked every `cordon_drain_longhorn_poll`). Past the bound it fails with the volume names, ahead of the cordon, so a node this gate stops stays schedulable. The node scope is deliberate: a cluster-wide check would let one permanently faulted volume anywhere block every node upgrade. A node with no Longhorn replicas skips the wait. Toggle with `cordon_drain_wait_for_longhorn`.
+
+`cordon_drain` sets `cordon_drain_cordoned` once the cordon lands, and `upgrade_rescue_agent`'s CRITICAL alert reads it to report whether the node needs uncordoning.
+
 ### Longhorn single-replica drain guard
 
 Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` / `longhorn-ephemeral-fast` StorageClasses set `numberOfReplicas: "1"` (`strict-local`), so a node holding such an *attached* volume can never satisfy Longhorn's per-node `instance-manager` PodDisruptionBudget (cluster `node-drain-policy: allow-if-replica-is-stopped`) — the drain retries evictions until it times out.
