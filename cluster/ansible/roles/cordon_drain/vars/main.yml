@@ -1,7 +1,5 @@
 ---
-# Volumes with a replica on this node that Longhorn reports attached and not
-# healthy. Derived, not a tunable: wait_longhorn.yml reads it both as the `until`
-# condition and, against the last poll, as the list its refusal message names.
+# Replicas of attached, unhealthy Volumes on this node. Derived, not tuneable.
 cordon_drain_longhorn_degraded: >-
   {{ (cordon_drain_longhorn_volumes | default({})).resources | default([])
      | selectattr('metadata.name', 'in', cordon_drain_longhorn_local_volumes | default([]))
