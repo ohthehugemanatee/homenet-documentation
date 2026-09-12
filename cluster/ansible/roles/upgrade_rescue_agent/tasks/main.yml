@@ -29,7 +29,7 @@
       delegate_to: localhost
       become: false
 
-    - name: Record successful pre-health uncordon
+    - name: Record successful pre-health uncordon  # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         cordon_drain_cordoned: false
   rescue:
