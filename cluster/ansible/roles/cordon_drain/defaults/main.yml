@@ -2,20 +2,17 @@
 cordon_drain_grace_period: 30
 
 # Before draining, scale to 0 any StatefulSet whose pod on this node mounts a
-# single-replica Longhorn PVC, so the drain's eviction API does not block on
-# Longhorn's instance-manager PodDisruptionBudget. Restored after the node is
-# healthy again. Set false to skip (e.g. clusters without single-replica volumes).
+# single-replica Longhorn PVC to handle instance-manager PodDisruptionBudget.
+# Set false to skip (e.g. clusters without single-replica volumes).
 cordon_drain_scale_down_single_replica: true
 
 # Before cordoning, wait for Longhorn to finish rebuilding the volumes with a
-# replica on this node. Draining into a rebuild cannot satisfy the node's
-# instance-manager PDB, so the drain would retry evictions until it timed out.
+# replica on this node. 
 # Set false to skip (e.g. clusters without Longhorn).
 cordon_drain_wait_for_longhorn: true
 cordon_drain_longhorn_namespace: longhorn-system
 
-# How long to wait for a rebuild, and how often to re-check. A 30Gi volume over
-# 1GbE takes several minutes; past the bound the play fails before the cordon.
+# How long to wait for a rebuild, and how often to re-check. 
 cordon_drain_longhorn_wait: 900
 cordon_drain_longhorn_poll: 15
 
