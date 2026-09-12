@@ -150,9 +150,8 @@ Package-level apt downgrade is not the recovery path (see agent rescue below).
 
 ### Drain refused: Longhorn still rebuilding
 
-Before cordoning, `cordon_drain` waits for every Longhorn volume with a replica on
-the target node to report healthy. Past `cordon_drain_longhorn_wait` (900s) the play
-fails with:
+Before cordoning, `cordon_drain` waits for Longhorn volumes with a replica on
+the node to be healthy. Play fails after `cordon_drain_longhorn_wait (900s) with: 
 
 ```
 Longhorn still reports pvc-xxxxxxxx degraded after 900s. Draining nuc2 would take
