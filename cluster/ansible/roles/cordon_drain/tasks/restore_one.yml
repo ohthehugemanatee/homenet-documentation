@@ -18,13 +18,20 @@
       kind: "{{ cordon_drain_controller.kind | default('StatefulSet') }}"
       name: "{{ cordon_drain_controller.name | default(item.metadata.name) }}"
 
+# Merge-patched rather than scaled for the reason given in scale_down_one.yml.
+# The replica count goes through a whole-expression template so the annotation's
+# string reaches the API as an int.
 - name: Scale StatefulSet back to pre-drain replica count
-  kubernetes.core.k8s_scale:
+  kubernetes.core.k8s:
+    state: patched
+    merge_type: merge
     api_version: "{{ cordon_drain_restore_target.api_version }}"
     kind: "{{ cordon_drain_restore_target.kind }}"
     namespace: "{{ item.metadata.namespace }}"
     name: "{{ cordon_drain_restore_target.name }}"
-    replicas: "{{ (item.metadata.annotations | default({}))[cordon_drain_replicas_annotation] | int }}"
+    definition:
+      spec: >-
+        {{ {'replicas': (item.metadata.annotations | default({}))[cordon_drain_replicas_annotation] | int} }}
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
   become: false

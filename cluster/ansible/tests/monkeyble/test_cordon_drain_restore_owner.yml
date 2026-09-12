@@ -177,6 +177,17 @@ monkeyble_scenarios:
           - assert_equal:
               arg_name: name
               expected: kps-alertmanager
+          # A CR's scale subresource rejects the strategic-merge patch k8s_scale
+          # sends, so the replica count has to go through a merge patch, and the
+          # annotation's string has to render back into an int.
+          - assert_equal:
+              arg_name: merge_type
+              expected: merge
+          - assert_dict_equal:
+              arg_name: definition
+              expected:
+                spec:
+                  replicas: 1
         mock:
           config:
             hpe.monkeyble.monkeyble_module:
