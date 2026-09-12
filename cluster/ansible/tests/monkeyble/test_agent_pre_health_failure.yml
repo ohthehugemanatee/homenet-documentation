@@ -1,7 +1,7 @@
 ---
-# Scenario: the drain fails, so the run never reaches the health checks.
-# Expected: no rebuild is attempted and k3s is left running on the node, with a
-# CRITICAL Pushover alert naming the failing task.
+# Scenario: the drain fails after a guarded workload was scaled down, so the run
+# never reaches the health checks. Expected: no rebuild is attempted, the node is
+# uncordoned, and the workload is restored before the CRITICAL alert.
 monkeyble_scenarios:
   agent_pre_health_failure:
     # apt_upgrade and node_state never run: the drain fails before them, so the
@@ -105,9 +105,7 @@ monkeyble_scenarios:
               result_dict:
                 rc: 0
 
-      # ── cordon_drain scale_down: no single-replica workloads on this node ────
-      # Empty cluster state → no scale-down targets; discovery must run, but
-      # annotate/scale tasks must be skipped (empty loop).
+      # ── cordon_drain scale_down: nextcloud is stopped before drain ─────────
       - task: "Find single-replica Longhorn StorageClasses"
         should_be_skipped: false
         mock:
@@ -115,7 +113,12 @@ monkeyble_scenarios:
             hpe.monkeyble.monkeyble_module:
               consider_changed: false
               result_dict:
-                resources: []
+                resources:
+                  - metadata:
+                      name: longhorn-ephemeral-fast
+                    provisioner: driver.longhorn.io
+                    parameters:
+                      numberOfReplicas: "1"
 
       - task: "Find PersistentVolumeClaims on single-replica Longhorn StorageClasses"
         should_be_skipped: false
@@ -124,7 +127,12 @@ monkeyble_scenarios:
             hpe.monkeyble.monkeyble_module:
               consider_changed: false
               result_dict:
-                resources: []
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud-previews
+                    spec:
+                      storageClassName: longhorn-ephemeral-fast
 
       - task: "List pods scheduled on this node"
         should_be_skipped: false
@@ -133,7 +141,18 @@ monkeyble_scenarios:
             hpe.monkeyble.monkeyble_module:
               consider_changed: false
               result_dict:
-                resources: []
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud-0
+                      ownerReferences:
+                        - kind: StatefulSet
+                          name: nextcloud
+                    spec:
+                      nodeName: testnode
+                      volumes:
+                        - persistentVolumeClaim:
+                            claimName: nextcloud-previews
 
       - task: "Get StatefulSets"
         should_be_skipped: false
@@ -142,14 +161,48 @@ monkeyble_scenarios:
             hpe.monkeyble.monkeyble_module:
               consider_changed: false
               result_dict:
-                resources: []
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud
+                    spec:
+                      replicas: 1
 
-      # Assert scale-down was skipped (no targets discovered).
+      - task: "Read the pre-drain replica count from that object"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - spec:
+                      replicas: 1
+
       - task: "Record pre-drain replica count on StatefulSet"
-        should_be_skipped: true
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
 
       - task: "Scale StatefulSet to zero"
-        should_be_skipped: true
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
+      - task: "Wait for the StatefulSet's pods to terminate"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - status:
+                      replicas: 0
 
       # Use ansible.builtin.fail as the mock module to trigger a real failure.
       # should_fail is deliberately absent: it makes monkeyble end the run at the
@@ -161,6 +214,42 @@ monkeyble_scenarios:
               msg: "Mocked drain failure (CI test)"
 
     post_tasks:
+      - task: "Uncordon node after pre-health failure"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
+      - task: "Get StatefulSets for restore"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      namespace: default
+                      name: nextcloud
+                      annotations:
+                        homenet.vertesi.com/pre-drain-node: testnode
+                        homenet.vertesi.com/pre-drain-replicas: "1"
+
+      - task: "Scale StatefulSet back to pre-drain replica count"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
+      - task: "Clear pre-drain annotations after restore"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
       # ── Key assertions ────────────────────────────────────────────────────
       # The rebuild block is gated off rather than aborted, so its tasks still
       # appear in the output as skipped. Assert the skip, including on the task

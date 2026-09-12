@@ -1,4 +1,12 @@
 ---
+- name: Record the original upgrade failure
+  ansible.builtin.set_fact:
+    upgrade_rescue_agent_original_failed_task: "{{ ansible_failed_task.name | default('unknown') }}"
+    upgrade_rescue_agent_pre_health_cleanup_needed: >-
+      {{ not (k3s_health_checks_started | default(false) | bool)
+         and (cordon_drain_cordoned | default(false) | bool) }}
+    upgrade_rescue_agent_pre_health_cleanup_errors: []
+
 - name: Record play failure for subsequent plays
   ansible.builtin.file:
     path: "{{ state_dir }}/rolling-upgrade-failed"
@@ -8,9 +16,58 @@
   become: false
   failed_when: false  # must not abort rescue — alert tasks below must still run
 
-# A failure before k3s_health means the node's k3s was never disturbed: the
-# cluster, apt or node config failed, and uninstalling a working k3s cannot fix
-# any of them. Alert and leave the node cordoned for an operator.
+# A failure before k3s_health means k3s was never disturbed. Undo the drain
+# preparation, but keep the failure flag because the upgrade itself still failed.
+- name: Uncordon node after pre-health failure
+  when: upgrade_rescue_agent_pre_health_cleanup_needed | bool
+  block:
+    - name: Uncordon node after pre-health failure
+      kubernetes.core.k8s_drain:
+        name: "{{ ansible_hostname }}"
+        state: uncordon
+        kubeconfig: "{{ k8s_kubeconfig }}"
+      delegate_to: localhost
+      become: false
+
+    - name: Record successful pre-health uncordon
+      ansible.builtin.set_fact:
+        cordon_drain_cordoned: false
+  rescue:
+    - name: Record pre-health uncordon failure
+      ansible.builtin.set_fact:
+        upgrade_rescue_agent_pre_health_cleanup_errors: >-
+          {{ upgrade_rescue_agent_pre_health_cleanup_errors
+             + ['uncordon: ' ~ (ansible_failed_result.msg | default('unknown error'))] }}
+
+- name: Restore scaled workloads after pre-health failure
+  when: upgrade_rescue_agent_pre_health_cleanup_needed | bool
+  block:
+    - name: Restore scaled workloads after pre-health failure
+      ansible.builtin.include_role:
+        name: cordon_drain
+        tasks_from: restore
+      when: cordon_drain_scale_down_single_replica | default(true) | bool
+  rescue:
+    - name: Record pre-health workload restore failure
+      ansible.builtin.set_fact:
+        upgrade_rescue_agent_pre_health_cleanup_errors: >-
+          {{ upgrade_rescue_agent_pre_health_cleanup_errors
+             + ['workload restore: '
+                ~ (ansible_failed_result.msg | default('unknown error'))] }}
+
+- name: Summarize pre-health recovery state
+  ansible.builtin.set_fact:
+    upgrade_rescue_agent_pre_health_status: >-
+      {% if not (upgrade_rescue_agent_pre_health_cleanup_needed | bool) %}
+      Node still schedulable.
+      {% elif upgrade_rescue_agent_pre_health_cleanup_errors | length == 0 %}
+      Node uncordoned; drain preparation restored.
+      {% else %}
+      Pre-health cleanup incomplete:
+      {{ upgrade_rescue_agent_pre_health_cleanup_errors | join('; ') }}.
+      {% endif %}
+  when: not (k3s_health_checks_started | default(false) | bool)
+
 - name: Alert CRITICAL — upgrade failed before health checks
   ansible.builtin.uri:
     url: https://api.pushover.net/1/messages.json
@@ -22,10 +79,9 @@
       user: "{{ pushover_user_key }}"
       message: >-
         CRITICAL: {{ inventory_hostname }} upgrade failed
-        at task '{{ ansible_failed_task.name | default('unknown') }}'
+        at task '{{ upgrade_rescue_agent_original_failed_task }}'
         before health checks ran. No rebuild attempted, k3s left running.
-        {{ cordon_drain_cordoned | default(false) | bool
-           | ternary('Node DRAINED', 'Node still schedulable') }}.
+        {{ upgrade_rescue_agent_pre_health_status }}
         Manual fix required.
       priority: "2"
       retry: "300"
