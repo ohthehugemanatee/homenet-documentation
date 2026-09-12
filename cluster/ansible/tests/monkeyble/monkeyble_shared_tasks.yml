@@ -4,6 +4,21 @@
 # Concatenated into each scenario's tasks_to_test via Jinja so this block exists in
 # exactly one place (#338).
 monkeyble_shared_tasks:
+  # ── Mock upgrade_check role tasks — nothing under test upstream of the
+  # upgrade block, and every scenario here exercises the "there is something
+  # to upgrade" path, so the simulated dist-upgrade must report changed.
+  - task: "Update apt cache before drain check"
+    mock:
+      config:
+        hpe.monkeyble.monkeyble_module:
+          consider_changed: false
+
+  - task: "Simulate dist-upgrade to check for pending packages"
+    mock:
+      config:
+        hpe.monkeyble.monkeyble_module:
+          consider_changed: true
+
   # Mock apt tasks to avoid modifying the CI runner and for speed
   - task: "Update apt cache"
     mock:

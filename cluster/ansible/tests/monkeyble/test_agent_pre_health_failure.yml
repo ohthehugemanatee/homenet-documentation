@@ -10,6 +10,20 @@ monkeyble_scenarios:
       {{ monkeyble_scenarios.agent_pre_health_failure.pre_tasks
          + monkeyble_scenarios.agent_pre_health_failure.post_tasks }}
     pre_tasks:
+      # ── upgrade_check role: mocked here rather than via monkeyble_shared_tasks,
+      # since that file assumes apt_upgrade/node_state also run (they don't below).
+      - task: "Update apt cache before drain check"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Simulate dist-upgrade to check for pending packages"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
       # ── Mock infrastructure tasks that require a real cluster ──────────────
 
       - task: "Verify k8s node name matches ansible_hostname"
