@@ -136,6 +136,23 @@ def use_tool(name, inp):
     return f"unknown tool: {name}"
 
 
+def head_repo_matches(repo, pr_number):
+    """True when the PR's head branch lives in this repository.
+
+    Resolved through the API because workflow_run's pull_requests[] carries a
+    minimal repo object with no full_name (#385). Fails closed: an unresolved
+    head repo is treated as a fork.
+    """
+    r = subprocess.run(
+        ["gh", "api", f"repos/{repo}/pulls/{pr_number}",
+         "--jq", ".head.repo.full_name"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    return r.stdout.strip() == repo
+
+
 def main():
     with open(os.environ["GITHUB_EVENT_PATH"]) as f:
         event = json.load(f)
@@ -155,8 +172,8 @@ def main():
     run_id = str(run["id"])
 
     # Only process same-repo PRs — forks can't receive pushes via GITHUB_TOKEN
-    if pr["head"]["repo"]["full_name"] != repo:
-        print(f"Skipping fork PR from {pr['head']['repo']['full_name']}")
+    if not head_repo_matches(repo, pr_number):
+        print("Skipping: PR head is not in this repository")
         return
 
     # Anti-loop: skip if head commit was already an autofix
