@@ -3,9 +3,12 @@
 # Generally it's recommended to re-image rather than upgrade major versions,
 # but that would mean going _all the way_ to the other room to pull the sd card.
 #
-# Drains each node, runs apt dist-upgrade, reboots, runs do-release-upgrade, uncordons, verifies Ready.
-# Safe to re-run — a node with no pending packages, no /var/run/reboot-required,
-# and no new Ubuntu release available is skipped before it is ever cordoned or drained.
+# Checks every targeted node in parallel first (apt cache + a check-mode
+# dist-upgrade dry run + a reboot-required stat + do-release-upgrade -c), then
+# drains each node with pending work, runs apt dist-upgrade, reboots, runs
+# do-release-upgrade, uncordons, verifies Ready — one at a time. Safe to
+# re-run — a node with nothing pending is skipped before it is ever cordoned
+# or drained.
 #
 # Prerequisites:
 #   - kubernetes.core collection installed; kubernetes Python library available
@@ -33,6 +36,25 @@
 # drain and restored after the node is healthy — handled by the cordon_drain /
 # k3s_health roles. No manual scaling needed.
 
+- name: Check all nodes for pending work
+  hosts: "{{ target | default('agents:!ubuntu:multimasters:masters') }}"
+  become: true
+
+  vars:
+    upgrade_check_release: true
+
+  tasks:
+    - name: Check if there is anything to upgrade
+      ansible.builtin.import_role:
+        name: upgrade_check
+
+    - name: Report per-node upgrade status
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} ({{ ansible_distribution }} {{ ansible_distribution_version }}):
+          {{ 'upgrade needed' if upgrade_check_needed else 'already up to date' }}
+
+
 - name: "Rolling OS release upgrade: agents"
   hosts: "{{ target | default('agents:!ubuntu') }}"
   become: true
@@ -45,7 +67,6 @@
   vars:
     k3s_svc: k3s-agent
     k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
-    upgrade_check_release: true
 
   pre_tasks:
     - name: Initialize upgrade state and verify node
@@ -53,10 +74,6 @@
         name: upgrade_pre_state
 
   tasks:
-    - name: Check if there is anything to upgrade
-      ansible.builtin.import_role:
-        name: upgrade_check
-
     - name: Show current OS version
       ansible.builtin.command: lsb_release -ds
       register: os_version
@@ -125,7 +142,6 @@
     apt_upgrade_post_reboot_delay: 20
     k3s_health_wait_before_uncordon: true
     k3s_health_node_ready_timeout: 180
-    upgrade_check_release: true
 
   pre_tasks:
     - name: Check prior-play failures and CP quorum
@@ -133,10 +149,6 @@
         name: upgrade_checks_cp
 
   tasks:
-    - name: Check if there is anything to upgrade
-      ansible.builtin.import_role:
-        name: upgrade_check
-
     - name: Show current OS version
       ansible.builtin.command: lsb_release -ds
       register: os_version
@@ -206,7 +218,6 @@
     k3s_health_wait_before_uncordon: true
     k3s_health_wait_retries: 36
     k3s_health_node_ready_timeout: 300
-    upgrade_check_release: true
 
   pre_tasks:
     - name: Check prior-play failures and CP quorum
@@ -214,10 +225,6 @@
         name: upgrade_checks_cp
 
   tasks:
-    - name: Check if there is anything to upgrade
-      ansible.builtin.import_role:
-        name: upgrade_check
-
     - name: Show current OS version
       ansible.builtin.command: lsb_release -ds
       register: os_version

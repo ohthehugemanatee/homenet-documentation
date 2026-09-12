@@ -26,6 +26,6 @@
 - name: Determine whether this node has anything to do
   ansible.builtin.set_fact:
     upgrade_check_needed: >-
-      {{ upgrade_check_apt_simulation.changed
-         or upgrade_check_reboot_required.stat.exists
-         or (upgrade_check_release_available.rc | default(1)) == 0 }}
+      {{ (upgrade_check_apt_simulation.changed
+          or upgrade_check_reboot_required.stat.exists
+          or (upgrade_check_release_available.rc | default(1)) == 0) | bool }}
