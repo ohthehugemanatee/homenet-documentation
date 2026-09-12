@@ -1,14 +1,5 @@
 ---
-# A node holding the last healthy replica of an attached Longhorn volume cannot
-# satisfy its own instance-manager PodDisruptionBudget, so `kubectl drain` retries
-# evictions until it times out. That is the cluster's normal state while Longhorn
-# rebuilds the replicas the previous node in a serial rollout took down. Wait for
-# the rebuild rather than draining into it, and refuse ahead of the cordon if it
-# never finishes, so a node this gate stops is left schedulable.
-#
-# Scoped to volumes with a replica here: a cluster-wide gate would let one
-# permanently faulted volume anywhere block every node upgrade.
-
+# Wait for longhorn "healthy" so rollout doesn't trip the PodDisruptionBudget
 - name: List Longhorn replicas on this node
   kubernetes.core.k8s_info:
     api_version: longhorn.io/v1beta2
@@ -20,8 +11,7 @@
   changed_when: false
   register: cordon_drain_longhorn_replicas
 
-# Read once: a rebuild already running has its Replica object, and one Longhorn
-# starts after this belongs to a volume that was healthy when the gate looked.
+# Avoid healthiness race condition since the gate last looked.
 - name: Collect the volumes with a replica on this node
   ansible.builtin.set_fact:
     cordon_drain_longhorn_local_volumes: >-
@@ -30,8 +20,6 @@
          | selectattr('spec.nodeID', 'equalto', cordon_drain_node_name)
          | map(attribute='spec.volumeName') | unique | list }}
 
-# failed_when covers a module error only: without it the exhausted `until` fails
-# the task itself, and the refusal below never gets to name the volumes.
 - name: Wait for those volumes to report healthy
   kubernetes.core.k8s_info:
     api_version: longhorn.io/v1beta2
