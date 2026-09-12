@@ -47,14 +47,44 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
                  "ANTHROPIC", "GH_TOKEN", "GITHUB_TOKEN", "SECRET")
 
 
-def claude(messages, system):
-    payload = json.dumps({
-        "model": "claude-opus-4-7",
-        "max_tokens": 4096,
+MODEL = "claude-sonnet-5"
+
+# The API accepts at most 4 cache breakpoints per request.
+MAX_CACHE_BREAKPOINTS = 4
+
+
+def build_payload(messages, system):
+    """Request body, with a static cache breakpoint on the opening prompt and
+    a rolling one on the latest turn.
+
+    Only user turns are marked: the loop always calls with a user message last,
+    and assistant turns carry thinking blocks that must go back unchanged.
+    """
+    for m in messages:
+        if isinstance(m.get("content"), list):
+            for b in m["content"]:
+                if isinstance(b, dict):
+                    b.pop("cache_control", None)
+
+    for i in sorted({0, len(messages) - 1}):
+        content = messages[i].get("content")
+        if messages[i].get("role") == "user" and isinstance(content, list) and content:
+            if isinstance(content[-1], dict):
+                content[-1]["cache_control"] = {"type": "ephemeral"}
+
+    return {
+        "model": MODEL,
+        "max_tokens": 8192,
+        "thinking": {"type": "adaptive"},
+        "output_config": {"effort": "low"},
         "system": system,
         "tools": TOOLS,
         "messages": messages,
-    }).encode()
+    }
+
+
+def claude(messages, system):
+    payload = json.dumps(build_payload(messages, system)).encode()
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
         data=payload,
@@ -106,6 +136,23 @@ def use_tool(name, inp):
     return f"unknown tool: {name}"
 
 
+def head_repo_matches(repo, pr_number):
+    """True when the PR's head branch lives in this repository.
+
+    Resolved through the API because workflow_run's pull_requests[] carries a
+    minimal repo object with no full_name (#385). Fails closed: an unresolved
+    head repo is treated as a fork.
+    """
+    r = subprocess.run(
+        ["gh", "api", f"repos/{repo}/pulls/{pr_number}",
+         "--jq", ".head.repo.full_name"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    return r.stdout.strip() == repo
+
+
 def main():
     with open(os.environ["GITHUB_EVENT_PATH"]) as f:
         event = json.load(f)
@@ -125,8 +172,8 @@ def main():
     run_id = str(run["id"])
 
     # Only process same-repo PRs — forks can't receive pushes via GITHUB_TOKEN
-    if pr["head"]["repo"]["full_name"] != repo:
-        print(f"Skipping fork PR from {pr['head']['repo']['full_name']}")
+    if not head_repo_matches(repo, pr_number):
+        print("Skipping: PR head is not in this repository")
         return
 
     # Anti-loop: skip if head commit was already an autofix
@@ -174,7 +221,7 @@ def main():
         "After all changes are made, summarize what you fixed in 1-2 sentences."
     )
 
-    messages = [{"role": "user", "content": prompt}]
+    messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
     written = []
     explanation = ""
 
@@ -184,6 +231,12 @@ def main():
         except RuntimeError as e:
             print(f"Claude API error: {e}")
             break
+
+        usage = resp.get("usage", {})
+        print(f"  tokens: in={usage.get('input_tokens')} "
+              f"cache_read={usage.get('cache_read_input_tokens')} "
+              f"cache_write={usage.get('cache_creation_input_tokens')} "
+              f"out={usage.get('output_tokens')}")
 
         messages.append({"role": "assistant", "content": resp["content"]})
         stop_reason = resp.get("stop_reason")
@@ -257,4 +310,5 @@ def main():
     print("Done")
 
 
-main()
+if __name__ == "__main__":
+    main()
