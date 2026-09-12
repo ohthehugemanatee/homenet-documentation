@@ -1,0 +1,61 @@
+---
+- name: List Longhorn volume attachments
+  kubernetes.core.k8s_info:
+    api_version: longhorn.io/v1beta2
+    kind: VolumeAttachment
+    namespace: "{{ cordon_drain_longhorn_namespace }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_longhorn_attachments
+
+- name: List Longhorn snapshots
+  kubernetes.core.k8s_info:
+    api_version: longhorn.io/v1beta2
+    kind: Snapshot
+    namespace: "{{ cordon_drain_longhorn_namespace }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_longhorn_snapshots
+
+- name: Initialize Longhorn snapshot ticket state
+  ansible.builtin.set_fact:
+    cordon_drain_snapshot_names: >-
+      {{ cordon_drain_longhorn_snapshots.resources
+         | map(attribute='metadata.name') | list }}
+    cordon_drain_snapshot_tickets: []
+
+- name: Collect snapshot-controller tickets for this node
+  ansible.builtin.include_tasks: snapshot_tickets_collect.yml
+  loop: "{{ cordon_drain_longhorn_attachments.resources }}"
+  loop_control:
+    loop_var: cordon_drain_attachment
+    label: "{{ cordon_drain_attachment.metadata.name }}"
+
+- name: Remove orphaned Longhorn snapshot attachment ticket
+  kubernetes.core.k8s:
+    state: patched
+    merge_type: merge
+    api_version: longhorn.io/v1beta2
+    kind: VolumeAttachment
+    namespace: "{{ cordon_drain_longhorn_namespace }}"
+    name: "{{ item.volume }}"
+    definition:
+      spec:
+        attachmentTickets: "{{ {item.ticket: none} }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  loop: "{{ cordon_drain_snapshot_tickets }}"
+  loop_control:
+    label: "{{ item.volume }}: {{ item.ticket }}"
+  when: item.snapshot not in cordon_drain_snapshot_names
+
+- name: Wait for each Longhorn snapshot ticket
+  ansible.builtin.include_tasks: snapshot_ticket_wait.yml
+  loop: "{{ cordon_drain_snapshot_tickets }}"
+  loop_control:
+    label: "{{ item.volume }}: {{ item.ticket }}"
