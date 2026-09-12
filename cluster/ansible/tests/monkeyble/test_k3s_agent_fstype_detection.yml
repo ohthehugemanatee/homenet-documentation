@@ -1,0 +1,78 @@
+---
+# Scenario: k3s-agent.yaml mounts a USB data disk formatted ext4, not ext2.
+# Expected: the mount task's fstype comes from detecting the partition's real
+# filesystem, not a hardcoded value.
+monkeyble_scenarios:
+  k3s_agent_fstype_detection:
+    tasks_to_test: >-
+      {{ monkeyble_scenarios.k3s_agent_fstype_detection.pre_tasks
+         + monkeyble_shared_tasks
+         + monkeyble_scenarios.k3s_agent_fstype_detection.post_tasks }}
+    pre_tasks:
+      - task: "Get PARTUUID"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "1234-ABCD"
+                rc: 0
+
+      - task: "Detect USB disk filesystem type"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stdout: "ext4"
+                rc: 0
+
+      # Key assertion: fstype comes from the detected value, not a hardcoded ext2.
+      - task: "Mount USB disk and persist in fstab"
+        should_be_skipped: false
+        test_input:
+          - assert_equal:
+              arg_name: fstype
+              expected: "ext4"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+    post_tasks:
+      - task: "Check if reboot is required"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stat:
+                  exists: false
+
+      - task: "Pre-installation reboot"
+        should_be_skipped: true
+
+      - task: "Download k3s agent installer"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Run k3s agent installer"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+              result_dict:
+                rc: 0
+
+      - task: "Run k3s multi-master installer"
+        should_be_skipped: true
+
+      - task: "Run k3s first master installer"
+        should_be_skipped: true

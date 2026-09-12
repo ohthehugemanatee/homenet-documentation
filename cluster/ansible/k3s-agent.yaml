@@ -15,11 +15,15 @@
       ansible.builtin.command: 'lsblk {{ usb_disk }} -no PARTUUID'
       register: partuuid
       when: usb_disk is defined
+    - name: Detect USB disk filesystem type
+      ansible.builtin.command: 'lsblk {{ usb_disk }} -no FSTYPE'
+      register: usb_fstype
+      when: usb_disk is defined
     - name: Mount USB disk and persist in fstab
       ansible.posix.mount:
         path: /mnt/usb
         src: 'PARTUUID={{ partuuid.stdout }}'
-        fstype: ext2
+        fstype: '{{ usb_fstype.stdout }}'
         opts: noatime
         state: mounted
       when: usb_disk is defined

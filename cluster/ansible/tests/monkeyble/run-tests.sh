@@ -114,6 +114,15 @@ run_failing_scenario() {
   echo "  PASSED: ${name}"
 }
 
+# ── Scenario 0: k3s-agent.yaml mounts the USB disk with its detected fstype ──
+run_scenario_expecting "k3s_agent_fstype_detection" \
+  k3s-agent.yaml \
+  "${SCRIPT_DIR}/test_k3s_agent_fstype_detection.yml" \
+  "TASK \[Mount USB disk and persist in fstab\]" \
+  "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
+  "-e" "usb_disk=/dev/sda1" \
+  "--limit" "agents"
+
 # ── Scenario 1: health check fails, rebuild succeeds → WARNING sent ──────────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario_expecting "agent_rescue_success" \
