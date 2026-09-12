@@ -17,6 +17,10 @@ cd "$ANSIBLE_DIR"
 # Enable the hpe.monkeyble callback plugin (installed via ansible-galaxy collection)
 export ANSIBLE_CALLBACKS_ENABLED=hpe.monkeyble.monkeyble_callback
 
+# test-tls-cert.yaml lives under tests/monkeyble/, not ANSIBLE_DIR, so the
+# default playbook-relative role search misses roles/tls_cert.
+export ANSIBLE_ROLES_PATH="${ANSIBLE_DIR}/roles"
+
 # _play <name> <playbook> <vars_file> [extra ansible-playbook args...]
 # Echoes combined output; returns the playbook's exit status.
 _play() {
@@ -352,6 +356,58 @@ run_scenario "migrate_rollback" \
   migrate-config-to-longhorn.yaml \
   "${SCRIPT_DIR}/test_migrate_rollback.yml" \
   "-e" "app=ombi" "-t" "rollback"
+
+# ── tls_cert: deliver a cluster-issued cert to an off-cluster host (#364) ───
+TLS_CERT_COMMON_ARGS=(
+  "-e" "tls_cert_secret=shoebox-tls"
+  "-e" "tls_cert_namespace=default"
+  "-e" "tls_cert_format=separate"
+  "-e" "tls_cert_min_days=30"
+  "-e" "tls_cert_reload_command=/bin/echo TLS_CERT_RELOAD_FIRED"
+  "--limit" "shoebox"
+)
+
+# Scenario: first delivery of a long-dated cert — copy changes both files, so
+# the reload command fires. ansible.builtin.copy does not create missing
+# parent directories, so the destination must exist first.
+mkdir -p "${STATE_DIR}/tls-cert-reload"
+run_scenario_expecting "tls_cert_delivers_and_reloads" \
+  "${SCRIPT_DIR}/test-tls-cert.yaml" \
+  "${SCRIPT_DIR}/test_tls_cert_delivers_and_reloads.yml" \
+  "TLS_CERT_RELOAD_FIRED" \
+  "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-reload/tls.crt" \
+  "-e" "tls_cert_dest_key=${STATE_DIR}/tls-cert-reload/tls.key" \
+  "${TLS_CERT_COMMON_ARGS[@]}"
+
+# Scenario: the destination already holds the exact cert and key the Secret
+# would deliver (seeded below from the same fixture) — copy's checksum
+# compare reports no change, so the reload command must not fire.
+mkdir -p "${STATE_DIR}/tls-cert-unchanged"
+install -m 0600 "${SCRIPT_DIR}/fixtures/tls-cert-valid.crt" "${STATE_DIR}/tls-cert-unchanged/tls.crt"
+install -m 0600 "${SCRIPT_DIR}/fixtures/tls-cert-valid.key" "${STATE_DIR}/tls-cert-unchanged/tls.key"
+run_scenario_expecting "tls_cert_skips_reload_unchanged" \
+  "${SCRIPT_DIR}/test-tls-cert.yaml" \
+  "${SCRIPT_DIR}/test_tls_cert_skips_reload_unchanged.yml" \
+  "TASK \[tls_cert : Deliver the certificate\]" \
+  "!TLS_CERT_RELOAD_FIRED" \
+  "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-unchanged/tls.crt" \
+  "-e" "tls_cert_dest_key=${STATE_DIR}/tls-cert-unchanged/tls.key" \
+  "${TLS_CERT_COMMON_ARGS[@]}"
+
+# Scenario: a short-dated fixture (combined/Pi-hole format) fails the run
+# rather than delivering quietly.
+mkdir -p "${STATE_DIR}/tls-cert-short"
+run_failing_scenario "tls_cert_short_dated_fails" \
+  "${SCRIPT_DIR}/test-tls-cert.yaml" \
+  "${SCRIPT_DIR}/test_tls_cert_short_dated_fails.yml" \
+  "expires .* within tls_cert_min_days" \
+  "-e" "tls_cert_secret=shoebox-tls" \
+  "-e" "tls_cert_namespace=default" \
+  "-e" "tls_cert_format=combined" \
+  "-e" "tls_cert_min_days=30" \
+  "-e" "tls_cert_reload_command=/bin/echo TLS_CERT_RELOAD_FIRED" \
+  "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-short/combined.pem" \
+  "--limit" "shoebox"
 
 echo ""
 echo "All Monkeyble scenarios passed."

@@ -1,0 +1,13 @@
+---
+# separate writes tls_cert_dest_cert and tls_cert_dest_key individually (the
+# shoebox reverse proxy); combined concatenates fullchain + key into one PEM
+# at tls_cert_dest_cert (Pi-hole v6).
+tls_cert_format: separate
+
+tls_cert_owner: root
+tls_cert_group: root
+tls_cert_mode: "0600"
+
+# Alert threshold: fail the run when the delivered cert's notAfter is closer
+# than this many days out, rather than let delivery go stale unnoticed.
+tls_cert_min_days: 30

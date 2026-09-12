@@ -42,6 +42,10 @@ Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` 
 
 `cordon_drain` handles this: it scales to 0 any StatefulSet whose pod **on the target node** mounts a single-replica Longhorn PVC, recording original replica count in `homenet.vertesi.com/pre-drain-{replicas,node}` annotations. When the StatefulSet has a controlling owner (e.g. kube-prometheus-stack alertmanager) the count read/write address that owner instead (but annotations stay on the StatefulSet either way). This means using `kubernetes.core.k8s` rather than `k8s_scale`, whose strategic-merge patch of the scale subresource fails with a 415 error on custom resources. `k3s_health` (happy path) and `upgrade_rescue_agent` (after a successful rebuild) call `cordon_drain`'s `restore` task to scale them back and clear the annotations. Discovery is dynamic (no hardcoded workload names) but **StatefulSet-only**. Toggle with `cordon_drain_scale_down_single_replica`. The long-term fix is moving pure-scratch volumes off Longhorn to `emptyDir` like plex transcode did in #277.
 
+### tls_cert
+
+Delivers a named TLS `Secret` to an off-cluster host: reads it with `kubernetes.core.k8s_info` (ADR-0005 contract), writes `tls_cert_format: separate` (cert + key files, the shoebox reverse proxy) or `combined` (one PEM, fullchain + key, Pi-hole v6) to the caller's destination, and runs `tls_cert_reload_command` only when `ansible.builtin.copy` reports a change. `community.crypto.x509_certificate_info` reads the delivered cert back and fails the run when `notAfter` is inside `tls_cert_min_days`, so a stalled delivery job is loud rather than silent. No playbook calls it yet — the `Certificate` manifests, inventory group and Semaphore schedule are a follow-up issue.
+
 ## State, failure flag, alerts
 
 - All upgrade plays read/write state under `/var/lib/ansible-upgrade/` on the shoebox host (not in repo).

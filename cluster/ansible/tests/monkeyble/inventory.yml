@@ -25,3 +25,10 @@ all:
           ansible_hostname: testmultimaster
     masters:
       hosts: {}
+    shoebox:
+      hosts:
+        testshoebox:
+          ansible_connection: local
+          ansible_host: localhost
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+          ansible_hostname: testshoebox
