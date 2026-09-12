@@ -87,6 +87,12 @@ Upgrades one node at a time: drain → `apt dist-upgrade` → reboot → wait �
 
 Play order: **agents → multimasters → masters** (first-master last, when cluster is most stable).
 
+Before cordoning, the drain role waits for Longhorn rebuilds and snapshot
+attachment tickets on the target node. It removes a snapshot-controller ticket
+only when its Snapshot CR no longer exists. Single-replica Longhorn StatefulSets
+are scaled down automatically and restored after success or a pre-reboot
+failure.
+
 **Prerequisites:** `kubectl` configured on localhost pointing at the cluster.
 
 ```sh

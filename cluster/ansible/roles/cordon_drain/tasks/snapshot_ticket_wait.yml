@@ -1,0 +1,32 @@
+---
+- name: Wait for Longhorn snapshot attachment ticket to clear
+  kubernetes.core.k8s_info:
+    api_version: longhorn.io/v1beta2
+    kind: VolumeAttachment
+    namespace: "{{ cordon_drain_longhorn_namespace }}"
+    name: "{{ item.volume }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_snapshot_ticket_state
+  failed_when: cordon_drain_snapshot_ticket_state.resources is not defined
+  until: >-
+    cordon_drain_snapshot_ticket_state.resources | length == 0 or
+    item.ticket not in
+      ((cordon_drain_snapshot_ticket_state.resources | first).spec.attachmentTickets
+       | default({}))
+  retries: "{{ ((cordon_drain_snapshot_wait | int) / (cordon_drain_snapshot_poll | int)) | round | int }}"
+  delay: "{{ cordon_drain_snapshot_poll }}"
+
+- name: Refuse to drain while a Longhorn snapshot ticket is active
+  ansible.builtin.fail:
+    msg: >-
+      Longhorn volume {{ item.volume }} still has snapshot attachment ticket
+      {{ item.ticket }} after {{ cordon_drain_snapshot_wait }}s. The node has
+      been left uncordoned.
+  when:
+    - cordon_drain_snapshot_ticket_state.resources | length > 0
+    - item.ticket in
+      ((cordon_drain_snapshot_ticket_state.resources | first).spec.attachmentTickets
+       | default({}))

@@ -7,6 +7,7 @@ monkeyble_scenarios:
   cordon_drain_restore_owner:
     tasks_to_test: >-
       {{ monkeyble_scenarios.cordon_drain_restore_owner.pre_tasks
+         + monkeyble_no_snapshot_ticket_tasks
          + monkeyble_shared_tasks
          + monkeyble_scenarios.cordon_drain_restore_owner.post_tasks }}
     pre_tasks:

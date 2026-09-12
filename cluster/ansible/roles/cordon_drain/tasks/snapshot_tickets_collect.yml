@@ -1,0 +1,16 @@
+---
+- name: Add snapshot-controller ticket to the drain gate
+  ansible.builtin.set_fact:
+    cordon_drain_snapshot_tickets: >-
+      {{ cordon_drain_snapshot_tickets
+         + [{'volume': cordon_drain_attachment.metadata.name,
+             'ticket': item.key,
+             'snapshot': item.key | regex_replace('^snapshot-controller-', '')}] }}
+  loop: >-
+    {{ cordon_drain_attachment.spec.attachmentTickets
+       | default({}) | dict2items }}
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.value.type | default('') == 'snapshot-controller'
+    - item.value.nodeID | default('') == cordon_drain_node_name

@@ -23,6 +23,19 @@ A node holding the last healthy replica of an attached volume sticks on PodDisru
 
 `cordon_drain` sets `cordon_drain_cordoned` once the cordon lands, and `upgrade_rescue_agent`'s CRITICAL alert reads it to report whether the node needs uncordoning.
 
+### Longhorn snapshot attachment gate
+
+Longhorn snapshot work can keep a volume attached after its workload stops. A
+`snapshot-controller-*` ticket assigned to the target node keeps the volume
+engine running, so Longhorn retains the instance-manager PodDisruptionBudget.
+
+Before cordoning, `cordon_drain` lists Longhorn `VolumeAttachment` and `Snapshot`
+CRs. It removes a snapshot-controller ticket only when the referenced Snapshot
+CR no longer exists, then waits for every ticket assigned to the target node to
+clear. The wait is bounded by `cordon_drain_snapshot_wait` (300s, re-checked
+every `cordon_drain_snapshot_poll`). A timeout fails before the cordon and names
+the volume and ticket. Toggle with `cordon_drain_wait_for_snapshot_tickets`.
+
 ### Longhorn single-replica drain guard
 
 Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` / `longhorn-ephemeral-fast` StorageClasses set `numberOfReplicas: "1"` (`strict-local`), so a node holding such an *attached* volume times out trying to meet PodDisruptionBudget (cluster `node-drain-policy: allow-if-replica-is-stopped`).

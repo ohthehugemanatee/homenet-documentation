@@ -77,19 +77,8 @@ ansible-playbook -i inventory.yaml \
 
 ## Pre-flight checklist (BEFORE every rolling-upgrade run)
 
-Strict-local StatefulSets block drain — scale them down first:
-
-```bash
-kubectl scale statefulset plex --replicas=0
-kubectl scale statefulset nextcloud --replicas=0
-```
-
-Scale back up after each node is verified Ready:
-
-```bash
-kubectl scale statefulset plex --replicas=1
-kubectl scale statefulset nextcloud --replicas=1
-```
+The playbook scales strict-local Longhorn StatefulSets down and restores them
+after the node returns. Do not scale them manually.
 
 **Verify cluster health before starting:**
 
@@ -151,7 +140,7 @@ Package-level apt downgrade is not the recovery path (see agent rescue below).
 ### Drain refused: Longhorn still rebuilding
 
 Before cordoning, `cordon_drain` waits for Longhorn volumes with a replica on
-the node to be healthy. Play fails after `cordon_drain_longhorn_wait (900s) with: 
+the node to be healthy. Play fails after `cordon_drain_longhorn_wait` (900s) with:
 
 ```
 Longhorn still reports pvc-xxxxxxxx degraded after 900s. Draining nuc2 would take
@@ -172,6 +161,25 @@ kubectl -n longhorn-system get engines.longhorn.io -o json | jq -r '.items[]
 A volume mid-rebuild needs more time: clear the failure flag and re-run with
 `--limit <node>`. A `faulted` volume needs an operator before any node upgrade
 continues.
+
+### Drain refused: Longhorn snapshot attachment ticket
+
+Longhorn snapshot work adds a `snapshot-controller-*` ticket to its
+`VolumeAttachment` CR. The ticket keeps the volume engine and its instance
+manager running even after the workload stops.
+
+The drain role removes a ticket only when the referenced Longhorn Snapshot CR
+does not exist. Active tickets are allowed `cordon_drain_snapshot_wait` seconds
+to clear. A timeout leaves the node schedulable and reports the volume and
+ticket. Inspect it with:
+
+```bash
+kubectl -n longhorn-system get volumeattachments.longhorn.io <volume> -o yaml
+kubectl -n longhorn-system get snapshots.longhorn.io
+```
+
+Do not remove a ticket while its Snapshot CR exists. The snapshot controller
+still owns it.
 
 ### Agent nodes
 

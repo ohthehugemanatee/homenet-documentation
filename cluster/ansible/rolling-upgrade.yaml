@@ -34,8 +34,9 @@
 # drain and restored after the node is healthy — handled by the cordon_drain /
 # k3s_health roles. No manual scaling needed.
 #
-# cordon_drain waits until volumes with replicas on the node are done rebuilding.
-# timeout leaves the node schedulable.
+# cordon_drain waits until volumes with replicas on the node are done rebuilding
+# and clears orphaned Longhorn snapshot attachment tickets. Either timeout leaves
+# the node schedulable.
 
 - name: Check all nodes for pending work
   hosts: "{{ target | default('agents:!ubuntu:multimasters:masters') }}"

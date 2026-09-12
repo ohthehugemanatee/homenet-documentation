@@ -3,6 +3,10 @@
   ansible.builtin.include_tasks: wait_longhorn.yml
   when: cordon_drain_wait_for_longhorn | bool
 
+- name: Clear stale Longhorn snapshot tickets before cordoning
+  ansible.builtin.include_tasks: snapshot_tickets.yml
+  when: cordon_drain_wait_for_snapshot_tickets | bool
+
 - name: Cordon node before drain
   kubernetes.core.k8s_drain:
     name: "{{ ansible_hostname }}"

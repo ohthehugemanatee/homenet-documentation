@@ -21,6 +21,70 @@ monkeyble_scenarios:
                   - metadata:
                       name: testnode
 
+      # A stale snapshot-controller ticket can keep a volume attached after its
+      # pod is gone. Its Snapshot CR is absent, so remove this ticket only.
+      - task: "List Longhorn volume attachments"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: pvc-stale-snapshot-ticket
+                    spec:
+                      attachmentTickets:
+                        snapshot-controller-daily-sn-stale:
+                          id: snapshot-controller-daily-sn-stale
+                          nodeID: testnode
+                          type: snapshot-controller
+
+      - task: "List Longhorn snapshots"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Remove orphaned Longhorn snapshot attachment ticket"
+        should_be_skipped: false
+        extra_vars:
+          item:
+            volume: pvc-stale-snapshot-ticket
+            ticket: snapshot-controller-daily-sn-stale
+            snapshot: daily-sn-stale
+          k8s_kubeconfig: /tmp/monkeyble-kubeconfig
+          cordon_drain_longhorn_namespace: longhorn-system
+        test_input:
+          - assert_equal:
+              arg_name: name
+              expected: pvc-stale-snapshot-ticket
+          - assert_equal:
+              arg_name: merge_type
+              expected: merge
+          - assert_dict_equal:
+              arg_name: definition
+              expected:
+                spec:
+                  attachmentTickets:
+                    snapshot-controller-daily-sn-stale: null
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
+      - task: "Wait for Longhorn snapshot attachment ticket to clear"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - spec:
+                      attachmentTickets: {}
+
       - task: "Cordon node before drain"
         mock:
           config:

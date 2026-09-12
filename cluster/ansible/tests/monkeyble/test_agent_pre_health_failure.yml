@@ -53,6 +53,50 @@ monkeyble_scenarios:
       - task: "Refuse to drain while a volume on this node is degraded"
         should_be_skipped: true
 
+      # A real Snapshot CR still owns this ticket. The role must wait for it to
+      # clear rather than removing it as orphaned.
+      - task: "List Longhorn volume attachments"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: pvc-active-snapshot-ticket
+                    spec:
+                      attachmentTickets:
+                        snapshot-controller-daily-sn-active:
+                          id: snapshot-controller-daily-sn-active
+                          nodeID: testnode
+                          type: snapshot-controller
+
+      - task: "List Longhorn snapshots"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: daily-sn-active
+
+      - task: "Remove orphaned Longhorn snapshot attachment ticket"
+        should_be_skipped: true
+
+      - task: "Wait for Longhorn snapshot attachment ticket to clear"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - spec:
+                      attachmentTickets: {}
+
       - task: "Cordon node before drain"
         mock:
           config:
