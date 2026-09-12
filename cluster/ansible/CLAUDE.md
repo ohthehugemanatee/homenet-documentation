@@ -47,6 +47,10 @@ Single-replica Longhorn volumes block `kubectl drain`: the `longhorn-ephemeral` 
 - All upgrade plays read/write state under `/var/lib/ansible-upgrade/` on the shoebox host (not in repo).
 - A persistent failure flag (`rolling-upgrade-failed`) **aborts subsequent plays** in the same run — agents-fail blocks multimasters-then-masters. Clearing the flag is the rescue path's job; never clear it silently.
 - **Pushover alerts:** `WARNING` when an auto-rebuild succeeded; `CRITICAL` for unrecovered failures (CP failure, agent rebuild failed, agent failure before `k3s_health` ran). New rescue paths follow this severity contract.
+- An agent failure before `k3s_health` leaves k3s running. If `cordon_drain`
+  already cordoned the node, the rescue path uncordons it and restores any
+  annotated StatefulSets before sending the CRITICAL alert. Cleanup errors are
+  included in the alert and the persistent failure flag remains set.
 - **kubectl from playbooks:** `delegate_to: localhost` with `$KUBECONFIG` set to shoebox's kubeconfig. Never run kubectl on the target node.
 
 ## Tests (`tests/` + `molecule/`)

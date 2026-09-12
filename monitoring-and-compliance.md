@@ -183,7 +183,12 @@ still owns it.
 
 ### Agent nodes
 
-On any task failure after drain, the rescue block:
+If a task fails before health checks start, k3s is still running. The rescue
+path uncordons the node, restores StatefulSets scaled down by `cordon_drain`,
+keeps the failure flag, and sends a CRITICAL alert. The alert names any cleanup
+operation that also failed.
+
+After health checks start, the rescue block:
 1. Sets `/var/lib/ansible-upgrade/rolling-upgrade-failed`
 2. Uninstalls k3s agent and reinstalls from scratch
 3. Waits for the node to rejoin the cluster
@@ -237,7 +242,7 @@ systemctl status k3s[-agent]
 
 # 2. Fix the underlying issue manually
 
-# 3. Uncordon (only after verifying node health)
+# 3. Uncordon if the alert reports that automatic cleanup failed
 kubectl uncordon <node>
 
 # 4. Clear state flags (from shoebox host shell or via docker exec into Semaphore —
@@ -251,7 +256,7 @@ rm /var/lib/ansible-upgrade/rolling-upgrade-failed
 # Also clear if maintenance-in-progress is stale (e.g. Semaphore was killed mid-run):
 rm -f /var/lib/ansible-upgrade/maintenance-in-progress
 
-# 5. Scale StatefulSets back up if needed
+# 5. Restore StatefulSets only if the alert reports that automatic cleanup failed
 kubectl scale statefulset plex --replicas=1
 kubectl scale statefulset nextcloud --replicas=1
 

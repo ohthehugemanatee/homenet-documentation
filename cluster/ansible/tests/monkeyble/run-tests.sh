@@ -195,6 +195,8 @@ rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario_expecting "agent_pre_health_failure" \
   rolling-upgrade.yaml \
   "${SCRIPT_DIR}/test_agent_pre_health_failure.yml" \
+  "TASK \[upgrade_rescue_agent : Uncordon node after pre-health failure\]" \
+  "TASK \[cordon_drain : Scale StatefulSet back to pre-drain replica count\]" \
   "TASK \[upgrade_rescue_agent : Alert CRITICAL — upgrade failed before health checks\]" \
   "--limit" "agents"
 
