@@ -53,21 +53,27 @@
   delegate_to: localhost
   become: false
 
+# k8s_scale patches the scale subresource as a strategic merge, which a custom
+# resource rejects with 415; merge-patch on the object itself is accepted by both
+# a CR and a StatefulSet. The Alertmanager CRD's scale subresource reads
+# spec.replicas too, so the operator reacts the same either way.
 - name: Scale StatefulSet to zero
-  kubernetes.core.k8s_scale:
+  kubernetes.core.k8s:
+    state: patched
+    merge_type: merge
     api_version: "{{ cordon_drain_target.api_version }}"
     kind: "{{ cordon_drain_target.kind }}"
     namespace: "{{ item.namespace }}"
     name: "{{ cordon_drain_target.name }}"
-    replicas: 0
+    definition:
+      spec:
+        replicas: 0
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
   become: false
 
-# k8s_scale picks its wait predicate by kind and falls back to a bare existence
-# check for anything it does not know, so waiting on a custom resource proves
-# nothing. The drain needs the volume detached, which is what zero StatefulSet
-# replicas means.
+# The drain needs the volume detached, which is what zero StatefulSet replicas
+# means. The patch above only records intent for an operator-owned workload.
 - name: Wait for the StatefulSet's pods to terminate
   kubernetes.core.k8s_info:
     kind: StatefulSet
