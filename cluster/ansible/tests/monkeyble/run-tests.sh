@@ -417,9 +417,11 @@ fi
 echo "  PASSED: tls_cert_skips_reload_unchanged did not run the reload command"
 
 # Scenario: a short-dated fixture (combined/Pi-hole format) fails the run
-# rather than delivering quietly.
+# rather than delivering quietly. The failing task is marked should_fail in
+# the scenario file, which monkeyble scores as a pass, so the exit code
+# proves nothing here — the failure message is the evidence.
 mkdir -p "${STATE_DIR}/tls-cert-short"
-run_failing_scenario "tls_cert_short_dated_fails" \
+run_scenario_expecting "tls_cert_short_dated_fails" \
   "${SCRIPT_DIR}/test-tls-cert.yaml" \
   "${SCRIPT_DIR}/test_tls_cert_short_dated_fails.yml" \
   "expires .* within tls_cert_min_days" \
