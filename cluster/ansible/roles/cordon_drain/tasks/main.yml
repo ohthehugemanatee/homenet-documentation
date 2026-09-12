@@ -1,4 +1,8 @@
 ---
+- name: Wait for Longhorn to finish rebuilding before cordoning
+  ansible.builtin.include_tasks: wait_longhorn.yml
+  when: cordon_drain_wait_for_longhorn | bool
+
 - name: Cordon node before drain
   kubernetes.core.k8s_drain:
     name: "{{ ansible_hostname }}"
@@ -6,6 +10,12 @@
     kubeconfig: "{{ k8s_kubeconfig }}"
   delegate_to: localhost
   become: false
+
+# Failure before this leaves the node schedulable, this tells
+# upgrade_rescue_agent not to try re-enabling it
+- name: Record that the node is cordoned
+  ansible.builtin.set_fact:
+    cordon_drain_cordoned: true
 
 - name: Scale down single-replica Longhorn workloads on this node
   ansible.builtin.include_tasks: scale_down.yml

@@ -1,0 +1,10 @@
+---
+# Replicas of attached, unhealthy Volumes on this node. Derived, not tuneable.
+cordon_drain_longhorn_degraded: >-
+  {{ (cordon_drain_longhorn_volumes | default({})).resources | default([])
+     | selectattr('metadata.name', 'in', cordon_drain_longhorn_local_volumes | default([]))
+     | selectattr('status.state', 'defined')
+     | selectattr('status.state', 'equalto', 'attached')
+     | selectattr('status.robustness', 'defined')
+     | rejectattr('status.robustness', 'equalto', 'healthy')
+     | map(attribute='metadata.name') | list }}

@@ -1,0 +1,90 @@
+---
+# Scenario: a volume with a replica on this node is attached and degraded, as it is
+# while Longhorn rebuilds what the previous node in a serial rollout took down.
+# Expected: the pre-cordon gate waits its bounded window out, then refuses. The node
+# is never cordoned, so the CRITICAL alert reports it schedulable rather than drained.
+# The bound comes from cordon_drain_longhorn_wait/poll, overridden in run-tests.sh so
+# the wait is two seconds rather than the fifteen-minute default.
+monkeyble_scenarios:
+  drain_gate_degraded_volume:
+    # apt_upgrade and node_state never run: the gate refuses ahead of them, so the
+    # shared mocks are not concatenated here.
+    tasks_to_test: >-
+      {{ monkeyble_scenarios.drain_gate_degraded_volume.pre_tasks
+         + monkeyble_scenarios.drain_gate_degraded_volume.post_tasks }}
+    pre_tasks:
+      # ── upgrade_check role: something to upgrade, so the node reaches the gate ──
+      - task: "Update apt cache before drain check"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Simulate dist-upgrade to check for pending packages"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: true
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      # ── cordon_drain wait_longhorn: one replica here, and its volume is degraded ──
+      - task: "List Longhorn replicas on this node"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: pvc-degraded-r-0e1f
+                    spec:
+                      nodeID: testnode
+                      volumeName: pvc-degraded
+
+      # A replica on another node must not drag its volume into the wait, so a
+      # second, unrelated degraded volume rides along and must not be named in
+      # the refusal below.
+      - task: "Wait for those volumes to report healthy"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: pvc-degraded
+                    status:
+                      state: attached
+                      robustness: degraded
+                  - metadata:
+                      name: pvc-elsewhere
+                    status:
+                      state: attached
+                      robustness: degraded
+
+    post_tasks:
+      # The rebuild block is gated off rather than aborted, so its tasks still
+      # appear as skipped. k3s was never touched, so none of them may run.
+      - task: "Read the k3s version the servers are running"
+        should_be_skipped: true
+
+      - task: "Uninstall k3s agent"
+        should_be_skipped: true
+
+      - task: "Alert CRITICAL — upgrade failed before health checks"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false

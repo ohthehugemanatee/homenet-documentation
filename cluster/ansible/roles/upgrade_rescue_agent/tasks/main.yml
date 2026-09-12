@@ -24,7 +24,9 @@
         CRITICAL: {{ inventory_hostname }} upgrade failed
         at task '{{ ansible_failed_task.name | default('unknown') }}'
         before health checks ran. No rebuild attempted, k3s left running.
-        Node DRAINED. Manual fix required.
+        {{ cordon_drain_cordoned | default(false) | bool
+           | ternary('Node DRAINED', 'Node still schedulable') }}.
+        Manual fix required.
       priority: "2"
       retry: "300"
       expire: "3600"

@@ -36,6 +36,23 @@ monkeyble_scenarios:
                   - metadata:
                       name: testnode
 
+      # ── cordon_drain wait_longhorn: no Longhorn replica on this node, as on a
+      # control-plane node, so the gate must not wait on anything.
+      - task: "List Longhorn replicas on this node"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Wait for those volumes to report healthy"
+        should_be_skipped: true
+
+      - task: "Refuse to drain while a volume on this node is degraded"
+        should_be_skipped: true
+
       - task: "Cordon node before drain"
         mock:
           config:

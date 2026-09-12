@@ -1,0 +1,48 @@
+---
+# Wait for longhorn "healthy" so rollout doesn't trip the PodDisruptionBudget
+- name: List Longhorn replicas on this node
+  kubernetes.core.k8s_info:
+    api_version: longhorn.io/v1beta2
+    kind: Replica
+    namespace: "{{ cordon_drain_longhorn_namespace }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_longhorn_replicas
+
+# Avoid healthiness race condition since the gate last looked.
+- name: Collect the volumes with a replica on this node
+  ansible.builtin.set_fact:
+    cordon_drain_longhorn_local_volumes: >-
+      {{ cordon_drain_longhorn_replicas.resources | default([])
+         | selectattr('spec.nodeID', 'defined')
+         | selectattr('spec.nodeID', 'equalto', cordon_drain_node_name)
+         | map(attribute='spec.volumeName') | unique | list }}
+
+- name: Wait for those volumes to report healthy
+  kubernetes.core.k8s_info:
+    api_version: longhorn.io/v1beta2
+    kind: Volume
+    namespace: "{{ cordon_drain_longhorn_namespace }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  register: cordon_drain_longhorn_volumes
+  failed_when: cordon_drain_longhorn_volumes.resources is not defined
+  until: cordon_drain_longhorn_degraded | length == 0
+  retries: "{{ ((cordon_drain_longhorn_wait | int) / (cordon_drain_longhorn_poll | int)) | round | int }}"
+  delay: "{{ cordon_drain_longhorn_poll }}"
+  when: cordon_drain_longhorn_local_volumes | length > 0
+
+- name: Refuse to drain while a volume on this node is degraded
+  ansible.builtin.fail:
+    msg: >-
+      Longhorn still reports {{ cordon_drain_longhorn_degraded | join(', ') }}
+      degraded after {{ cordon_drain_longhorn_wait }}s. Draining
+      {{ cordon_drain_node_name }} would take the last healthy replica with it,
+      so the node has been left uncordoned.
+  when:
+    - cordon_drain_longhorn_local_volumes | length > 0
+    - cordon_drain_longhorn_degraded | length > 0
