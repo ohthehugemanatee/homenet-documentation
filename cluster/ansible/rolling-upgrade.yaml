@@ -1,8 +1,8 @@
 ---
 # Rolling OS upgrade for k3s nodes.
 # Drains each node, runs apt dist-upgrade, reboots, uncordons, verifies Ready.
-# Safe to re-run — skips reboot if /var/run/reboot-required is absent and
-# no packages were upgraded.
+# Safe to re-run — a node with no pending packages and no
+# /var/run/reboot-required is skipped before it is ever cordoned or drained.
 #
 # Prerequisites:
 #   - kubernetes.core collection installed; kubernetes Python library available
@@ -51,13 +51,23 @@
         name: upgrade_pre_state
 
   tasks:
-    - name: Upgrade node
-      block:
-        - name: Show current OS version
-          ansible.builtin.command: lsb_release -ds
-          register: os_version
-          changed_when: false
+    - name: Check if there is anything to upgrade
+      ansible.builtin.import_role:
+        name: upgrade_check
 
+    - name: Show current OS version
+      ansible.builtin.command: lsb_release -ds
+      register: os_version
+      changed_when: false
+
+    - name: Node is up to date — skipping upgrade
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} ({{ os_version.stdout }}) has nothing to upgrade — not draining."
+      when: not upgrade_check_needed
+
+    - name: Upgrade node
+      when: upgrade_check_needed
+      block:
         - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: "Starting upgrade of {{ inventory_hostname }} ({{ os_version.stdout }})"
@@ -116,13 +126,23 @@
         name: upgrade_checks_cp
 
   tasks:
-    - name: Upgrade node
-      block:
-        - name: Show current OS version
-          ansible.builtin.command: lsb_release -ds
-          register: os_version
-          changed_when: false
+    - name: Check if there is anything to upgrade
+      ansible.builtin.import_role:
+        name: upgrade_check
 
+    - name: Show current OS version
+      ansible.builtin.command: lsb_release -ds
+      register: os_version
+      changed_when: false
+
+    - name: Node is up to date — skipping upgrade
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} ({{ os_version.stdout }}) has nothing to upgrade — not draining."
+      when: not upgrade_check_needed
+
+    - name: Upgrade node
+      when: upgrade_check_needed
+      block:
         - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: "Starting upgrade of multi-master {{ inventory_hostname }} ({{ os_version.stdout }})"
@@ -182,13 +202,23 @@
         name: upgrade_checks_cp
 
   tasks:
-    - name: Upgrade node
-      block:
-        - name: Show current OS version
-          ansible.builtin.command: lsb_release -ds
-          register: os_version
-          changed_when: false
+    - name: Check if there is anything to upgrade
+      ansible.builtin.import_role:
+        name: upgrade_check
 
+    - name: Show current OS version
+      ansible.builtin.command: lsb_release -ds
+      register: os_version
+      changed_when: false
+
+    - name: Node is up to date — skipping upgrade
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} ({{ os_version.stdout }}) has nothing to upgrade — not draining."
+      when: not upgrade_check_needed
+
+    - name: Upgrade node
+      when: upgrade_check_needed
+      block:
         - name: Starting upgrade of {{ inventory_hostname }}
           ansible.builtin.debug:
             msg: >

@@ -1,0 +1,31 @@
+---
+- name: Update apt cache before drain check
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Simulate dist-upgrade to check for pending packages
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true
+  check_mode: true
+  register: upgrade_check_apt_simulation
+
+- name: Check if a reboot is already pending
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: upgrade_check_reboot_required
+
+- name: Check for a new Ubuntu release  # noqa: command-instead-of-module
+  ansible.builtin.command: do-release-upgrade -c
+  register: upgrade_check_release_available
+  changed_when: false
+  failed_when: false
+  when: upgrade_check_release | bool
+
+- name: Determine whether this node has anything to do
+  ansible.builtin.set_fact:
+    upgrade_check_needed: >-
+      {{ upgrade_check_apt_simulation.changed
+         or upgrade_check_reboot_required.stat.exists
+         or (upgrade_check_release_available.rc | default(1)) == 0 }}

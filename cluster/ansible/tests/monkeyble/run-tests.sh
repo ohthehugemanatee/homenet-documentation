@@ -165,6 +165,13 @@ run_scenario_expecting "agent_upgrade_success" \
   "-e" "@${SCRIPT_DIR}/monkeyble_shared_tasks.yml" \
   "--limit" "agents"
 
+# ── Scenario 2e: nothing pending → upgrade_check skips cordon/drain entirely ──
+rm -f "${STATE_DIR}/rolling-upgrade-failed"
+run_scenario "agent_upgrade_skipped" \
+  rolling-upgrade.yaml \
+  "${SCRIPT_DIR}/test_agent_upgrade_skipped.yml" \
+  "--limit" "agents"
+
 # ── Scenario 2d: operator-owned workload → scale down the owning CR ─────────
 rm -f "${STATE_DIR}/rolling-upgrade-failed"
 run_scenario_expecting "cordon_drain_scaledown_owner" \

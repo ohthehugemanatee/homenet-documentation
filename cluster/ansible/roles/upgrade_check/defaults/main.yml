@@ -1,0 +1,3 @@
+---
+# Set true only by the release-upgrade playbook's plays.
+upgrade_check_release: false

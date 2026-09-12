@@ -1,0 +1,79 @@
+---
+# Scenario: nothing pending — no packages to upgrade, no reboot required.
+# Expected: upgrade_check runs, but the node is never cordoned or drained, and
+# none of apt_upgrade/node_state/k3s_health run. No failure, no rescue.
+monkeyble_scenarios:
+  agent_upgrade_skipped:
+    tasks_to_test: >-
+      {{ monkeyble_scenarios.agent_upgrade_skipped.pre_tasks
+         + monkeyble_scenarios.agent_upgrade_skipped.post_tasks }}
+    pre_tasks:
+      # ── Mock infrastructure tasks that require a real cluster ──────────────
+
+      - task: "Verify k8s node name matches ansible_hostname"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources:
+                  - metadata:
+                      name: testnode
+
+      # ── upgrade_check role: nothing pending ───────────────────────────────
+
+      - task: "Update apt cache before drain check"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Simulate dist-upgrade to check for pending packages"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Check if a reboot is already pending"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                stat:
+                  exists: false
+
+      # rolling-upgrade.yaml never sets upgrade_check_release, so this stays off.
+      - task: "Check for a new Ubuntu release"
+        should_be_skipped: true
+
+    post_tasks:
+      # ── Key assertions ────────────────────────────────────────────────────
+      # Nothing to do: the skip message runs, the upgrade block does not.
+      - task: "Node is up to date — skipping upgrade"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+
+      - task: "Starting upgrade of testnode"
+        should_be_skipped: true
+
+      - task: "Cordon node before drain"
+        should_be_skipped: true
+
+      - task: "Drain node"
+        should_be_skipped: true
+
+      - task: "Run dist-upgrade"
+        should_be_skipped: true
+
+      - task: "Wait for k3s-agent to become active"
+        should_be_skipped: true
+
+      - task: "Uncordon node"
+        should_be_skipped: true
+
+      - task: "Upgrade complete — testnode"
+        should_be_skipped: true
