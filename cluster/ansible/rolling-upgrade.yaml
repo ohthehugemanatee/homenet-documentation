@@ -1,8 +1,10 @@
 ---
 # Rolling OS upgrade for k3s nodes.
-# Drains each node, runs apt dist-upgrade, reboots, uncordons, verifies Ready.
-# Safe to re-run — a node with no pending packages and no
-# /var/run/reboot-required is skipped before it is ever cordoned or drained.
+# Checks every targeted node in parallel first (apt cache + a check-mode
+# dist-upgrade dry run + a reboot-required stat), then drains each node with
+# pending work, runs apt dist-upgrade, reboots, uncordons, verifies Ready —
+# one at a time. Safe to re-run — a node with nothing pending is skipped
+# before it is ever cordoned or drained.
 #
 # Prerequisites:
 #   - kubernetes.core collection installed; kubernetes Python library available
@@ -32,6 +34,22 @@
 # drain and restored after the node is healthy — handled by the cordon_drain /
 # k3s_health roles. No manual scaling needed.
 
+- name: Check all nodes for pending work
+  hosts: "{{ target | default('agents:!ubuntu:multimasters:masters') }}"
+  become: true
+
+  tasks:
+    - name: Check if there is anything to upgrade
+      ansible.builtin.import_role:
+        name: upgrade_check
+
+    - name: Report per-node upgrade status
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} ({{ ansible_distribution }} {{ ansible_distribution_version }}):
+          {{ 'upgrade needed' if upgrade_check_needed else 'already up to date' }}
+
+
 - name: Rolling OS upgrade — agents
   hosts: "{{ target | default('agents:!ubuntu') }}"
   become: true
@@ -51,10 +69,6 @@
         name: upgrade_pre_state
 
   tasks:
-    - name: Check if there is anything to upgrade
-      ansible.builtin.import_role:
-        name: upgrade_check
-
     - name: Show current OS version
       ansible.builtin.command: lsb_release -ds
       register: os_version
@@ -126,10 +140,6 @@
         name: upgrade_checks_cp
 
   tasks:
-    - name: Check if there is anything to upgrade
-      ansible.builtin.import_role:
-        name: upgrade_check
-
     - name: Show current OS version
       ansible.builtin.command: lsb_release -ds
       register: os_version
@@ -202,10 +212,6 @@
         name: upgrade_checks_cp
 
   tasks:
-    - name: Check if there is anything to upgrade
-      ansible.builtin.import_role:
-        name: upgrade_check
-
     - name: Show current OS version
       ansible.builtin.command: lsb_release -ds
       register: os_version
