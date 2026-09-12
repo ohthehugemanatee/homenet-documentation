@@ -358,10 +358,15 @@ run_scenario "migrate_rollback" \
   "-e" "app=ombi" "-t" "rollback"
 
 # ── tls_cert: deliver a cluster-issued cert to an off-cluster host (#364) ───
+# The role's owner/group defaults (root) assume it runs privileged on the real
+# host; this harness runs as whoever invoked it, so override to that user —
+# otherwise ansible.builtin.copy's chown to root fails for a non-root runner.
 TLS_CERT_COMMON_ARGS=(
   "-e" "tls_cert_secret=shoebox-tls"
   "-e" "tls_cert_namespace=default"
   "-e" "tls_cert_format=separate"
+  "-e" "tls_cert_owner=$(id -un)"
+  "-e" "tls_cert_group=$(id -gn)"
   "-e" "tls_cert_min_days=30"
   "-e" "tls_cert_reload_command=/bin/echo TLS_CERT_RELOAD_FIRED"
   "--limit" "shoebox"
@@ -404,6 +409,8 @@ run_failing_scenario "tls_cert_short_dated_fails" \
   "-e" "tls_cert_secret=shoebox-tls" \
   "-e" "tls_cert_namespace=default" \
   "-e" "tls_cert_format=combined" \
+  "-e" "tls_cert_owner=$(id -un)" \
+  "-e" "tls_cert_group=$(id -gn)" \
   "-e" "tls_cert_min_days=30" \
   "-e" "tls_cert_reload_command=/bin/echo TLS_CERT_RELOAD_FIRED" \
   "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-short/combined.pem" \
