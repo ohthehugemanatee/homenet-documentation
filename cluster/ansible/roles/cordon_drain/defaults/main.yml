@@ -16,8 +16,7 @@ cordon_drain_longhorn_namespace: longhorn-system
 cordon_drain_longhorn_wait: 900
 cordon_drain_longhorn_poll: 15
 
-# Before cordoning, remove snapshot-controller attachment tickets whose
-# referenced Snapshot CR no longer exists, then wait for active tickets.
+# Before cordoning, remove orphaned snapshot-controller attachment tickets
 cordon_drain_wait_for_snapshot_tickets: true
 cordon_drain_snapshot_wait: 300
 cordon_drain_snapshot_poll: 10
