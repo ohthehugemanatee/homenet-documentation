@@ -1,0 +1,13 @@
+---
+# Monkeyble harness for the tls_cert role only (#364). Not a production
+# playbook — the playbook that calls this role for real, its inventory group
+# and the Semaphore schedule are the follow-up issue.
+- name: Exercise the tls_cert role
+  hosts: shoebox
+  gather_facts: false
+
+  vars:
+    k8s_kubeconfig: "{{ lookup('env', 'KUBECONFIG') or (lookup('env', 'HOME') + '/.kube/config') }}"
+
+  roles:
+    - tls_cert
