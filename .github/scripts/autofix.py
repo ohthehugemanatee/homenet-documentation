@@ -47,6 +47,12 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
                  "ANTHROPIC", "GH_TOKEN", "GITHUB_TOKEN", "SECRET")
 
 
+# Deterministic fixers, keyed by the name of the CI job that failed. `fix` runs,
+# then `check` must pass on its result; anything less falls through to the model.
+# Each entry is {"setup": [argv, ...], "fix": argv, "check": argv, "cwd": path}.
+FIXERS = {}
+
+
 MODEL = "claude-sonnet-5"
 
 # The API accepts at most 4 cache breakpoints per request.
@@ -153,6 +159,121 @@ def head_repo_matches(repo, pr_number):
     return r.stdout.strip() == repo
 
 
+def failed_job_names(repo, run_id):
+    """Names of the jobs that failed in the triggering run."""
+    r = subprocess.run(
+        ["gh", "run", "view", run_id, "--repo", repo, "--json", "jobs",
+         "--jq", '.jobs[] | select(.conclusion == "failure") | .name'],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f"Could not list failed jobs: {r.stderr.strip()}")
+        return []
+    return [n for n in r.stdout.splitlines() if n.strip()]
+
+
+def _changed():
+    r = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
+    return [p for p in r.stdout.splitlines() if p.strip()]
+
+
+def _revert(paths):
+    if paths:
+        subprocess.run(["git", "checkout", "--"] + paths, capture_output=True, text=True)
+
+
+def deterministic_pass(job_names):
+    """Run the fixers matching the failed jobs, keeping only verified repairs.
+
+    A fixer's edits survive only if they stay out of `.github/` and its check
+    then passes; otherwise they are reverted so the model sees the tree the
+    logs describe. Returns the paths left modified.
+    """
+    fixed = []
+    for name in job_names:
+        f = FIXERS.get(name)
+        if not f:
+            continue
+        print(f"Deterministic fixer for '{name}'...")
+        cwd = f.get("cwd")
+        setup_ok = True
+        for cmd in f["setup"]:
+            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"  setup failed: {' '.join(cmd)}")
+                setup_ok = False
+                break
+        if not setup_ok:
+            continue
+
+        subprocess.run(f["fix"], cwd=cwd, capture_output=True, text=True)
+        paths = [p for p in _changed() if p not in fixed]
+        if not paths:
+            print("  no changes")
+            continue
+
+        blocked = [p for p in paths if p.startswith(".github/")]
+        if blocked:
+            print(f"  reverting, fixer wrote to {', '.join(blocked)}")
+            _revert(paths)
+            continue
+
+        r = subprocess.run(f["check"], cwd=cwd, capture_output=True, text=True)
+        if r.returncode != 0:
+            print("  check still fails, reverting")
+            _revert(paths)
+            continue
+
+        print(f"  fixed {', '.join(paths)}")
+        fixed += paths
+    return fixed
+
+
+def finish(repo, pr_number, head_ref, written, explanation):
+    if not written:
+        body = (
+            "## Auto-fix Attempt\n\n"
+            "I analyzed the CI failures but could not determine an automated fix. "
+            "Please review manually.\n\n---\n*Automated by Claude*"
+        )
+    else:
+        subprocess.run(["git", "config", "user.name", "claude-autofix[bot]"], check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "claude-autofix@noreply.github.com"], check=True
+        )
+        subprocess.run(["git", "add", "--"] + [p.lstrip("/") for p in written], check=True)
+        r = subprocess.run(
+            ["git", "commit", "-m",
+             f"fix: auto-fix CI failures [autofix]\n\n{explanation[:400]}"],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            print(f"Nothing to commit or commit failed: {r.stderr}")
+            return
+        r = subprocess.run(
+            ["git", "push", "origin", f"HEAD:refs/heads/{head_ref}"],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            print(f"Push failed: {r.stderr}")
+            return
+        body = (
+            "## Auto-fix Applied\n\n"
+            f"Modified: {', '.join(f'`{p}`' for p in written)}\n\n"
+            f"{explanation}\n\n---\n*Automated by Claude*"
+        )
+
+    with open("/tmp/autofix-comment.md", "w") as f:
+        f.write(body)
+    subprocess.run(
+        ["gh", "pr", "comment", pr_number,
+         "--body-file", "/tmp/autofix-comment.md",
+         "--repo", repo],
+        check=True,
+    )
+    print("Done")
+
+
 def main():
     with open(os.environ["GITHUB_EVENT_PATH"]) as f:
         event = json.load(f)
@@ -183,6 +304,13 @@ def main():
     )
     if r.returncode == 0 and "[autofix]" in r.stdout:
         print("Head commit is already an autofix, skipping")
+        return
+
+    # Deterministic fixers first — a verified repair costs no tokens
+    prepass = deterministic_pass(failed_job_names(repo, run_id))
+    if prepass:
+        finish(repo, pr_number, head_ref, prepass,
+               "Fixed by deterministic fixers. No model call was made.")
         return
 
     # Fetch failure logs
@@ -266,48 +394,7 @@ def main():
             print(f"Stopping: unexpected stop_reason '{stop_reason}'")
             break
 
-    if not written:
-        body = (
-            "## Auto-fix Attempt\n\n"
-            "I analyzed the CI failures but could not determine an automated fix. "
-            "Please review manually.\n\n---\n*Automated by Claude*"
-        )
-    else:
-        subprocess.run(["git", "config", "user.name", "claude-autofix[bot]"], check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "claude-autofix@noreply.github.com"], check=True
-        )
-        subprocess.run(["git", "add", "--"] + [p.lstrip("/") for p in written], check=True)
-        r = subprocess.run(
-            ["git", "commit", "-m",
-             f"fix: auto-fix CI failures [autofix]\n\n{explanation[:400]}"],
-            capture_output=True, text=True,
-        )
-        if r.returncode != 0:
-            print(f"Nothing to commit or commit failed: {r.stderr}")
-            return
-        r = subprocess.run(
-            ["git", "push", "origin", f"HEAD:refs/heads/{head_ref}"],
-            capture_output=True, text=True,
-        )
-        if r.returncode != 0:
-            print(f"Push failed: {r.stderr}")
-            return
-        body = (
-            "## Auto-fix Applied\n\n"
-            f"Modified: {', '.join(f'`{p}`' for p in written)}\n\n"
-            f"{explanation}\n\n---\n*Automated by Claude*"
-        )
-
-    with open("/tmp/autofix-comment.md", "w") as f:
-        f.write(body)
-    subprocess.run(
-        ["gh", "pr", "comment", pr_number,
-         "--body-file", "/tmp/autofix-comment.md",
-         "--repo", repo],
-        check=True,
-    )
-    print("Done")
+    finish(repo, pr_number, head_ref, written, explanation)
 
 
 if __name__ == "__main__":
