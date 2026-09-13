@@ -349,7 +349,6 @@ def main():
         print("Head commit is already an autofix, skipping")
         return
 
-    # Deterministic fixers first — a verified repair costs no tokens
     r = subprocess.run(["gh", "pr", "diff", pr_number, "--name-only", "--repo", repo],
                        capture_output=True, text=True)
     in_scope = set(r.stdout.split()) if r.returncode == 0 else set()
