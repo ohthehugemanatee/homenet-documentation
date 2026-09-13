@@ -47,8 +47,21 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
                  "ANTHROPIC", "GH_TOKEN", "GITHUB_TOKEN", "SECRET")
 
 
+ANSIBLE_TARGETS = ["k3s-agent.yaml", "node-state.yaml", "rolling-upgrade.yaml",
+                   "../../shoebox/shoebox-ansible-setup.yaml"]
+
 # Keyed by failing CI job name; {"setup": [argv], "fix": argv, "check": argv, "cwd": path}.
-FIXERS = {}
+FIXERS = {
+    "Ansible playbooks": {
+        "setup": [
+            ["pip", "install", "ansible", "ansible-lint", "yamllint"],
+            ["ansible-galaxy", "collection", "install", "-r", "requirements.yaml"],
+        ],
+        "fix": ["ansible-lint", "--fix"] + ANSIBLE_TARGETS,
+        "check": ["ansible-lint"] + ANSIBLE_TARGETS,
+        "cwd": "cluster/ansible",
+    },
+}
 
 
 MODEL = "claude-sonnet-5"
@@ -180,11 +193,30 @@ def _revert(paths):
         subprocess.run(["git", "checkout", "--"] + paths, capture_output=True, text=True)
 
 
-def deterministic_pass(job_names):
+def _yaml_clean(paths):
+    """Changed YAML satisfies the repo-wide gating yamllint.
+
+    Fails closed when yamllint is absent.
+    """
+    yamls = [p for p in paths if p.endswith((".yaml", ".yml"))]
+    if not yamls:
+        return True
+    try:
+        r = subprocess.run(["yamllint"] + yamls, capture_output=True, text=True)
+    except FileNotFoundError:
+        print("  yamllint unavailable, refusing the fix")
+        return False
+    if r.returncode != 0:
+        print(f"  yamllint rejects the result:\n{r.stdout.strip()[:500]}")
+    return r.returncode == 0
+
+
+def deterministic_pass(job_names, in_scope):
     """Apply the fixers for these jobs, and return the paths they repaired.
 
-    Edits survive only when they stay clear of `.github/` and the fixer's own
-    check passes on the result. Everything else is reverted.
+    Edits survive only on files the PR already touches, clear of `.github/`,
+    and leaving both the fixer's check and yamllint passing. Everything else
+    is reverted.
     """
     fixed = []
     for name in job_names:
@@ -215,9 +247,23 @@ def deterministic_pass(job_names):
             _revert(paths)
             continue
 
+        # ansible-lint --fix reformats every file it is pointed at.
+        stray = [p for p in paths if p not in in_scope]
+        if stray:
+            print(f"  reverting {len(stray)} file(s) outside the PR diff")
+            _revert(stray)
+            paths = [p for p in paths if p in in_scope]
+        if not paths:
+            print("  nothing left in scope")
+            continue
+
         r = subprocess.run(f["check"], cwd=cwd, capture_output=True, text=True)
         if r.returncode != 0:
             print("  check still fails, reverting")
+            _revert(paths)
+            continue
+
+        if not _yaml_clean(paths):
             _revert(paths)
             continue
 
@@ -303,7 +349,10 @@ def main():
         print("Head commit is already an autofix, skipping")
         return
 
-    prepass = deterministic_pass(failed_job_names(repo, run_id))
+    r = subprocess.run(["gh", "pr", "diff", pr_number, "--name-only", "--repo", repo],
+                       capture_output=True, text=True)
+    in_scope = set(r.stdout.split()) if r.returncode == 0 else set()
+    prepass = deterministic_pass(failed_job_names(repo, run_id), in_scope)
     if prepass:
         finish(repo, pr_number, head_ref, prepass,
                "Fixed by deterministic fixers. No model call was made.")

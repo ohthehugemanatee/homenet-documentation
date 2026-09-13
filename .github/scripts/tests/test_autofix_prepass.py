@@ -1,7 +1,9 @@
-"""Pre-pass tests. Fixers run against a real git repo."""
+"""Pre-pass tests. Fixers run against a real git repo so the revert path and
+the `.github/` guard are exercised as git, not as mocks."""
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -47,6 +49,8 @@ class RepoFixture(unittest.TestCase):
         os.chdir(repo)
         self.addCleanup(os.chdir, cwd)
         self.repo = repo
+        self.scope = {'play.yaml', 'roles.yaml',
+                      '.github/workflows/ci.yaml'}
 
     def body(self, path):
         with open(os.path.join(self.repo, path)) as f:
@@ -62,7 +66,7 @@ class PrePassTest(RepoFixture):
         with mock.patch.dict(autofix.FIXERS,
                              {'Ansible playbooks': fixer("echo fixed > play.yaml")},
                              clear=True):
-            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks']),
+            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks'], self.scope),
                              ['play.yaml'])
         self.assertEqual(self.body('play.yaml'), 'fixed\n')
 
@@ -71,7 +75,7 @@ class PrePassTest(RepoFixture):
                              {'Ansible playbooks': fixer("echo fixed > play.yaml",
                                                          check='false')},
                              clear=True):
-            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks']), [])
+            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks'], self.scope), [])
         self.assertEqual(self.body('play.yaml'), 'original\n')
         self.assertEqual(self.dirty(), '')
 
@@ -82,7 +86,7 @@ class PrePassTest(RepoFixture):
                 "echo fixed > play.yaml && echo fixed > .github/workflows/ci.yaml")},
             clear=True,
         ):
-            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks']), [])
+            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks'], self.scope), [])
         self.assertEqual(self.body('.github/workflows/ci.yaml'), 'original\n')
         self.assertEqual(self.body('play.yaml'), 'original\n')
         self.assertEqual(self.dirty(), '')
@@ -91,14 +95,14 @@ class PrePassTest(RepoFixture):
         with mock.patch.dict(autofix.FIXERS,
                              {'Ansible playbooks': fixer("echo fixed > play.yaml")},
                              clear=True):
-            self.assertEqual(autofix.deterministic_pass(['Kustomize builds']), [])
+            self.assertEqual(autofix.deterministic_pass(['Kustomize builds'], self.scope), [])
         self.assertEqual(self.dirty(), '')
 
     def test_fixer_that_changes_nothing(self):
         with mock.patch.dict(autofix.FIXERS,
                              {'Ansible playbooks': fixer("true")},
                              clear=True):
-            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks']), [])
+            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks'], self.scope), [])
 
     def test_failed_setup_skips_the_fixer(self):
         with mock.patch.dict(
@@ -106,7 +110,7 @@ class PrePassTest(RepoFixture):
             {'Ansible playbooks': fixer("echo fixed > play.yaml", setup=('false',))},
             clear=True,
         ):
-            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks']), [])
+            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks'], self.scope), [])
         self.assertEqual(self.body('play.yaml'), 'original\n')
 
     def test_untracked_file_left_by_a_fixer_is_not_committed(self):
@@ -115,7 +119,7 @@ class PrePassTest(RepoFixture):
             {'Ansible playbooks': fixer("echo fixed > play.yaml && echo x > scratch")},
             clear=True,
         ):
-            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks']),
+            self.assertEqual(autofix.deterministic_pass(['Ansible playbooks'], self.scope),
                              ['play.yaml'])
 
     def test_second_fixer_reports_only_its_own_paths(self):
@@ -125,8 +129,71 @@ class PrePassTest(RepoFixture):
              'B': fixer("echo b > roles.yaml")},
             clear=True,
         ):
-            self.assertEqual(autofix.deterministic_pass(['A', 'B']),
+            self.assertEqual(autofix.deterministic_pass(['A', 'B'], self.scope),
                              ['play.yaml', 'roles.yaml'])
+
+
+class ScopeAndYamlGuardTest(RepoFixture):
+    def test_files_outside_the_pr_diff_are_reverted(self):
+        with mock.patch.dict(
+            autofix.FIXERS,
+            {'Ansible playbooks': fixer("echo fixed > play.yaml && echo x > roles.yaml")},
+            clear=True,
+        ):
+            self.assertEqual(
+                autofix.deterministic_pass(['Ansible playbooks'], {'play.yaml'}),
+                ['play.yaml'])
+        self.assertEqual(self.body('roles.yaml'), 'original\n')
+        self.assertEqual(self.body('play.yaml'), 'fixed\n')
+
+    def test_nothing_in_scope_reverts_everything(self):
+        with mock.patch.dict(
+            autofix.FIXERS,
+            {'Ansible playbooks': fixer("echo fixed > play.yaml")},
+            clear=True,
+        ):
+            self.assertEqual(
+                autofix.deterministic_pass(['Ansible playbooks'], {'other.yaml'}), [])
+        self.assertEqual(self.body('play.yaml'), 'original\n')
+        self.assertEqual(self.dirty(), '')
+
+    def test_yamllint_failure_reverts_the_fix(self):
+        with mock.patch.dict(
+            autofix.FIXERS,
+            {'Ansible playbooks': fixer("printf 'a: {b: 1}\\n' > play.yaml")},
+            clear=True,
+        ), mock.patch.object(autofix, '_yaml_clean', return_value=False):
+            self.assertEqual(
+                autofix.deterministic_pass(['Ansible playbooks'], self.scope), [])
+        self.assertEqual(self.body('play.yaml'), 'original\n')
+        self.assertEqual(self.dirty(), '')
+
+
+class YamlGuardTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def write(self, name, body):
+        path = os.path.join(self.tmp.name, name)
+        with open(path, 'w') as f:
+            f.write(body)
+        return path
+
+    def test_non_yaml_paths_pass(self):
+        self.assertTrue(autofix._yaml_clean(['script.sh', 'notes.txt']))
+
+    def test_brace_spacing_is_rejected(self):
+        bad = self.write('bad.yaml', '---\nitems:\n  - { src: a, dest: b }\n')
+        self.assertFalse(autofix._yaml_clean([bad]))
+
+    def test_compliant_yaml_passes(self):
+        good = self.write('good.yaml', '---\nitems:\n  - {src: a, dest: b}\n')
+        self.assertTrue(autofix._yaml_clean([good]))
+
+    def test_missing_yamllint_fails_closed(self):
+        with mock.patch.object(autofix.subprocess, 'run', side_effect=FileNotFoundError):
+            self.assertFalse(autofix._yaml_clean(['x.yaml']))
 
 
 class FailedJobNamesTest(unittest.TestCase):
@@ -141,6 +208,33 @@ class FailedJobNamesTest(unittest.TestCase):
         with mock.patch.object(autofix.subprocess, 'run') as run:
             run.return_value = subprocess.CompletedProcess([], 1, stdout='', stderr='x')
             self.assertEqual(autofix.failed_job_names('o/r', '1'), [])
+
+
+class FixerTableTest(unittest.TestCase):
+    def test_ansible_job_name_matches_lint_yaml(self):
+        root = os.path.join(os.path.dirname(__file__), '..', '..')
+        with open(os.path.join(root, 'workflows', 'lint.yaml')) as f:
+            lint = f.read()
+        for name in autofix.FIXERS:
+            self.assertIn(f'name: {name}', lint,
+                          f'no job in lint.yaml is named {name!r}')
+
+    def test_ansible_targets_match_lint_yaml(self):
+        root = os.path.join(os.path.dirname(__file__), '..', '..')
+        with open(os.path.join(root, 'workflows', 'lint.yaml')) as f:
+            lint = f.read()
+        m = re.search(r'run: \|\n\s+ansible-lint((?:[^\n]*\\\n)*[^\n]*)', lint)
+        self.assertIsNotNone(m, 'no ansible-lint run step found in lint.yaml')
+        targets = m.group(1).replace('\\\n', ' ').split()
+        self.assertEqual(targets, autofix.FIXERS['Ansible playbooks']['check'][1:])
+
+    def test_ansible_fixer_writes_and_verifies(self):
+        entry = autofix.FIXERS['Ansible playbooks']
+        self.assertIn('--fix', entry['fix'])
+        self.assertNotIn('--fix', entry['check'])
+        self.assertEqual(entry['fix'][:1], ['ansible-lint'])
+        self.assertEqual(entry['check'][:1], ['ansible-lint'])
+        self.assertEqual(entry['fix'][1:], ['--fix'] + entry['check'][1:])
 
 
 class NoApiCallTest(unittest.TestCase):

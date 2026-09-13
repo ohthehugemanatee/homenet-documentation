@@ -20,7 +20,7 @@
 - **Read-only bash allowlist stays in place.** No `curl`, no commands that can exfiltrate secrets.
 - **Same-repo PRs only.** No forks — write permission would leak.
 - **Autofix commits MUST carry `[autofix]` in the subject** so this workflow does not re-loop on its own pushes. The marker check happens early; removing it deadlocks CI.
-- **A deterministic fixer's output is verified before it is kept.** `deterministic_pass()` keeps edits only where they stay clear of `.github/` and leave the fixer's own check passing. Everything else is reverted before the model runs.
+- **A deterministic fixer's output is verified before it is kept.** `deterministic_pass()` keeps edits only on files the PR already touches, clear of `.github/`, and leaving both the fixer's check and `yamllint` passing. Everything else is reverted before the model runs.
 - Any change to `autofix.py` needs a spec + a dry-run before merge.
 
 ## Commit subject markers
