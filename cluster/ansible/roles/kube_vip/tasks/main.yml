@@ -10,7 +10,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Place kube-vip control-plane manifest
   ansible.builtin.copy:
@@ -18,4 +18,4 @@
     dest: "{{ kube_vip_manifest_dir }}/kube-vip.yaml"
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"

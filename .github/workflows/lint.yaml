@@ -302,6 +302,11 @@ jobs:
         run: |
           ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml \
             ../../shoebox/shoebox-ansible-setup.yaml
+      - name: Verify ansible-lint fixer output
+        run: |
+          ansible-lint --fix cluster/ansible/k3s-agent.yaml cluster/ansible/node-state.yaml \
+            cluster/ansible/rolling-upgrade.yaml shoebox/shoebox-ansible-setup.yaml
+          yamllint .
 
   policy:
     name: Kubernetes policy (advisory)

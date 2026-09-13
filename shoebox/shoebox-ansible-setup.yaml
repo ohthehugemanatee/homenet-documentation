@@ -39,7 +39,7 @@
 
   vars:
     ansible_user_home: /home/ansible
-    kubectl_version: "1.29.4"  # pin to match cluster version
+    kubectl_version: "1.29.4" # pin to match cluster version
     semaphore_data_dir: /opt/semaphore/data
     semaphore_env_file: /opt/semaphore/.env
     state_dir: /var/lib/ansible-upgrade
@@ -106,7 +106,7 @@
         state: directory
         owner: ansible
         group: ansible
-        mode: '0700'
+        mode: "0700"
       loop:
         - "{{ ansible_user_home }}/.ssh"
         - "{{ ansible_user_home }}/.kube"
@@ -121,7 +121,7 @@
         type: ed25519
         owner: ansible
         group: ansible
-        mode: '0600'
+        mode: "0600"
         regenerate: never
       register: ssh_keypair
 
@@ -162,7 +162,7 @@
         path: "{{ item }}"
         owner: ansible
         group: "1001"
-        mode: '0750'
+        mode: "0750"
         recurse: false
       loop:
         - "{{ ansible_user_home }}/.ssh"
@@ -173,12 +173,12 @@
         path: "{{ item }}"
         owner: ansible
         group: "1001"
-        mode: '0640'
+        mode: "0640"
       loop:
         - "{{ ansible_user_home }}/.ssh/id_ed25519"
         - "{{ ansible_user_home }}/.ssh/id_ed25519.pub"
         - "{{ ansible_user_home }}/.ssh/known_hosts"
-      failed_when: false  # files may not all exist yet
+      failed_when: false # files may not all exist yet
 
     # ── kubectl ───────────────────────────────────────────────────────────────
 
@@ -186,7 +186,7 @@
       ansible.builtin.get_url:
         url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/linux/{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}/kubectl"
         dest: /usr/local/bin/kubectl
-        mode: '0755'
+        mode: "0755"
         owner: root
         group: root
 
@@ -203,7 +203,7 @@
         state: directory
         owner: root
         group: root
-        mode: '0755'
+        mode: "0755"
 
     # ── Credential files ──────────────────────────────────────────────────────
 
@@ -213,7 +213,7 @@
         dest: /etc/ansible/vault-password
         owner: ansible
         group: ansible
-        mode: '0400'
+        mode: "0400"
       no_log: true
 
     - name: Write Pushover credentials file
@@ -224,7 +224,7 @@
         dest: /etc/ansible/pushover.env
         owner: ansible
         group: "1001"
-        mode: '0640'
+        mode: "0640"
       no_log: true
 
     # ── State and log directories ─────────────────────────────────────────────
@@ -235,7 +235,7 @@
         state: directory
         owner: ansible
         group: "1001"
-        mode: '0775'
+        mode: "0775"
 
     - name: Create log dir
       ansible.builtin.file:
@@ -243,7 +243,7 @@
         state: directory
         owner: ansible
         group: ansible
-        mode: '0755'
+        mode: "0755"
 
     # ── Logrotate ─────────────────────────────────────────────────────────────
 
@@ -260,7 +260,7 @@
         dest: /etc/logrotate.d/ansible
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
 
     # ── Semaphore Docker ──────────────────────────────────────────────────────
     # node-state.yaml is scheduled and run by Semaphore (not a separate systemd
@@ -278,7 +278,7 @@
         state: directory
         owner: "1001"
         group: "1001"
-        mode: '0755'
+        mode: "0755"
 
     # Catch malformed SEMAPHORE_ACCESS_KEY_ENCRYPTION values before Semaphore
     # starts — a bad value here causes "illegal base64 data at input byte N"
@@ -315,7 +315,7 @@
         dest: "{{ semaphore_env_file }}"
         owner: root
         group: root
-        mode: '0600'
+        mode: "0600"
       no_log: true
 
     - name: Copy docker-compose.yaml for Semaphore
@@ -324,7 +324,7 @@
         dest: /opt/semaphore/docker-compose.yaml
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
 
     - name: Copy Python requirements for Semaphore container
       ansible.builtin.copy:
@@ -332,7 +332,7 @@
         dest: /opt/semaphore/requirements.txt
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
 
     - name: Install Semaphore Docker systemd service
       ansible.builtin.copy:
@@ -357,7 +357,7 @@
         dest: /etc/systemd/system/semaphore.service
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
 
     - name: Enable and start Semaphore
       ansible.builtin.systemd:

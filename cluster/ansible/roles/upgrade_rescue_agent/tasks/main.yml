@@ -11,10 +11,10 @@
   ansible.builtin.file:
     path: "{{ state_dir }}/rolling-upgrade-failed"
     state: touch
-    mode: '0644'
+    mode: "0644"
   delegate_to: localhost
   become: false
-  failed_when: false  # must not abort rescue — alert tasks below must still run
+  failed_when: false # must not abort rescue — alert tasks below must still run
 
 # A failure before k3s_health means k3s was never disturbed. Undo the drain
 # preparation, but keep the failure flag because the upgrade itself still failed.
@@ -29,7 +29,7 @@
       delegate_to: localhost
       become: false
 
-    - name: Record successful pre-health uncordon  # noqa: var-naming[no-role-prefix]
+    - name: Record successful pre-health uncordon # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         cordon_drain_cordoned: false
   rescue:
@@ -135,7 +135,7 @@
       failed_when: false
       changed_when: true
 
-    - name: Reinstall k3s agent  # noqa: command-instead-of-module
+    - name: Reinstall k3s agent # noqa: command-instead-of-module
       ansible.builtin.shell:
         executable: /bin/bash
         cmd: |
@@ -148,7 +148,7 @@
       changed_when: true
       no_log: true
 
-    - name: Wait for k3s-agent to become active after rebuild  # noqa: command-instead-of-module
+    - name: Wait for k3s-agent to become active after rebuild # noqa: command-instead-of-module
       ansible.builtin.command: systemctl is-active k3s-agent
       register: upgrade_rescue_agent_rebuilt
       until: upgrade_rescue_agent_rebuilt.rc == 0
@@ -225,13 +225,12 @@
           mount | grep -E '/var/lib/kubelet|/run/k3s' || true
       register: upgrade_rescue_agent_diagnostics
       changed_when: false
-      failed_when: false      # must not mask the rebuild failure being reported
+      failed_when: false # must not mask the rebuild failure being reported
       ignore_unreachable: true
 
     - name: Report k3s-agent state
       ansible.builtin.debug:
-        msg: "{{ upgrade_rescue_agent_diagnostics.stdout_lines
-                 | default(['node unreachable, no diagnostics collected']) }}"
+        msg: "{{ upgrade_rescue_agent_diagnostics.stdout_lines | default(['node unreachable, no diagnostics collected']) }}"
 
     - name: Alert CRITICAL — upgrade and rebuild both failed
       ansible.builtin.uri:
