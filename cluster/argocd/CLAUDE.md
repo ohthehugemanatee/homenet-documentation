@@ -6,7 +6,7 @@ One Application manifest per managed workload in `apps/`. File names match the A
 
 - Every Application sets `metadata.namespace: argocd` explicitly.
 - `spec.destination.namespace` matches the workload's actual namespace.
-- **Auto-sync** (prune + self-heal): stable media and utility apps. These get `metadata.finalizers: [resources-finalizer.argocd.argoproj.io]` so removing the Application YAML cascade-deletes the resources.
+- **Auto-sync** (prune + self-heal): stable media and utility apps. These get `metadata.finalizers: [resources-finalizer.argocd.argoproj.io]` so removing the Application YAML cascade-deletes the resources. `traefik-default-tls` is the exception: auto-sync for self-heal, but no finalizer and `prune: false`, so the Certificate it holds survives both.
 - **Manual sync** (no prune, no self-heal): infrastructure and complex stateful apps (nextcloud, collabora). No finalizer — accidental Application deletion must not cascade-delete infrastructure.
 - All manual-sync apps get `notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""` annotation.
 - All auto-sync apps get `on-sync-failed` and `on-health-degraded` notification annotations.

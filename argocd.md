@@ -15,10 +15,13 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Stateful | manual | no | no | nextcloud, collabora |
 | Infrastructure | manual | no | no | cert-manager, longhorn, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
+| Default TLS | auto | yes | no | traefik-default-tls |
 
 **system-upgrade note:** The `system-upgrade` Application is auto-sync. ArgoCD sync waves handle resource ordering automatically: the `plans.upgrade.cattle.io` CRD (wave −1) is established before the controller Deployment (wave 0), which must be ready before the server-plan and agent-plan `Plan` CRs (wave 1). `SYSTEM_UPGRADE_JOB_PRIVILEGED=true` is set by design — upgrade Jobs must replace the k3s binary on the host.
 
 Auto-sync apps self-heal when someone `kubectl edit`s a managed resource. Manual-sync apps alert on drift but wait for operator approval in the ArgoCD UI.
+
+**traefik-default-tls note:** it holds the `berlin-wildcard` Certificate and the `TLSStore` naming it, the certificate every host under `*.berlin.vertesi.com` serves. Self-heal re-creates the Certificate whenever it goes missing from the cluster. Prune is off and the Application carries no finalizer, so neither a sync nor deleting the Application removes it.
 
 ## Access
 

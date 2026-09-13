@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik-default-tls
+  namespace: argocd
+  # No finalizer, so deleting this Application leaves the Certificate standing.
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.pushover: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+    targetRevision: HEAD
+    path: cluster/services
+    directory:
+      include: '{berlin-wildcard-cert.yaml,traefik-default-tls.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    # selfHeal restores a deleted Certificate; prune off keeps git from taking it.
+    automated:
+      prune: false
+      selfHeal: true
