@@ -1,5 +1,6 @@
 ---
 # Monkeyble harness for the tls_cert role only (#364).
+- name: Exercise the tls_cert role
   hosts: shoebox
   gather_facts: false
 
