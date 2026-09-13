@@ -1,6 +1,4 @@
 extends: default
-ignore: |
-  cluster/services/cert-manager.yaml
 rules:
   line-length:
     max: 160

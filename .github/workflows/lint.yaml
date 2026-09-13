@@ -79,6 +79,12 @@ jobs:
         # nothing collects the copy once the volume is gone. Plex transcode
         # leaked 11 BackupVolumes and 27 GiB that way (#277).
         run: python3 .github/scripts/check_ephemeral_volumes.py
+      - name: Assert the Traefik default certificate is managed by ArgoCD
+        # The Secret outlives the Certificate that issued it, so deleting the
+        # Certificate is invisible until the cert expires and every host under
+        # *.berlin.vertesi.com loses TLS at once. A cert-manager teardown did
+        # exactly that in August 2026 (#391).
+        run: python3 .github/scripts/check_default_tls_managed.py
 
   kustomize:
     name: Kustomize builds
@@ -335,5 +341,4 @@ jobs:
             --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignorefile .trivyignore.yaml \
-            --skip-files "cluster/services/cert-manager.yaml" \
             cluster

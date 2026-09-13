@@ -67,6 +67,7 @@ kubectl -n cert-manager get pods
 kubectl get clusterissuer letsencrypt-prod \
   -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'   # True
 kubectl get certificate -A          # every entry READY=True
+kubectl -n kube-system get certificate berlin-wildcard   # the default cert
 kubectl get challenge -A            # empty in steady state
 ```
 
@@ -90,8 +91,16 @@ What survives, and why this is safe:
 
 What does not survive: every `Certificate`, `CertificateRequest`, `Order`,
 `Challenge` and `ClusterIssuer`, because deleting a CRD deletes its objects.
-ingress-shim rebuilds the Certificates from Ingress annotations; the ClusterIssuer
-is re-applied by hand.
+Each comes back a different way. ingress-shim rebuilds the Certificates it
+derives from Ingress annotations. The `berlin-wildcard` Certificate has no
+Ingress behind it, so ingress-shim cannot rebuild it; the `traefik-default-tls`
+Application does, on self-heal. The ClusterIssuer is re-applied by hand.
+
+`berlin-wildcard` is the certificate Traefik serves for every host under
+`*.berlin.vertesi.com` that has none of its own, named by `TLSStore/default`.
+Losing it takes TLS off argocd, grafana, longhorn, semaphore, unifi and the
+rest at the same moment, which is what happened after the August 2026 teardown
+(#391).
 
 ```sh
 # 1. Back up the ACME account key and the issued certs, in case of surprises.
@@ -126,7 +135,9 @@ kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180
 #    recreates it.
 kubectl apply -f cluster/services/letsencrypt-issuer-prod.yaml
 
-# 6. Watch ingress-shim rebuild the Certificates.
+# 6. Watch ingress-shim rebuild the Certificates, and ArgoCD rebuild
+#    berlin-wildcard. Expect all of them; a missing berlin-wildcard means the
+#    traefik-default-tls Application did not self-heal, so sync it by hand.
 kubectl get certificate -A -w
 ```
 
@@ -141,10 +152,10 @@ certs remain valid.
 
 ## History
 
-Until August 2026 cert-manager was a vendored upstream manifest at
-`cluster/services/cert-manager.yaml`, pinned to v1.1.0 and — because nothing ever
-applied it — four years out of step with the v1.7.2 the cluster actually ran
-(installed by hand in March 2022).
+Until August 2026 cert-manager was a vendored upstream manifest under
+`cluster/services/`, pinned to v1.1.0 and, because nothing ever applied it,
+four years out of step with the v1.7.2 the cluster actually ran (installed by
+hand in March 2022). The dead file was removed in #391.
 
 v1.7.2's Cloudflare solver built its stale-record cleanup URL from a per-record
 `zone_id` field that Cloudflare's API stopped returning, emitting

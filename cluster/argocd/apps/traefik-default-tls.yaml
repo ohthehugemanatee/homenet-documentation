@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik-default-tls
+  namespace: argocd
+  # No finalizer, and prune is off below: neither deleting this Application nor
+  # removing the manifests from git may delete the Certificate. Every host
+  # under *.berlin.vertesi.com serves this one certificate.
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.pushover: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+    targetRevision: HEAD
+    path: cluster/services
+    directory:
+      include: '{berlin-wildcard-cert.yaml,traefik-default-tls.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    # selfHeal, unlike the rest of the infrastructure tier. A missing
+    # Certificate is the drift that cost every internal host its TLS in #391,
+    # and re-creating two leaf objects carries none of the blast radius that
+    # keeps cert-manager and longhorn on manual sync.
+    automated:
+      prune: false
+      selfHeal: true
