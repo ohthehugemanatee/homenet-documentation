@@ -1,8 +1,6 @@
 ---
-# Scenario: a short-dated fixture cert (combined/Pi-hole format) must fail the
-# run rather than deliver quietly — the guard against a delivery job that
-# stops running and nobody notices until the cert expires.
-
+# Scenario: a short-dated fixture cert (combined/Pi-hole format) fails the run
+#
 monkeyble_scenarios:
   tls_cert_short_dated_fails:
     tasks_to_test:
