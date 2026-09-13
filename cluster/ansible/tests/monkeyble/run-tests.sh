@@ -17,8 +17,7 @@ cd "$ANSIBLE_DIR"
 # Enable the hpe.monkeyble callback plugin (installed via ansible-galaxy collection)
 export ANSIBLE_CALLBACKS_ENABLED=hpe.monkeyble.monkeyble_callback
 
-# test-tls-cert.yaml lives under tests/monkeyble/, not ANSIBLE_DIR, so the
-# default playbook-relative role search misses roles/tls_cert.
+# test-tls-cert.yaml lives under tests/monkeyble/, not ANSIBLE_DIR.
 export ANSIBLE_ROLES_PATH="${ANSIBLE_DIR}/roles"
 
 # _play <name> <playbook> <vars_file> [extra ansible-playbook args...]
