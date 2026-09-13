@@ -47,10 +47,22 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
                  "ANTHROPIC", "GH_TOKEN", "GITHUB_TOKEN", "SECRET")
 
 
+ANSIBLE_TARGETS = ["k3s-agent.yaml", "node-state.yaml", "rolling-upgrade.yaml",
+                   "../../shoebox/shoebox-ansible-setup.yaml"]
+
 # Deterministic fixers, keyed by the name of the CI job that failed. `fix` runs,
 # then `check` must pass on its result; anything less falls through to the model.
-# Each entry is {"setup": [argv, ...], "fix": argv, "check": argv, "cwd": path}.
-FIXERS = {}
+FIXERS = {
+    "Ansible playbooks": {
+        "setup": [
+            ["pip", "install", "ansible", "ansible-lint", "yamllint"],
+            ["ansible-galaxy", "collection", "install", "-r", "requirements.yaml"],
+        ],
+        "fix": ["ansible-lint", "--fix"] + ANSIBLE_TARGETS,
+        "check": ["ansible-lint"] + ANSIBLE_TARGETS,
+        "cwd": "cluster/ansible",
+    },
+}
 
 
 MODEL = "claude-sonnet-5"
@@ -182,12 +194,33 @@ def _revert(paths):
         subprocess.run(["git", "checkout", "--"] + paths, capture_output=True, text=True)
 
 
-def deterministic_pass(job_names):
+def _yaml_clean(paths):
+    """Changed YAML still satisfies the repo-wide gating yamllint.
+
+    `ansible-lint --fix` rewrites `{a: 1}` to `{ a: 1 }`, which .yamllint.yaml
+    rejects, so a fixer can turn a red Ansible job into a red YAML one. Fails
+    closed when yamllint is absent.
+    """
+    yamls = [p for p in paths if p.endswith((".yaml", ".yml"))]
+    if not yamls:
+        return True
+    try:
+        r = subprocess.run(["yamllint"] + yamls, capture_output=True, text=True)
+    except FileNotFoundError:
+        print("  yamllint unavailable, refusing the fix")
+        return False
+    if r.returncode != 0:
+        print(f"  yamllint rejects the result:\n{r.stdout.strip()[:500]}")
+    return r.returncode == 0
+
+
+def deterministic_pass(job_names, in_scope):
     """Run the fixers matching the failed jobs, keeping only verified repairs.
 
-    A fixer's edits survive only if they stay out of `.github/` and its check
-    then passes; otherwise they are reverted so the model sees the tree the
-    logs describe. Returns the paths left modified.
+    A fixer's edits survive only where they land on a file the PR already
+    touches, stay out of `.github/`, and leave both its own check and yamllint
+    passing. Everything else is reverted so the model sees the tree the logs
+    describe. Returns the paths left modified.
     """
     fixed = []
     for name in job_names:
@@ -218,9 +251,24 @@ def deterministic_pass(job_names):
             _revert(paths)
             continue
 
+        # ansible-lint --fix reformats every file it is pointed at, not just the
+        # one that failed; outside the PR's own diff that is an unrelated rewrite.
+        stray = [p for p in paths if p not in in_scope]
+        if stray:
+            print(f"  reverting {len(stray)} file(s) outside the PR diff")
+            _revert(stray)
+            paths = [p for p in paths if p in in_scope]
+        if not paths:
+            print("  nothing left in scope")
+            continue
+
         r = subprocess.run(f["check"], cwd=cwd, capture_output=True, text=True)
         if r.returncode != 0:
             print("  check still fails, reverting")
+            _revert(paths)
+            continue
+
+        if not _yaml_clean(paths):
             _revert(paths)
             continue
 
@@ -307,7 +355,10 @@ def main():
         return
 
     # Deterministic fixers first — a verified repair costs no tokens
-    prepass = deterministic_pass(failed_job_names(repo, run_id))
+    r = subprocess.run(["gh", "pr", "diff", pr_number, "--name-only", "--repo", repo],
+                       capture_output=True, text=True)
+    in_scope = set(r.stdout.split()) if r.returncode == 0 else set()
+    prepass = deterministic_pass(failed_job_names(repo, run_id), in_scope)
     if prepass:
         finish(repo, pr_number, head_ref, prepass,
                "Fixed by deterministic fixers. No model call was made.")

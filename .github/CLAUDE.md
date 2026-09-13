@@ -20,7 +20,7 @@
 - **Read-only bash allowlist stays in place.** No `curl`, no commands that can exfiltrate secrets.
 - **Same-repo PRs only.** No forks — write permission would leak.
 - **Autofix commits MUST carry `[autofix]` in the subject** so this workflow does not re-loop on its own pushes. The marker check happens early; removing it deadlocks CI.
-- **A deterministic fixer's output is never trusted on sight.** `deterministic_pass()` keeps a fixer's edits only where they stay out of `.github/` and leave the fixer's own check passing; anything else is reverted before the model runs, so a fixer can never make the tree worse than the logs describe.
+- **A deterministic fixer's output is never trusted on sight.** `deterministic_pass()` keeps a fixer's edits only where they land on a file the PR already touches, stay out of `.github/`, and leave both the fixer's own check and `yamllint` passing; anything else is reverted. `ansible-lint --fix` reformats every file it is pointed at and emits brace spacing `.yamllint.yaml` rejects, so without those guards a red Ansible job becomes a red YAML job plus an unrelated 16-file rewrite.
 - Any change to `autofix.py` needs a spec + a dry-run before merge.
 
 ## Commit subject markers
