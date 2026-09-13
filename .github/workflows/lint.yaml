@@ -259,6 +259,35 @@ jobs:
         # would otherwise enable: it reports 23 pre-existing findings (#396).
         run: actionlint -shellcheck=
 
+  hadolint:
+    name: Dockerfiles
+    runs-on: ubuntu-latest
+    env:
+      HADOLINT_VERSION: 2.14.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache hadolint binary
+        id: cache-hadolint
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/hadolint
+          key: hadolint-${{ env.HADOLINT_VERSION }}
+      - name: Install hadolint
+        if: steps.cache-hadolint.outputs.cache-hit != 'true'
+        # 2.14.0, not the newer 2.15.0, because 2.15.0 publishes no checksum.
+        # The checksum file names the asset in lowercase, so rebuild the line.
+        run: |
+          curl -fsSLo /usr/local/bin/hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64"
+          curl -fsSLo /tmp/hadolint.sha256 \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64.sha256"
+          echo "$(cut -d' ' -f1 /tmp/hadolint.sha256)  /usr/local/bin/hadolint" | sha256sum -c -
+          chmod +x /usr/local/bin/hadolint
+      - name: Print hadolint version
+        run: hadolint --version
+      - name: Lint Dockerfiles
+        run: hadolint $(git ls-files 'cluster/Dockerfiles/*Dockerfile')
+
   ansible:
     name: Ansible playbooks
     runs-on: ubuntu-latest

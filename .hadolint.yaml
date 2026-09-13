@@ -1,5 +1,5 @@
 failure-threshold: error
-ignore:
+ignored:
   - DL3007
   - DL3008
   - DL3015
