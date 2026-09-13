@@ -191,6 +191,10 @@ class YamlGuardTest(unittest.TestCase):
         good = self.write('good.yaml', '---\nitems:\n  - {src: a, dest: b}\n')
         self.assertTrue(autofix._yaml_clean([good]))
 
+    def test_two_space_braces_are_rejected(self):
+        bad = self.write('bad.yaml', '---\nitems:\n  - {  src: a, dest: b  }\n')
+        self.assertFalse(autofix._yaml_clean([bad]))
+
     def test_missing_yamllint_fails_closed(self):
         with mock.patch.object(autofix.subprocess, 'run', side_effect=FileNotFoundError):
             self.assertFalse(autofix._yaml_clean(['x.yaml']))
