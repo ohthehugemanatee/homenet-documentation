@@ -303,7 +303,6 @@ def main():
         print("Head commit is already an autofix, skipping")
         return
 
-    # Deterministic fixers first — a verified repair costs no tokens
     prepass = deterministic_pass(failed_job_names(repo, run_id))
     if prepass:
         finish(repo, pr_number, head_ref, prepass,
