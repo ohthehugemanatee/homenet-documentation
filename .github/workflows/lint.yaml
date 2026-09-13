@@ -229,6 +229,36 @@ jobs:
           print(f"OK :: all {len(producers)} PR check names have exactly one producer")
           PY
 
+  actionlint:
+    name: GitHub Actions workflows
+    runs-on: ubuntu-latest
+    env:
+      ACTIONLINT_VERSION: 1.7.7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache actionlint binary
+        id: cache-actionlint
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/actionlint
+          key: actionlint-${{ env.ACTIONLINT_VERSION }}
+      - name: Install actionlint
+        if: steps.cache-actionlint.outputs.cache-hit != 'true'
+        run: |
+          TARBALL="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLo "/tmp/${TARBALL}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${TARBALL}"
+          curl -fsSLo /tmp/actionlint.checksums \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          grep "${TARBALL}$" /tmp/actionlint.checksums | (cd /tmp && sha256sum -c -)
+          tar -xzf "/tmp/${TARBALL}" -C /usr/local/bin actionlint
+      - name: Print actionlint version
+        run: actionlint --version
+      - name: Lint workflows
+        # -shellcheck= disables the shellcheck integration, which the runner
+        # would otherwise enable: it reports 23 pre-existing findings (#396).
+        run: actionlint -shellcheck=
+
   ansible:
     name: Ansible playbooks
     runs-on: ubuntu-latest
