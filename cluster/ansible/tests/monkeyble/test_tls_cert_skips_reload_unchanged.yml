@@ -1,8 +1,5 @@
 ---
-# Scenario: re-run against a destination that already holds the same cert and
-# key (seeded by run-tests.sh from the same valid fixture). copy's checksum
-# compare reports no change, so the reload command must not fire.
-
+# Scenario: re-run when a destination already has the same cert+key is no-op
 monkeyble_scenarios:
   tls_cert_skips_reload_unchanged:
     tasks_to_test:
