@@ -1,5 +1,4 @@
-"""Pre-pass tests. Fixers run against a real git repo so the revert path and
-the `.github/` guard are exercised as git, not as mocks."""
+"""Pre-pass tests. Fixers run against a real git repo."""
 
 import json
 import os
