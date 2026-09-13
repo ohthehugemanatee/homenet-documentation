@@ -1,5 +1,5 @@
 ---
 # Scratch file: probes the autofix loop end to end (#374, #385).
 # Deleted with the branch; never merged.
-probe: autofix validation   
+probe: autofix validation
 note: trailing whitespace above, no newline below
