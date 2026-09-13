@@ -1,0 +1,10 @@
+---
+# Deliver certs "separate" (tls_cert_dest_cert and tls_cert_dest_key files) or "combined" (fullchain + key in one PEM)
+tls_cert_format: separate
+
+tls_cert_owner: root
+tls_cert_group: root
+tls_cert_mode: "0600"
+
+# Alert threshold: minimum cert NotAfter value before failing the run.
+tls_cert_min_days: 30

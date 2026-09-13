@@ -1,0 +1,93 @@
+---
+- name: Assert the caller supplied the per-host contract
+  ansible.builtin.assert:
+    that:
+      - tls_cert_secret is defined
+      - tls_cert_namespace is defined
+      - tls_cert_dest_cert is defined
+      - tls_cert_format in ['separate', 'combined']
+      - tls_cert_format == 'combined' or tls_cert_dest_key is defined
+      - tls_cert_reload_command is defined
+    fail_msg: >-
+      tls_cert requires tls_cert_secret, tls_cert_namespace, tls_cert_dest_cert
+      and tls_cert_reload_command (plus tls_cert_dest_key when tls_cert_format
+      is 'separate')
+
+- name: Read the TLS Secret
+  kubernetes.core.k8s_info:
+    kind: Secret
+    api_version: v1
+    name: "{{ tls_cert_secret }}"
+    namespace: "{{ tls_cert_namespace }}"
+    kubeconfig: "{{ k8s_kubeconfig }}"
+  delegate_to: localhost
+  become: false
+  no_log: true
+  register: tls_cert_secret_info
+
+- name: Assert the Secret exists
+  ansible.builtin.assert:
+    that:
+      - tls_cert_secret_info.resources | length == 1
+    fail_msg: "Secret {{ tls_cert_namespace }}/{{ tls_cert_secret }} not found"
+
+- name: Decode the certificate material from the Secret
+  ansible.builtin.set_fact:
+    tls_cert_crt: "{{ tls_cert_secret_info.resources[0].data['tls.crt'] | b64decode }}"
+    tls_cert_key: "{{ tls_cert_secret_info.resources[0].data['tls.key'] | b64decode }}"
+  no_log: true
+
+- name: Deliver the certificate
+  ansible.builtin.copy:
+    content: "{{ tls_cert_crt }}"
+    dest: "{{ tls_cert_dest_cert }}"
+    owner: "{{ tls_cert_owner }}"
+    group: "{{ tls_cert_group }}"
+    mode: "{{ tls_cert_mode }}"
+  register: tls_cert_cert_copy
+  when: tls_cert_format == 'separate'
+
+- name: Deliver the private key
+  ansible.builtin.copy:
+    content: "{{ tls_cert_key }}"
+    dest: "{{ tls_cert_dest_key }}"
+    owner: "{{ tls_cert_owner }}"
+    group: "{{ tls_cert_group }}"
+    mode: "{{ tls_cert_mode }}"
+  register: tls_cert_key_copy
+  no_log: true
+  when: tls_cert_format == 'separate'
+
+- name: Deliver the combined fullchain and key
+  ansible.builtin.copy:
+    content: "{{ tls_cert_crt }}{{ tls_cert_key }}"
+    dest: "{{ tls_cert_dest_cert }}"
+    owner: "{{ tls_cert_owner }}"
+    group: "{{ tls_cert_group }}"
+    mode: "{{ tls_cert_mode }}"
+  register: tls_cert_combined_copy
+  no_log: true
+  when: tls_cert_format == 'combined'
+
+# ansible.builtin.copy compares checksums, so an unchanged Secret is a
+# no-change run here and the reload below does not fire.
+- name: Run the reload command
+  ansible.builtin.command: "{{ tls_cert_reload_command }}"
+  changed_when: true
+  when: >-
+    (tls_cert_cert_copy is defined and tls_cert_cert_copy.changed)
+    or (tls_cert_key_copy is defined and tls_cert_key_copy.changed)
+    or (tls_cert_combined_copy is defined and tls_cert_combined_copy.changed)
+
+- name: Read the delivered certificate's expiry
+  community.crypto.x509_certificate_info:
+    path: "{{ tls_cert_dest_cert }}"
+  register: tls_cert_info
+
+- name: Assert the delivered certificate still has life left
+  ansible.builtin.assert:
+    that:
+      - (tls_cert_info.not_after | to_datetime('%Y%m%d%H%M%SZ') - now(utc=true)).days >= tls_cert_min_days | int
+    fail_msg: >-
+      {{ tls_cert_dest_cert }} expires {{ tls_cert_info.not_after }}, within
+      tls_cert_min_days ({{ tls_cert_min_days }})
