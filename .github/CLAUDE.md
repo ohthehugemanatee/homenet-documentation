@@ -9,7 +9,7 @@
 
   The gate is **substantive**: the reviewer returns structured findings via a forced `report_review` tool call, and `scripts/review_verdict.py` decides. A finding blocks merge when it is `HIGH` **and** confidence is `High` or `Medium` — that policy is two constants at the top of that module, unit-tested in `scripts/tests/test_review_verdict.py`. The rule **fails closed**: an unparseable severity, a missing field, or a response truncated by `max_tokens` blocks rather than passes, so a malformed reply can never look like a clean review. `review/override` on the PR waives a blocking finding (the review is still posted); recurring false positives belong in `agentic-review-exceptions.yaml` instead.
 - `workflows/pr-size-gate.yaml` — soft (≥200 LOC) and hard (≥400 LOC) PR size limits; `size/override` label bypasses the soft limit. Counting and the verdict live in `scripts/pr_size.js`, unit-tested in `scripts/tests/pr_size.test.js`; the workflow `require()`s it from the workspace, which is why the job checks out. It counts per file because `adr/` is exempt (ADR-0001) and `pr.additions`/`pr.deletions` cannot be split by path. It fires on `labeled`/`unlabeled` as well as the SHA-changing events, so it can run several times against one head SHA; it therefore **updates** its `PR size check` check run in place instead of creating a new one each time (#245). The job is named `PR size gate`, deliberately *not* `PR size check`, so it is not a second producer of the gate's name.
-- `workflows/autofix.yaml` — fires on `lint.yaml` / `test-cluster.yaml` failure; runs `scripts/autofix.py` (Claude agentic loop: read_file / write_file / run_bash; commits + comments).
+- `workflows/autofix.yaml` — fires on `lint.yaml` / `test-cluster.yaml` failure; runs `scripts/autofix.py`. A deterministic pre-pass runs first, keyed off the failing job's name in `FIXERS`; the model runs only when it yields nothing. The model half is an agentic loop: read_file / write_file / run_bash; commits + comments.
 
 **Check names are gates — one producer each.** Branch protection matches required checks by name, so two producers of one name make the gate race itself and strand a red check run that no re-run can clear (#236, #245). `lint.yaml`'s `github-scripts` job enforces this across every `pull_request` workflow. A job whose `name:` is the check name and a `checks.create` using that name both count; when a workflow can run more than once per SHA, the single producer must update in place.
 
@@ -20,6 +20,7 @@
 - **Read-only bash allowlist stays in place.** No `curl`, no commands that can exfiltrate secrets.
 - **Same-repo PRs only.** No forks — write permission would leak.
 - **Autofix commits MUST carry `[autofix]` in the subject** so this workflow does not re-loop on its own pushes. The marker check happens early; removing it deadlocks CI.
+- **A deterministic fixer's output is verified before it is kept.** `deterministic_pass()` keeps edits only where they stay clear of `.github/` and leave the fixer's own check passing. Everything else is reverted before the model runs.
 - Any change to `autofix.py` needs a spec + a dry-run before merge.
 
 ## Commit subject markers
