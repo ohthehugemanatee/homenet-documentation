@@ -47,9 +47,7 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
                  "ANTHROPIC", "GH_TOKEN", "GITHUB_TOKEN", "SECRET")
 
 
-# Deterministic fixers, keyed by the name of the CI job that failed. `fix` runs,
-# then `check` must pass on its result; anything less falls through to the model.
-# Each entry is {"setup": [argv, ...], "fix": argv, "check": argv, "cwd": path}.
+# Keyed by failing CI job name; {"setup": [argv], "fix": argv, "check": argv, "cwd": path}.
 FIXERS = {}
 
 
@@ -183,11 +181,10 @@ def _revert(paths):
 
 
 def deterministic_pass(job_names):
-    """Run the fixers matching the failed jobs, keeping only verified repairs.
+    """Apply the fixers for these jobs, and return the paths they repaired.
 
-    A fixer's edits survive only if they stay out of `.github/` and its check
-    then passes; otherwise they are reverted so the model sees the tree the
-    logs describe. Returns the paths left modified.
+    Edits survive only when they stay clear of `.github/` and the fixer's own
+    check passes on the result. Everything else is reverted.
     """
     fixed = []
     for name in job_names:

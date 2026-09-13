@@ -1,9 +1,5 @@
-"""Tests for the deterministic pre-pass that runs before the agentic loop.
-
-The fixers are driven through a real git repository rather than a mocked
-subprocess, because the revert path and the `.github/` guard are the parts
-that must not be wrong and both are git behaviour.
-"""
+"""Pre-pass tests. Fixers run against a real git repo so the revert path and
+the `.github/` guard are exercised as git, not as mocks."""
 
 import json
 import os
@@ -146,6 +142,54 @@ class FailedJobNamesTest(unittest.TestCase):
         with mock.patch.object(autofix.subprocess, 'run') as run:
             run.return_value = subprocess.CompletedProcess([], 1, stdout='', stderr='x')
             self.assertEqual(autofix.failed_job_names('o/r', '1'), [])
+
+
+class NoApiCallTest(unittest.TestCase):
+    def run_main(self, prepass):
+        event = {'workflow_run': {'id': 7, 'head_sha': 'abc',
+                                  'pull_requests': [{'number': 3,
+                                                     'head': {'ref': 'topic'}}]}}
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+            json.dump(event, f)
+            path = f.name
+        self.addCleanup(os.unlink, path)
+
+        env = {'GITHUB_EVENT_PATH': path, 'REPO': 'o/r'}
+        with mock.patch.dict(os.environ, env, clear=False), \
+                mock.patch.object(autofix, 'head_repo_matches', return_value=True), \
+                mock.patch.object(autofix, 'failed_job_names', return_value=['j']), \
+                mock.patch.object(autofix, 'deterministic_pass', return_value=prepass), \
+                mock.patch.object(autofix, 'claude') as claude, \
+                mock.patch.object(autofix, 'finish') as finish, \
+                mock.patch.object(autofix.subprocess, 'run') as run:
+            run.return_value = subprocess.CompletedProcess(
+                [], 0, stdout='ansible-lint failed', stderr='')
+            claude.return_value = {'content': [], 'stop_reason': 'end_turn',
+                                   'usage': {}}
+            autofix.main()
+        return claude, finish
+
+    def test_successful_prepass_skips_the_api(self):
+        claude, finish = self.run_main(['cluster/ansible/node-state.yaml'])
+        claude.assert_not_called()
+        finish.assert_called_once()
+        self.assertEqual(finish.call_args.args[3], ['cluster/ansible/node-state.yaml'])
+
+    def test_empty_prepass_falls_through_to_the_loop(self):
+        claude, _ = self.run_main([])
+        self.assertTrue(claude.called)
+
+
+class CommitMarkerTest(unittest.TestCase):
+    def test_commit_subject_carries_the_marker(self):
+        with mock.patch.object(autofix.subprocess, 'run') as run:
+            run.return_value = subprocess.CompletedProcess([], 0, stdout='', stderr='')
+            autofix.finish('o/r', '3', 'topic', ['play.yaml'], 'why')
+        subjects = [c.args[0][c.args[0].index('-m') + 1]
+                    for c in run.call_args_list
+                    if c.args and c.args[0][:2] == ['git', 'commit']]
+        self.assertEqual(len(subjects), 1)
+        self.assertIn('[autofix]', subjects[0].split('\n')[0])
 
 
 if __name__ == '__main__':
