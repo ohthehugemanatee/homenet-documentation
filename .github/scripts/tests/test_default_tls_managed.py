@@ -1,8 +1,7 @@
 """Tests for check_default_tls_managed.
 
-The failure this guards is silent for weeks. Deleting the Certificate leaves
-the issued Secret in place, Traefik keeps serving it, and nothing reports a
-problem until the certificate expires and every internal host breaks at once.
+Deleting the Certificate leaves the Secret in place, serving
+happily until every internal host breaks at once.
 """
 import os
 import sys
