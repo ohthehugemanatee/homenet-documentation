@@ -152,10 +152,10 @@ certs remain valid.
 
 ## History
 
-Until August 2026 cert-manager was a vendored upstream manifest under
-`cluster/services/`, pinned to v1.1.0 and, because nothing ever applied it,
-four years out of step with the v1.7.2 the cluster actually ran (installed by
-hand in March 2022). The dead file was removed in #391.
+Until August 2026 cert-manager was a vendored upstream manifest at
+`cluster/services/cert-manager.yaml`, pinned to v1.1.0 and — because nothing ever
+applied it — four years out of step with the v1.7.2 the cluster actually ran
+(installed by hand in March 2022).
 
 v1.7.2's Cloudflare solver built its stale-record cleanup URL from a per-record
 `zone_id` field that Cloudflare's API stopped returning, emitting
