@@ -25,6 +25,7 @@ MANIFEST_GLOB = 'cluster/**/*.yaml'
 APP_GLOB = 'cluster/argocd/apps/*.yaml'
 CERT_GROUP = 'cert-manager.io/'
 STORE_GROUP = 'traefik.io/'
+SECRET_REF = 'secretName'
 
 
 def expand_braces(pattern):
@@ -88,21 +89,22 @@ def covers(source, rel_path):
 def problems(stores, certificates, sources):
     """Return human-readable defects across the whole repo.
 
-    stores and certificates are (path, name, secret_name) triples; sources are
-    the directory sources of every Application.
+    stores and certificates are (path, name, cert_ref) triples, where cert_ref
+    is the name of the Secret holding the certificate, never its contents.
+    sources are the directory sources of every Application.
     """
     found = []
-    for path, name, secret in stores:
+    for path, name, cert_ref in stores:
         if not any(covers(s, path) for s in sources):
             found.append(
                 f'{path}: TLSStore {name!r} is not reconciled by any ArgoCD '
                 f'Application, so nothing restores it once it is deleted')
 
-        issuers = [c for c in certificates if c[2] == secret]
+        issuers = [c for c in certificates if c[2] == cert_ref]
         if not issuers:
             found.append(
-                f'{path}: TLSStore {name!r} serves Secret {secret!r} by '
-                f'default, and no Certificate manifest in cluster/ issues it')
+                f'{path}: TLSStore {name!r} serves {cert_ref!r} by default, '
+                f'and no Certificate manifest in cluster/ issues it')
             continue
 
         if any(any(covers(s, cert_path) for s in sources)
@@ -111,9 +113,9 @@ def problems(stores, certificates, sources):
 
         listed = ', '.join(sorted(c[0] for c in issuers))
         found.append(
-            f'{path}: TLSStore {name!r} serves Secret {secret!r} by default, '
-            f'but the Certificate issuing it ({listed}) is not reconciled by '
-            f'any ArgoCD Application. A cert-manager teardown deletes it and '
+            f'{path}: TLSStore {name!r} serves {cert_ref!r} by default, but '
+            f'the Certificate issuing it ({listed}) is not reconciled by any '
+            f'ArgoCD Application. A cert-manager teardown deletes it and '
             f'nothing brings it back (#391)')
 
     return found
@@ -146,13 +148,15 @@ def main():
         if not isinstance(spec, dict):
             continue
 
+        # Both fields hold the name of a Secret, not its contents.
         if doc.get('kind') == 'TLSStore' and api.startswith(STORE_GROUP):
-            secret = (spec.get('defaultCertificate') or {}).get('secretName')
-            if secret:
-                stores.append((rel, name, secret))
+            cert_ref = (spec.get('defaultCertificate') or {}).get(SECRET_REF)
+            if cert_ref:
+                stores.append((rel, name, cert_ref))
         elif doc.get('kind') == 'Certificate' and api.startswith(CERT_GROUP):
-            if spec.get('secretName'):
-                certificates.append((rel, name, spec['secretName']))
+            cert_ref = spec.get(SECRET_REF)
+            if cert_ref:
+                certificates.append((rel, name, cert_ref))
 
     sources = [s for _, doc in read(root, APP_GLOB) for s in app_sources(doc)]
 
