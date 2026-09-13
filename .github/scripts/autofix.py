@@ -50,8 +50,7 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
 ANSIBLE_TARGETS = ["k3s-agent.yaml", "node-state.yaml", "rolling-upgrade.yaml",
                    "../../shoebox/shoebox-ansible-setup.yaml"]
 
-# Deterministic fixers, keyed by the name of the CI job that failed. `fix` runs,
-# then `check` must pass on its result; anything less falls through to the model.
+# Keyed by failing CI job name; {"setup": [argv], "fix": argv, "check": argv, "cwd": path}.
 FIXERS = {
     "Ansible playbooks": {
         "setup": [
@@ -195,11 +194,9 @@ def _revert(paths):
 
 
 def _yaml_clean(paths):
-    """Changed YAML still satisfies the repo-wide gating yamllint.
+    """Changed YAML satisfies the repo-wide gating yamllint.
 
-    `ansible-lint --fix` rewrites `{a: 1}` to `{ a: 1 }`, which .yamllint.yaml
-    rejects, so a fixer can turn a red Ansible job into a red YAML one. Fails
-    closed when yamllint is absent.
+    Fails closed when yamllint is absent.
     """
     yamls = [p for p in paths if p.endswith((".yaml", ".yml"))]
     if not yamls:
@@ -215,12 +212,11 @@ def _yaml_clean(paths):
 
 
 def deterministic_pass(job_names, in_scope):
-    """Run the fixers matching the failed jobs, keeping only verified repairs.
+    """Apply the fixers for these jobs, and return the paths they repaired.
 
-    A fixer's edits survive only where they land on a file the PR already
-    touches, stay out of `.github/`, and leave both its own check and yamllint
-    passing. Everything else is reverted so the model sees the tree the logs
-    describe. Returns the paths left modified.
+    Edits survive only on files the PR already touches, clear of `.github/`,
+    and leaving both the fixer's check and yamllint passing. Everything else
+    is reverted.
     """
     fixed = []
     for name in job_names:
@@ -251,8 +247,7 @@ def deterministic_pass(job_names, in_scope):
             _revert(paths)
             continue
 
-        # ansible-lint --fix reformats every file it is pointed at, not just the
-        # one that failed; outside the PR's own diff that is an unrelated rewrite.
+        # ansible-lint --fix reformats every file it is pointed at.
         stray = [p for p in paths if p not in in_scope]
         if stray:
             print(f"  reverting {len(stray)} file(s) outside the PR diff")

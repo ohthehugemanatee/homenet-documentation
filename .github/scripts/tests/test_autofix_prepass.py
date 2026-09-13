@@ -1,9 +1,5 @@
-"""Tests for the deterministic pre-pass that runs before the agentic loop.
-
-The fixers are driven through a real git repository rather than a mocked
-subprocess, because the revert path and the `.github/` guard are the parts
-that must not be wrong and both are git behaviour.
-"""
+"""Pre-pass tests. Fixers run against a real git repo so the revert path and
+the `.github/` guard are exercised as git, not as mocks."""
 
 import json
 import os
@@ -162,7 +158,6 @@ class ScopeAndYamlGuardTest(RepoFixture):
         self.assertEqual(self.dirty(), '')
 
     def test_yamllint_failure_reverts_the_fix(self):
-        """The brace transform ansible-lint applies is exactly this case."""
         with mock.patch.dict(
             autofix.FIXERS,
             {'Ansible playbooks': fixer("printf 'a: {b: 1}\\n' > play.yaml")},
@@ -216,8 +211,6 @@ class FailedJobNamesTest(unittest.TestCase):
 
 
 class FixerTableTest(unittest.TestCase):
-    """The shipped table, as opposed to the injected ones above."""
-
     def test_ansible_job_name_matches_lint_yaml(self):
         root = os.path.join(os.path.dirname(__file__), '..', '..')
         with open(os.path.join(root, 'workflows', 'lint.yaml')) as f:
@@ -227,8 +220,6 @@ class FixerTableTest(unittest.TestCase):
                           f'no job in lint.yaml is named {name!r}')
 
     def test_ansible_targets_match_lint_yaml(self):
-        """A playbook added to CI but not here would leave `check` passing on a
-        tree CI still rejects, and autofix would push it."""
         root = os.path.join(os.path.dirname(__file__), '..', '..')
         with open(os.path.join(root, 'workflows', 'lint.yaml')) as f:
             lint = f.read()
@@ -247,8 +238,6 @@ class FixerTableTest(unittest.TestCase):
 
 
 class NoApiCallTest(unittest.TestCase):
-    """#376's acceptance criterion: a verified deterministic repair spends nothing."""
-
     def run_main(self, prepass):
         event = {'workflow_run': {'id': 7, 'head_sha': 'abc',
                                   'pull_requests': [{'number': 3,
@@ -285,8 +274,6 @@ class NoApiCallTest(unittest.TestCase):
 
 
 class CommitMarkerTest(unittest.TestCase):
-    """`[autofix]` in the subject is the anti-loop guard; see .github/CLAUDE.md."""
-
     def test_commit_subject_carries_the_marker(self):
         with mock.patch.object(autofix.subprocess, 'run') as run:
             run.return_value = subprocess.CompletedProcess([], 0, stdout='', stderr='')
