@@ -92,15 +92,12 @@ What survives, and why this is safe:
 What does not survive: every `Certificate`, `CertificateRequest`, `Order`,
 `Challenge` and `ClusterIssuer`, because deleting a CRD deletes its objects.
 Each comes back a different way. ingress-shim rebuilds the Certificates it
-derives from Ingress annotations. The `berlin-wildcard` Certificate has no
-Ingress behind it, so ingress-shim cannot rebuild it; the `traefik-default-tls`
-Application does, on self-heal. The ClusterIssuer is re-applied by hand.
+derives from Ingress annotations. `berlin-wildcard` has no Ingress behind it
+and is rebuilt by the `traefik-default-tls` Application on self-heal. The
+ClusterIssuer is re-applied by hand.
 
-`berlin-wildcard` is the certificate Traefik serves for every host under
-`*.berlin.vertesi.com` that has none of its own, named by `TLSStore/default`.
-Losing it takes TLS off argocd, grafana, longhorn, semaphore, unifi and the
-rest at the same moment, which is what happened after the August 2026 teardown
-(#391).
+`berlin-wildcard` is the certificate `TLSStore/default` names, which Traefik
+serves for every host under `*.berlin.vertesi.com` that has none of its own.
 
 ```sh
 # 1. Back up the ACME account key and the issued certs, in case of surprises.
@@ -135,9 +132,8 @@ kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180
 #    recreates it.
 kubectl apply -f cluster/services/letsencrypt-issuer-prod.yaml
 
-# 6. Watch ingress-shim rebuild the Certificates, and ArgoCD rebuild
-#    berlin-wildcard. Expect all of them; a missing berlin-wildcard means the
-#    traefik-default-tls Application did not self-heal, so sync it by hand.
+# 6. Watch the Certificates come back. A missing berlin-wildcard means the
+#    traefik-default-tls Application has not self-healed; sync it by hand.
 kubectl get certificate -A -w
 ```
 

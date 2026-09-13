@@ -91,8 +91,7 @@ class CoversTest(unittest.TestCase):
         self.assertFalse(covers(source(path='cluster/argocd'), STORE[0]))
 
     def test_partial_directory_name_does_not_cover(self):
-        # 'cluster/serv' is a string prefix of 'cluster/services' but not a
-        # parent directory of it.
+        # A string prefix of the path is not a parent directory of it.
         self.assertFalse(covers(source(path='cluster/serv'), STORE[0]))
 
 

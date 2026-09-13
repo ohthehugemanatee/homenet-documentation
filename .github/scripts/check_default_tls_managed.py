@@ -1,16 +1,8 @@
 """Gate Traefik's default TLS certificate on ArgoCD management.
 
-`TLSStore/default` names the one Secret Traefik serves for every host without a
-certificate of its own, which here is roughly eighteen names under
-`*.berlin.vertesi.com`. That Secret comes from a standalone cert-manager
-Certificate with no Ingress behind it, so ingress-shim cannot rebuild it the
-way it rebuilds the annotation-derived certs.
-
-The August 2026 cert-manager teardown deleted the CRDs and every object under
-them. The hand-applied Certificate did not come back, cert-manager stopped
-renewing a Secret it no longer knew about, and Traefik served the stale one
-until its ninety days ran out (#391). An Application reconciling the manifest
-is what keeps a teardown from costing TLS on every internal host again.
+A `TLSStore`'s `defaultCertificate` must name a Secret that a `Certificate`
+manifest issues, and both manifests must sit under a path an Application
+reconciles.
 
 problems() is pure; main() does the I/O.
 """
@@ -29,11 +21,7 @@ SECRET_REF = 'secretName'
 
 
 def expand_braces(pattern):
-    """Expand `{a,b}` alternation the way ArgoCD's glob matcher does.
-
-    fnmatch has no alternation, and `directory.include` is the only place this
-    repo needs it.
-    """
+    """Expand `{a,b}` alternation the way ArgoCD's glob matcher does."""
     open_at = pattern.find('{')
     if open_at == -1:
         return [pattern]
@@ -89,9 +77,8 @@ def covers(source, rel_path):
 def problems(stores, certificates, sources):
     """Return human-readable defects across the whole repo.
 
-    stores and certificates are (path, name, cert_ref) triples, where cert_ref
-    is the name of the Secret holding the certificate, never its contents.
-    sources are the directory sources of every Application.
+    stores and certificates are (path, name, cert_ref) triples; sources are the
+    directory sources of every Application.
     """
     found = []
     for path, name, cert_ref in stores:
@@ -115,8 +102,7 @@ def problems(stores, certificates, sources):
         found.append(
             f'{path}: TLSStore {name!r} serves {cert_ref!r} by default, but '
             f'the Certificate issuing it ({listed}) is not reconciled by any '
-            f'ArgoCD Application. A cert-manager teardown deletes it and '
-            f'nothing brings it back (#391)')
+            f'ArgoCD Application, so nothing restores it once it is deleted')
 
     return found
 
@@ -148,7 +134,7 @@ def main():
         if not isinstance(spec, dict):
             continue
 
-        # Both fields hold the name of a Secret, not its contents.
+        # Both fields hold a Secret's name, never its contents.
         if doc.get('kind') == 'TLSStore' and api.startswith(STORE_GROUP):
             cert_ref = (spec.get('defaultCertificate') or {}).get(SECRET_REF)
             if cert_ref:

@@ -21,7 +21,7 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 
 Auto-sync apps self-heal when someone `kubectl edit`s a managed resource. Manual-sync apps alert on drift but wait for operator approval in the ArgoCD UI.
 
-**traefik-default-tls note:** it holds the `berlin-wildcard` Certificate and the `TLSStore` naming it, the certificate every host under `*.berlin.vertesi.com` serves. Self-heal is the point: a cert-manager teardown deletes the Certificate along with the CRDs, and the issued Secret stays behind, so the loss is invisible until the certificate expires (#391). Prune stays off and the Application carries no finalizer, so neither a bad sync nor deleting the Application can take the Certificate with it.
+**traefik-default-tls note:** it holds the `berlin-wildcard` Certificate and the `TLSStore` naming it, the certificate every host under `*.berlin.vertesi.com` serves. Self-heal re-creates the Certificate whenever it goes missing from the cluster. Prune is off and the Application carries no finalizer, so neither a sync nor deleting the Application removes it.
 
 ## Access
 
