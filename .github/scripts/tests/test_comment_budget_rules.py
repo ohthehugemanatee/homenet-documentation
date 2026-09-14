@@ -5,7 +5,8 @@ import re
 import unittest
 
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
-# Static prompt character count before this PR removed step 3b.
+# Static prompt character count from .github/workflows/pr-review.yaml at
+# 9c7ff57c0807df39b65ca913fd4b1a107f082174, before this PR removed step 3b.
 PRE_STEP_3B_STATIC_PROMPT_CHARS = 4716
 
 
