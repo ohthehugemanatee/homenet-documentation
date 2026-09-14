@@ -97,6 +97,8 @@ class ReviewChecklistParityTest(unittest.TestCase):
         self.assertIn('--exit-code 1', lint_workflow)
         self.assertIn('--severity CRITICAL,HIGH', lint_workflow)
         self.assertIn('--ignorefile .trivyignore.yaml', lint_workflow)
+        self.assertIn('trivy fs', lint_workflow)
+        self.assertIn('--scanners secret', lint_workflow)
 
     def test_prompt_static_text_shrinks_from_recorded_baseline(self):
         self.assertLess(
