@@ -42,7 +42,7 @@ def review_prompt_static_chars(prompt_workflow):
             return count_string_literals(node.left) + count_string_literals(node.right)
         if isinstance(node, ast.Name):
             return 0
-        return sum(count_string_literals(child) for child in ast.iter_child_nodes(node))
+        raise AssertionError(f'unhandled prompt expression: {type(node).__name__}')
 
     return count_string_literals(assignment.value)
 
