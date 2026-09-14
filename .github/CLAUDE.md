@@ -35,4 +35,4 @@
 
 ## PR template
 
-`pull_request_template.md` is the human reviewer's checklist. `pr-review.yaml` is prompted to run its Part 2 (AI-specific validation) and Part 3 (security & privacy) checks and must report each item explicitly, so the two stay in step: changing one means changing the other.
+`pull_request_template.md` is the human reviewer's checklist. `pr-review.yaml` is prompted to run its Part 2 semantic validation checks and must report each item explicitly, so the two stay in step: changing one means changing the other.

@@ -1,4 +1,5 @@
 """Comment-budget and doc-currency rules stay in force. See #307."""
+import ast
 import os
 import re
 import unittest
@@ -15,6 +16,32 @@ def checklist_items(template, heading):
     """Bold item names under one `## Part N:` heading of the PR template."""
     body = template.split(heading, 1)[1].split('\n## ', 1)[0].split('\n---', 1)[0]
     return re.findall(r'^- \[ \] \*\*(.+?)\*\*', body, re.MULTILINE)
+
+
+def review_prompt_static_chars(prompt_workflow):
+    """Count literal prompt text, excluding diff and prior-review runtime payloads."""
+    source = re.search(
+        r"python3 << 'PYEOF'\n(.*?)\n\s*PYEOF", prompt_workflow, re.DOTALL
+    ).group(1)
+    source = re.sub(r'^ {10}', '', source, flags=re.MULTILINE)
+    module = ast.parse(source)
+    assignment = next(
+        node for node in ast.walk(module)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == 'prompt'
+                for target in node.targets)
+    )
+
+    def count_string_literals(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return len(node.value)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            return count_string_literals(node.left) + count_string_literals(node.right)
+        if isinstance(node, ast.Name):
+            return 0
+        return sum(count_string_literals(child) for child in ast.iter_child_nodes(node))
+
+    return count_string_literals(assignment.value)
 
 
 class CommentBudgetRuleTest(unittest.TestCase):
@@ -51,11 +78,25 @@ class ReviewChecklistParityTest(unittest.TestCase):
         for item in items:
             self.assertIn(item.removesuffix(' Check'), self.prompt, item)
 
-    def test_part3_items_reach_the_reviewer_prompt(self):
-        items = checklist_items(self.template, '## Part 3: Security & Privacy Review')
-        self.assertTrue(items)
-        for item in items:
-            self.assertIn(item, self.prompt, item)
+    def test_scanner_covered_security_part_stays_out_of_ai_review(self):
+        self.assertNotIn('## Part 3: Security & Privacy Review', self.template)
+        self.assertNotIn('Security & Privacy Review', self.prompt)
+        for scanner_covered_item in (
+                'Secrets', 'RBAC & Access Control', 'Network Exposure',
+                'Container Security'):
+            self.assertNotIn(scanner_covered_item, self.template)
+            self.assertNotIn(scanner_covered_item, self.prompt)
+
+    def test_trivy_gate_covers_removed_kubernetes_misconfiguration_classes(self):
+        lint_workflow = read('.github', 'workflows', 'lint.yaml')
+        self.assertIn('IaC security scan (Trivy)', lint_workflow)
+        self.assertIn('trivy config', lint_workflow)
+        self.assertIn('--exit-code 1', lint_workflow)
+        self.assertIn('--severity CRITICAL,HIGH', lint_workflow)
+        self.assertIn('--ignorefile .trivyignore.yaml', lint_workflow)
+
+    def test_prompt_static_text_shrinks_from_recorded_baseline(self):
+        self.assertLess(review_prompt_static_chars(self.prompt), 4716)
 
     def test_prompt_scores_comment_to_code_ratio(self):
         self.assertIn('against added code lines', self.prompt)
