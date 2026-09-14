@@ -409,3 +409,10 @@ jobs:
             --ignorefile .trivyignore.yaml \
             --skip-files "cluster/services/cert-manager.yaml" \
             cluster
+      - name: Scan repository for secrets
+        run: |
+          trivy fs \
+            --scanners secret \
+            --exit-code 1 \
+            --skip-dirs .git \
+            .
