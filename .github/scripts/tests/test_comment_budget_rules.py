@@ -96,6 +96,7 @@ class ReviewChecklistParityTest(unittest.TestCase):
         self.assertIn('--ignorefile .trivyignore.yaml', lint_workflow)
 
     def test_prompt_static_text_shrinks_from_recorded_baseline(self):
+        # 4716 is the static prompt character count before removing step 3b.
         self.assertLess(review_prompt_static_chars(self.prompt), 4716)
 
     def test_prompt_scores_comment_to_code_ratio(self):
