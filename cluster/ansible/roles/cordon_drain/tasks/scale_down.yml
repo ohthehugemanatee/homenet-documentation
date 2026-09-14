@@ -81,13 +81,9 @@
   loop_control:
     label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
   when:
-    - item.metadata.ownerReferences | default([])
-      | selectattr('kind', 'equalto', 'StatefulSet') | list | length > 0
-    - item.spec.volumes | default([])
-      | selectattr('persistentVolumeClaim', 'defined')
-      | map(attribute='persistentVolumeClaim.claimName')
-      | map('regex_replace', '^', item.metadata.namespace ~ '/')
-      | select('in', cordon_drain_sr_pvcs) | list | length > 0
+    - item.metadata.ownerReferences | default([]) | selectattr('kind', 'equalto', 'StatefulSet') | list | length > 0
+    - item.spec.volumes | default([]) | selectattr('persistentVolumeClaim', 'defined') | map(attribute='persistentVolumeClaim.claimName') | map('regex_replace',
+      '^', item.metadata.namespace ~ '/') | select('in', cordon_drain_sr_pvcs) | list | length > 0
 
 - name: Record pre-drain replica count and scale StatefulSet to zero
   ansible.builtin.include_tasks: scale_down_one.yml

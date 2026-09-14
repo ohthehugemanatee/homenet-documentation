@@ -6,7 +6,7 @@
   ansible.builtin.file:
     path: "{{ state_dir }}"
     state: directory
-    mode: '0775'
+    mode: "0775"
   delegate_to: localhost
   become: false
   run_once: true
@@ -27,7 +27,7 @@
   ansible.builtin.copy:
     content: "{{ ansible_date_time.iso8601 }}"
     dest: "{{ state_dir }}/maintenance-in-progress"
-    mode: '0644'
+    mode: "0644"
   delegate_to: localhost
   become: false
   run_once: true

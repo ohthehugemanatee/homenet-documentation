@@ -183,13 +183,17 @@ class YamlGuardTest(unittest.TestCase):
     def test_non_yaml_paths_pass(self):
         self.assertTrue(autofix._yaml_clean(['script.sh', 'notes.txt']))
 
-    def test_brace_spacing_is_rejected(self):
-        bad = self.write('bad.yaml', '---\nitems:\n  - { src: a, dest: b }\n')
-        self.assertFalse(autofix._yaml_clean([bad]))
+    def test_ansible_lint_brace_spacing_passes(self):
+        good = self.write('good.yaml', '---\nitems:\n  - { src: a, dest: b }\n')
+        self.assertTrue(autofix._yaml_clean([good]))
 
-    def test_compliant_yaml_passes(self):
+    def test_zero_space_braces_pass(self):
         good = self.write('good.yaml', '---\nitems:\n  - {src: a, dest: b}\n')
         self.assertTrue(autofix._yaml_clean([good]))
+
+    def test_two_space_braces_are_rejected(self):
+        bad = self.write('bad.yaml', '---\nitems:\n  - {  src: a, dest: b  }\n')
+        self.assertFalse(autofix._yaml_clean([bad]))
 
     def test_missing_yamllint_fails_closed(self):
         with mock.patch.object(autofix.subprocess, 'run', side_effect=FileNotFoundError):

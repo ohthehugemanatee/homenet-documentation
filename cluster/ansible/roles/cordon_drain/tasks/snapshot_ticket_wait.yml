@@ -27,6 +27,4 @@
       been left uncordoned.
   when:
     - cordon_drain_snapshot_ticket_state.resources | length > 0
-    - item.ticket in
-      ((cordon_drain_snapshot_ticket_state.resources | first).spec.attachmentTickets
-       | default({}))
+    - item.ticket in ((cordon_drain_snapshot_ticket_state.resources | first).spec.attachmentTickets | default({}))

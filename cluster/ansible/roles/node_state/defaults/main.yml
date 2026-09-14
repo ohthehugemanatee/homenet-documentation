@@ -45,7 +45,7 @@ node_state_zram_algorithm: "zstd"
 node_state_usb_offload_enabled: >-
   {{ (cluster_role | default('agent')) in ['first-master', 'multi-master'] }}
 node_state_usb_offload_links:
-  - {src: /mnt/usb/k3s, dest: /var/lib/rancher/k3s}
-  - {src: /mnt/usb/longhorn, dest: /var/lib/rancher/longhorn}
-  - {src: /mnt/usb/kubelet, dest: /var/lib/kubelet}
-  - {src: /mnt/usb/log/pods, dest: /var/log/pods}
+  - { src: /mnt/usb/k3s, dest: /var/lib/rancher/k3s }
+  - { src: /mnt/usb/longhorn, dest: /var/lib/rancher/longhorn }
+  - { src: /mnt/usb/kubelet, dest: /var/lib/kubelet }
+  - { src: /mnt/usb/log/pods, dest: /var/log/pods }

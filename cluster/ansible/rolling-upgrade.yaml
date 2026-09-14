@@ -120,7 +120,6 @@
           ansible.builtin.import_role:
             name: upgrade_rescue_agent
 
-
 - name: Rolling OS upgrade — multi-master servers
   hosts: "{{ target | default('multimasters') }}"
   become: true
@@ -190,7 +189,6 @@
         - name: Alert and record CP upgrade failure
           ansible.builtin.import_role:
             name: upgrade_rescue_cp
-
 
 - name: Rolling OS upgrade — first master (last)
   hosts: "{{ target | default('masters') }}"
@@ -284,7 +282,6 @@
         - name: Alert and record CP upgrade failure
           ansible.builtin.import_role:
             name: upgrade_rescue_cp
-
 
 - name: Cleanup — clear maintenance flag
   hosts: localhost

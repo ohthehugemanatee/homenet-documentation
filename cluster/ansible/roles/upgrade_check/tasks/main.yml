@@ -16,7 +16,7 @@
     path: /var/run/reboot-required
   register: upgrade_check_reboot_required
 
-- name: Check for a new Ubuntu release  # noqa: command-instead-of-module
+- name: Check for a new Ubuntu release # noqa: command-instead-of-module
   ansible.builtin.command: do-release-upgrade -c
   register: upgrade_check_release_available
   changed_when: false

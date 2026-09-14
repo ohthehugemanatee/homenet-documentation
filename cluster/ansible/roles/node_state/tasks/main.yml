@@ -28,7 +28,7 @@
     pkg:
       - intel-media-va-driver-non-free
       - libmfx1
-  tags: [molecule-notest]  # multiverse not enabled in Docker test containers
+  tags: [molecule-notest] # multiverse not enabled in Docker test containers
 
 # ── Hostname ─────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@
     dest: /etc/hosts
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
     unsafe_writes: "{{ (ansible_virtualization_type == 'docker') | bool }}"
 
 # ── NFS client ───────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@
     dest: /etc/nfsmount.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 # ── Kernel modules ───────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@
     dest: /etc/modules-load.d/k3s.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Load k3s kernel modules now
   ansible.builtin.command: "modprobe {{ item }}"
@@ -86,7 +86,7 @@
     dest: /etc/sysctl.d/99-k3s.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: Apply sysctl
 
 # ── cgroup v2 kernel command line ────────────────────────────────────────
@@ -99,16 +99,16 @@
   ansible.builtin.lineinfile:
     path: /boot/firmware/cmdline.txt
     backrefs: true
-    regexp: '^((?!.*cgroup_enable=memory).*)$'
-    line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+    regexp: "^((?!.*cgroup_enable=memory).*)$"
+    line: "\\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory"
 
 - name: ARM — ensure cgroup v2 unified hierarchy in kernel cmdline
   when: ansible_architecture == "aarch64"
   ansible.builtin.lineinfile:
     path: /boot/firmware/cmdline.txt
     backrefs: true
-    regexp: '^((?!.*systemd\.unified_cgroup_hierarchy).*)$'
-    line: '\1 systemd.unified_cgroup_hierarchy=1'
+    regexp: "^((?!.*systemd\\.unified_cgroup_hierarchy).*)$"
+    line: "\\1 systemd.unified_cgroup_hierarchy=1"
   register: node_state_arm_cgroup_v2
 
 - name: X86 — ensure cgroup v2 unified hierarchy in GRUB
@@ -145,7 +145,7 @@
   ansible.builtin.file:
     path: /var/run/reboot-required
     state: touch
-    mode: '0644'
+    mode: "0644"
 
 # ── NTP ──────────────────────────────────────────────────────────────────
 
@@ -155,7 +155,7 @@
     dest: /etc/systemd/timesyncd.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: Restart timesyncd
 
 # ── Security updates ─────────────────────────────────────────────────────
@@ -166,7 +166,7 @@
     dest: /etc/apt/apt.conf.d/50unattended-upgrades
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Enable automatic security updates
   ansible.builtin.copy:
@@ -177,7 +177,7 @@
     dest: /etc/apt/apt.conf.d/20auto-upgrades
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 # ── Swap ─────────────────────────────────────────────────────────────────
 
@@ -186,14 +186,14 @@
   when:
     - ansible_swaptotal_mb | int > 0
     - ansible_virtualization_type != 'docker'
-    - not (node_state_zram_enabled | bool)  # keep the zram cushion enabled
+    - not (node_state_zram_enabled | bool) # keep the zram cushion enabled
   changed_when: ansible_swaptotal_mb | int > 0
 
 - name: Disable swap in fstab
   ansible.builtin.replace:
     path: /etc/fstab
-    regexp: '^([^#].*?\sswap\s+\S+\s+.*)$'
-    replace: '# \1'
+    regexp: "^([^#].*?\\sswap\\s+\\S+\\s+.*)$"
+    replace: "# \\1"
 
 # ── zram compressed-RAM swap cushion (opt-in; low-RAM nodes) ─────────────────
 # Coexists with the swap-disable tasks above: the blanket swapoff is skipped
@@ -204,7 +204,7 @@
     name: zram-tools
     state: present
   when: node_state_zram_enabled | bool
-  tags: [molecule-notest]  # universe not enabled in Docker test containers
+  tags: [molecule-notest] # universe not enabled in Docker test containers
 
 - name: Configure zramswap
   ansible.builtin.template:
@@ -212,7 +212,7 @@
     dest: /etc/default/zramswap
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   when: node_state_zram_enabled | bool
   notify: Restart zramswap
 
@@ -224,15 +224,15 @@
   when:
     - node_state_zram_enabled | bool
     - ansible_virtualization_type != 'docker'
-  tags: [molecule-notest]  # no /dev/zram in Docker test containers
+  tags: [molecule-notest] # no /dev/zram in Docker test containers
 
 # ── Journald ─────────────────────────────────────────────────────────────
 
 - name: Configure journald volatile storage
   ansible.builtin.lineinfile:
     path: /etc/systemd/journald.conf
-    regexp: '^#?Storage='
-    line: 'Storage=volatile'
+    regexp: "^#?Storage="
+    line: "Storage=volatile"
   notify: Restart journald
 
 # ── k3s server config (control-plane taint) ───────────────────────────────
@@ -245,7 +245,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   when: cluster_role in ['first-master', 'multi-master']
 
 - name: Template k3s server config with control-plane taint
@@ -254,7 +254,7 @@
     dest: /etc/rancher/k3s/config.yaml
     owner: root
     group: root
-    mode: '0600'
+    mode: "0600"
   when: cluster_role in ['first-master', 'multi-master']
   notify: Restart k3s
 
@@ -268,7 +268,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   when: cluster_role in ['first-master', 'multi-master']
 
 - name: Template k3s MemoryHigh systemd drop-in
@@ -277,7 +277,7 @@
     dest: /etc/systemd/system/k3s.service.d/memory.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   when: cluster_role in ['first-master', 'multi-master']
   notify:
     - Reload systemd
@@ -302,7 +302,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   loop: "{{ node_state_usb_offload_links }}"
   loop_control:
     label: "{{ item.dest }}"
@@ -327,7 +327,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   loop: "{{ node_state_usb_offload_links }}"
   loop_control:
     label: "{{ item.src }}"
