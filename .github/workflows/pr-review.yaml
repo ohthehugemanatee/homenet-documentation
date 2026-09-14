@@ -185,6 +185,7 @@ jobs:
               ' already says, and doc edits the change did not make necessary. Verbosity is never HIGH.\n\n'
               '4. **Verify Your Findings** *(internal)* — Verify your gathered findings:\n'
               '   - Are reliability/idempotency concerns accurate?\n'
+              '   - Did I verify rerunning the changed tasks or workflows has no unintended side effects?\n'
               '   - Did I check docs against the changed implementation?\n'
               '   - Did I verify the rollback path against the resources changed?\n'
               '   - Did I miss any edge cases?\n'
