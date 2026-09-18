@@ -148,8 +148,8 @@ certs remain valid.
 
 ## History
 
-Until August 2026 cert-manager was a vendored upstream manifest at
-`cluster/services/cert-manager.yaml`, pinned to v1.1.0 and — because nothing ever
+Until August 2026 cert-manager was a vendored upstream manifest in
+`cluster/services/`, pinned to v1.1.0 and — because nothing ever
 applied it — four years out of step with the v1.7.2 the cluster actually ran
 (installed by hand in March 2022).
 
