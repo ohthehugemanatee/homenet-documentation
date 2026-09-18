@@ -395,6 +395,15 @@ jobs:
           reclaimPolicy: Delete
           EOF
 
+      - name: Verify plex memory request and limit
+        run: |
+          kubectl apply -f cluster/services/plex.yaml
+          for FIELD in requests limits; do
+            GOT=$(kubectl get statefulset plex -n default \
+              -o jsonpath="{.spec.template.spec.containers[?(@.name=='plex')].resources.$FIELD.memory}")
+            [ "$GOT" = 10Gi ] || { echo "FAILED: memory $FIELD is $GOT"; exit 1; }
+          done
+
       - name: Deploy OIDC discovery stub
         run: |
           # login-flow does OIDC discovery at startup and treats 4xx as a config
