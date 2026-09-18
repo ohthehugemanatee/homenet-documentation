@@ -1375,7 +1375,7 @@ jobs:
             nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
             --namespace kube-system \
             --dry-run \
-            --set nfs.server=shoebox.vert \
+            --set nfs.server=shoebox \
             --set nfs.path=/export/storage/configs/kubernetes
 
       - name: Dry-run node-feature-discovery
