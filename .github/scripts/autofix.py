@@ -68,6 +68,9 @@ MODEL = "claude-sonnet-5"
 
 # The API accepts at most 4 cache breakpoints per request.
 MAX_CACHE_BREAKPOINTS = 4
+MAX_TURNS = 6
+MAX_TOOL_RESULT_BYTES = 12000
+TOOL_RESULT_TRUNCATED = "\n...(tool-result budget exhausted)"
 
 
 def build_payload(messages, system):
@@ -151,6 +154,75 @@ def use_tool(name, inp):
             return "Error: command timed out after 60 seconds"
 
     return f"unknown tool: {name}"
+
+
+def _bounded_tool_result(out, remaining):
+    text = str(out)
+    data = text.encode("utf-8")
+    if len(data) <= remaining:
+        return text, len(data)
+    if remaining <= 0:
+        return "", 0
+
+    suffix = TOOL_RESULT_TRUNCATED.encode("utf-8")
+    if remaining <= len(suffix):
+        content = data[:remaining].decode("utf-8", "ignore")
+    else:
+        content = data[:remaining - len(suffix)].decode("utf-8", "ignore")
+        content += TOOL_RESULT_TRUNCATED
+    return content, len(content.encode("utf-8"))
+
+
+def repair_loop(messages, system):
+    written = []
+    explanation = ""
+    tool_result_bytes = 0
+
+    for _ in range(MAX_TURNS):
+        try:
+            resp = claude(messages, system)
+        except RuntimeError as e:
+            print(f"Claude API error: {e}")
+            break
+
+        usage = resp.get("usage", {})
+        print(f"  tokens: in={usage.get('input_tokens')} "
+              f"cache_read={usage.get('cache_read_input_tokens')} "
+              f"cache_write={usage.get('cache_creation_input_tokens')} "
+              f"out={usage.get('output_tokens')}")
+
+        messages.append({"role": "assistant", "content": resp["content"]})
+        stop_reason = resp.get("stop_reason")
+
+        if stop_reason == "end_turn":
+            for b in resp["content"]:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    explanation = b["text"]
+            break
+
+        if stop_reason == "tool_use":
+            results = []
+            for b in resp["content"]:
+                if not isinstance(b, dict) or b.get("type") != "tool_use":
+                    continue
+                print(f"  [{b['name']}] {str(b['input'])[:120]}")
+                out = use_tool(b["name"], b["input"])
+                if b["name"] == "write_file" and not str(out).startswith("Error"):
+                    written.append(b["input"]["path"])
+                content, used = _bounded_tool_result(
+                    out, MAX_TOOL_RESULT_BYTES - tool_result_bytes)
+                tool_result_bytes += used
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": b["id"],
+                    "content": content,
+                })
+            messages.append({"role": "user", "content": results})
+        else:
+            print(f"Stopping: unexpected stop_reason '{stop_reason}'")
+            break
+
+    return written, explanation
 
 
 def head_repo_matches(repo, pr_number):
@@ -395,50 +467,7 @@ def main():
     )
 
     messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
-    written = []
-    explanation = ""
-
-    for _ in range(15):
-        try:
-            resp = claude(messages, system)
-        except RuntimeError as e:
-            print(f"Claude API error: {e}")
-            break
-
-        usage = resp.get("usage", {})
-        print(f"  tokens: in={usage.get('input_tokens')} "
-              f"cache_read={usage.get('cache_read_input_tokens')} "
-              f"cache_write={usage.get('cache_creation_input_tokens')} "
-              f"out={usage.get('output_tokens')}")
-
-        messages.append({"role": "assistant", "content": resp["content"]})
-        stop_reason = resp.get("stop_reason")
-
-        if stop_reason == "end_turn":
-            for b in resp["content"]:
-                if isinstance(b, dict) and b.get("type") == "text":
-                    explanation = b["text"]
-            break
-
-        if stop_reason == "tool_use":
-            results = []
-            for b in resp["content"]:
-                if not isinstance(b, dict) or b.get("type") != "tool_use":
-                    continue
-                print(f"  [{b['name']}] {str(b['input'])[:120]}")
-                out = use_tool(b["name"], b["input"])
-                if b["name"] == "write_file" and not str(out).startswith("Error"):
-                    written.append(b["input"]["path"])
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": b["id"],
-                    "content": str(out),
-                })
-            messages.append({"role": "user", "content": results})
-        else:
-            print(f"Stopping: unexpected stop_reason '{stop_reason}'")
-            break
-
+    written, explanation = repair_loop(messages, system)
     finish(repo, pr_number, head_ref, written, explanation)
 
 
