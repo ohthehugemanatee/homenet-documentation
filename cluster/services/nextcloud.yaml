@@ -112,10 +112,10 @@ spec:
               mountPath: "/preview-cache"
         - name: imaginary
           image: ghcr.io/nextcloud-releases/aio-imaginary:latest
-          args: ["-p", "9001", "-concurrency", "20", "-enable-url-source", "-return-size"]
+          args: ["-p", "9001", "-concurrency", "4", "-return-size"]
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
             limits:
               memory: "1Gi"
           env:
