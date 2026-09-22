@@ -42,6 +42,10 @@ spec:
         - name: preview-cache
           persistentVolumeClaim:
             claimName: nextcloud-previews
+        # libvips spills large images to /tmp and mmaps them; the container
+        # layer is on the USB disk, so keep the spill on the node's NVMe.
+        - name: vips-tmp
+          emptyDir: {}
       nodeSelector:
         transcodingGpu: "1"
         nvme: "1"
@@ -126,6 +130,9 @@ spec:
           securityContext:
             capabilities:
               add: ["SYS_NICE"]
+          volumeMounts:
+            - name: vips-tmp
+              mountPath: /tmp
         - name: nextcloud-promtail
           image: grafana/promtail:2.1.0
           imagePullPolicy: IfNotPresent
