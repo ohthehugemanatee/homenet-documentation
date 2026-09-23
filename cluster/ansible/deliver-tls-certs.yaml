@@ -23,18 +23,29 @@
     - name: Deliver every certificate this host serves
       block:
         # ansible.builtin.copy does not create missing parent directories.
-        - name: Create the destination directories
+        # Owned by the delivery's own user, not root: the directory has to be
+        # writable by whoever owns the files in it.
+        - name: Create the certificate destination directories
           ansible.builtin.file:
-            path: "{{ item }}"
+            path: "{{ item.dest_cert | dirname }}"
             state: directory
-            owner: root
-            group: root
+            owner: "{{ item.owner }}"
+            group: "{{ item.group }}"
             mode: "0755"
-          loop: >-
-            {{ ((tls_deliveries | map(attribute='dest_cert') | list)
-                + (tls_deliveries | selectattr('dest_key', 'defined')
-                   | map(attribute='dest_key') | list))
-               | map('dirname') | unique }}
+          loop: "{{ tls_deliveries }}"
+          loop_control:
+            label: "{{ item.dest_cert | dirname }}"
+
+        - name: Create the private key destination directories
+          ansible.builtin.file:
+            path: "{{ item.dest_key | dirname }}"
+            state: directory
+            owner: "{{ item.owner }}"
+            group: "{{ item.group }}"
+            mode: "0755"
+          loop: "{{ tls_deliveries | selectattr('dest_key', 'defined') }}"
+          loop_control:
+            label: "{{ item.dest_key | dirname }}"
 
         # One delivery per host: the role's copy registers are host facts that
         # outlive the iteration, so a second entry in a different format could

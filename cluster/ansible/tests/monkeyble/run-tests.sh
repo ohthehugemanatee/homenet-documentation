@@ -477,7 +477,7 @@ JSON
 run_scenario_expecting "deliver_tls_certs_delivers" \
   deliver-tls-certs.yaml \
   "${SCRIPT_DIR}/test_deliver_tls_certs_delivers.yml" \
-  "TASK \[Create the destination directories\]" \
+  "TASK \[Create the certificate destination directories\]" \
   "-e" "$(_deliveries)" \
   "-e" "tls_pushover_env=${DELIVER_PUSHOVER_ENV}"
 if [[ ! -f "$DELIVER_RELOAD_MARKER" ]]; then
