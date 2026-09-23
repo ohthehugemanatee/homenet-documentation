@@ -69,16 +69,11 @@ jobs:
           kubectl rollout status deployment/cert-manager-webhook \
             -n cert-manager --timeout=120s
 
-      - name: Validate the off-cluster Certificates against the real CRD
-        # kubeconform runs with --ignore-missing-schemas, so it checks nothing
-        # inside a Certificate. A server-side dry run against cert-manager's
-        # own CRD and webhook is what catches a mistyped field before ArgoCD
-        # syncs it. The ArgoCD Application creates the namespace in the real
-        # cluster; here it has to exist first.
-        run: |
-          kubectl create namespace offcluster-tls
-          kubectl apply --server-side --dry-run=server \
-            -f cluster/services/offcluster-certs.yaml
+      - name: Create the off-cluster TLS namespace
+        # The all-manifests dry-run below covers cluster/services/offcluster-certs.yaml
+        # and would fail on a namespace that does not exist. In the real cluster
+        # the offcluster-certs Application creates it with CreateNamespace=true.
+        run: kubectl create namespace offcluster-tls
 
       - name: Assert cert-manager stays on the manual-sync infra tier
         run: |
