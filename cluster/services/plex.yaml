@@ -78,9 +78,11 @@ spec:
           image: linuxserver/plex:latest
           imagePullPolicy: Always
           resources:
+            requests:
+              memory: 10Gi
             limits:
               gpu.intel.com/i915: 1
-              memory: 6Gi
+              memory: 10Gi
           ports:
             - containerPort: 32400
           startupProbe:

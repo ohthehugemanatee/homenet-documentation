@@ -406,6 +406,15 @@ jobs:
           reclaimPolicy: Delete
           EOF
 
+      - name: Verify plex memory request and limit
+        run: |
+          kubectl apply -f cluster/services/plex.yaml
+          for FIELD in requests limits; do
+            GOT=$(kubectl get statefulset plex -n default \
+              -o jsonpath="{.spec.template.spec.containers[?(@.name=='plex')].resources.$FIELD.memory}")
+            [ "$GOT" = 10Gi ] || { echo "FAILED: memory $FIELD is $GOT"; exit 1; }
+          done
+
       - name: Deploy OIDC discovery stub
         run: |
           # login-flow does OIDC discovery at startup and treats 4xx as a config
@@ -1386,7 +1395,7 @@ jobs:
             nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
             --namespace kube-system \
             --dry-run \
-            --set nfs.server=shoebox.vert \
+            --set nfs.server=shoebox \
             --set nfs.path=/export/storage/configs/kubernetes
 
       - name: Dry-run node-feature-discovery

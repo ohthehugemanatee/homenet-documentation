@@ -12,20 +12,20 @@
   tasks:
     # ── USB data disk (bootstrap-only: initial PARTUUID mount + fstab) ─────────
     - name: Get PARTUUID
-      ansible.builtin.command: 'lsblk {{ usb_disk }} -no PARTUUID'
+      ansible.builtin.command: "lsblk {{ usb_disk }} -no PARTUUID"
       register: partuuid
       changed_when: false
       when: usb_disk is defined
     - name: Detect USB disk filesystem type
-      ansible.builtin.command: 'lsblk {{ usb_disk }} -no FSTYPE'
+      ansible.builtin.command: "lsblk {{ usb_disk }} -no FSTYPE"
       register: usb_fstype
       changed_when: false
       when: usb_disk is defined
     - name: Mount USB disk and persist in fstab
       ansible.posix.mount:
         path: /mnt/usb
-        src: 'PARTUUID={{ partuuid.stdout }}'
-        fstype: '{{ usb_fstype.stdout }}'
+        src: "PARTUUID={{ partuuid.stdout }}"
+        fstype: "{{ usb_fstype.stdout }}"
         opts: noatime
         state: mounted
       when: usb_disk is defined
@@ -55,7 +55,7 @@
       ansible.builtin.get_url:
         url: https://get.k3s.io
         dest: /tmp/k3s-setup.sh
-        mode: '0755'
+        mode: "0755"
     - name: Run k3s agent installer
       when: cluster_role == "agent"
       tags:

@@ -6,7 +6,7 @@
   ansible.builtin.set_fact:
     k3s_health_checks_started: true
 
-- name: "Wait for {{ k3s_svc }} to become active"  # noqa: command-instead-of-module name[template]
+- name: "Wait for {{ k3s_svc }} to become active" # noqa: command-instead-of-module name[template]
   ansible.builtin.command: "systemctl is-active {{ k3s_svc }}"
   register: k3s_health_status
   until: k3s_health_status.rc == 0
@@ -53,7 +53,7 @@
   become: false
   changed_when: false
 
-- name: Verify k3s not in restart loop  # noqa: command-instead-of-module
+- name: Verify k3s not in restart loop # noqa: command-instead-of-module
   ansible.builtin.command: "systemctl show {{ k3s_svc }} --property=NRestarts --value"
   register: k3s_health_restarts
   failed_when: k3s_health_restarts.stdout | int > 3

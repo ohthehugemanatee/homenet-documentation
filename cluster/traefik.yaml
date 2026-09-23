@@ -5,6 +5,24 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
+    # The control-plane nodes are all Raspberry Pis and run at their memory
+    # ceiling; traefik proxies every ingress byte, so it belongs on amd64.
+    nodeSelector:
+      kubernetes.io/arch: amd64
+    replicas: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: traefik
+            topologyKey: kubernetes.io/hostname
+    service:
+      spec:
+        # MetalLB announces the VIP only from nodes running traefik, so traffic
+        # never hairpins through a Pi. Also preserves the client source IP,
+        # which Plex needs to classify LAN clients.
+        externalTrafficPolicy: Local
     #    additionalArguments:
     #      - "--log.level=WARN"
     log:

@@ -302,6 +302,17 @@ jobs:
         run: |
           ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml \
             deliver-tls-certs.yaml ../../shoebox/shoebox-ansible-setup.yaml
+      - name: Verify ansible-lint fixer output
+        working-directory: .
+        run: |
+          ansible-lint --fix cluster/ansible/k3s-agent.yaml cluster/ansible/node-state.yaml \
+            cluster/ansible/rolling-upgrade.yaml cluster/ansible/deliver-tls-certs.yaml \
+            shoebox/shoebox-ansible-setup.yaml
+          yamllint .
+          git diff --exit-code || {
+            echo "::error::ansible-lint --fix changed files; run it locally and commit the result"
+            exit 1
+          }
 
   policy:
     name: Kubernetes policy (advisory)
@@ -399,3 +410,10 @@ jobs:
             --ignorefile .trivyignore.yaml \
             --skip-files "cluster/services/cert-manager.yaml" \
             cluster
+      - name: Scan repository for secrets
+        run: |
+          trivy fs \
+            --scanners secret \
+            --exit-code 1 \
+            --skip-dirs .git \
+            .

@@ -47,6 +47,23 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
                  "ANTHROPIC", "GH_TOKEN", "GITHUB_TOKEN", "SECRET")
 
 
+ANSIBLE_TARGETS = ["k3s-agent.yaml", "node-state.yaml", "rolling-upgrade.yaml",
+                   "../../shoebox/shoebox-ansible-setup.yaml"]
+
+# Keyed by failing CI job name; {"setup": [argv], "fix": argv, "check": argv, "cwd": path}.
+FIXERS = {
+    "Ansible playbooks": {
+        "setup": [
+            ["pip", "install", "ansible", "ansible-lint", "yamllint"],
+            ["ansible-galaxy", "collection", "install", "-r", "requirements.yaml"],
+        ],
+        "fix": ["ansible-lint", "--fix"] + ANSIBLE_TARGETS,
+        "check": ["ansible-lint"] + ANSIBLE_TARGETS,
+        "cwd": "cluster/ansible",
+    },
+}
+
+
 MODEL = "claude-sonnet-5"
 
 # The API accepts at most 4 cache breakpoints per request.
@@ -153,6 +170,153 @@ def head_repo_matches(repo, pr_number):
     return r.stdout.strip() == repo
 
 
+def failed_job_names(repo, run_id):
+    """Names of the jobs that failed in the triggering run."""
+    r = subprocess.run(
+        ["gh", "run", "view", run_id, "--repo", repo, "--json", "jobs",
+         "--jq", '.jobs[] | select(.conclusion == "failure") | .name'],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f"Could not list failed jobs: {r.stderr.strip()}")
+        return []
+    return [n for n in r.stdout.splitlines() if n.strip()]
+
+
+def _changed():
+    r = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
+    return [p for p in r.stdout.splitlines() if p.strip()]
+
+
+def _revert(paths):
+    if paths:
+        subprocess.run(["git", "checkout", "--"] + paths, capture_output=True, text=True)
+
+
+def _yaml_clean(paths):
+    """Changed YAML satisfies the repo-wide gating yamllint.
+
+    Fails closed when yamllint is absent.
+    """
+    yamls = [p for p in paths if p.endswith((".yaml", ".yml"))]
+    if not yamls:
+        return True
+    try:
+        r = subprocess.run(["yamllint"] + yamls, capture_output=True, text=True)
+    except FileNotFoundError:
+        print("  yamllint unavailable, refusing the fix")
+        return False
+    if r.returncode != 0:
+        print(f"  yamllint rejects the result:\n{r.stdout.strip()[:500]}")
+    return r.returncode == 0
+
+
+def deterministic_pass(job_names, in_scope):
+    """Apply the fixers for these jobs, and return the paths they repaired.
+
+    Edits survive only on files the PR already touches, clear of `.github/`,
+    and leaving both the fixer's check and yamllint passing. Everything else
+    is reverted.
+    """
+    fixed = []
+    for name in job_names:
+        f = FIXERS.get(name)
+        if not f:
+            continue
+        print(f"Deterministic fixer for '{name}'...")
+        cwd = f.get("cwd")
+        setup_ok = True
+        for cmd in f["setup"]:
+            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"  setup failed: {' '.join(cmd)}")
+                setup_ok = False
+                break
+        if not setup_ok:
+            continue
+
+        subprocess.run(f["fix"], cwd=cwd, capture_output=True, text=True)
+        paths = [p for p in _changed() if p not in fixed]
+        if not paths:
+            print("  no changes")
+            continue
+
+        blocked = [p for p in paths if p.startswith(".github/")]
+        if blocked:
+            print(f"  reverting, fixer wrote to {', '.join(blocked)}")
+            _revert(paths)
+            continue
+
+        # ansible-lint --fix reformats every file it is pointed at.
+        stray = [p for p in paths if p not in in_scope]
+        if stray:
+            print(f"  reverting {len(stray)} file(s) outside the PR diff")
+            _revert(stray)
+            paths = [p for p in paths if p in in_scope]
+        if not paths:
+            print("  nothing left in scope")
+            continue
+
+        r = subprocess.run(f["check"], cwd=cwd, capture_output=True, text=True)
+        if r.returncode != 0:
+            print("  check still fails, reverting")
+            _revert(paths)
+            continue
+
+        if not _yaml_clean(paths):
+            _revert(paths)
+            continue
+
+        print(f"  fixed {', '.join(paths)}")
+        fixed += paths
+    return fixed
+
+
+def finish(repo, pr_number, head_ref, written, explanation):
+    if not written:
+        body = (
+            "## Auto-fix Attempt\n\n"
+            "I analyzed the CI failures but could not determine an automated fix. "
+            "Please review manually.\n\n---\n*Automated by Claude*"
+        )
+    else:
+        subprocess.run(["git", "config", "user.name", "claude-autofix[bot]"], check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "claude-autofix@noreply.github.com"], check=True
+        )
+        subprocess.run(["git", "add", "--"] + [p.lstrip("/") for p in written], check=True)
+        r = subprocess.run(
+            ["git", "commit", "-m",
+             f"fix: auto-fix CI failures [autofix]\n\n{explanation[:400]}"],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            print(f"Nothing to commit or commit failed: {r.stderr}")
+            return
+        r = subprocess.run(
+            ["git", "push", "origin", f"HEAD:refs/heads/{head_ref}"],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            print(f"Push failed: {r.stderr}")
+            return
+        body = (
+            "## Auto-fix Applied\n\n"
+            f"Modified: {', '.join(f'`{p}`' for p in written)}\n\n"
+            f"{explanation}\n\n---\n*Automated by Claude*"
+        )
+
+    with open("/tmp/autofix-comment.md", "w") as f:
+        f.write(body)
+    subprocess.run(
+        ["gh", "pr", "comment", pr_number,
+         "--body-file", "/tmp/autofix-comment.md",
+         "--repo", repo],
+        check=True,
+    )
+    print("Done")
+
+
 def main():
     with open(os.environ["GITHUB_EVENT_PATH"]) as f:
         event = json.load(f)
@@ -183,6 +347,15 @@ def main():
     )
     if r.returncode == 0 and "[autofix]" in r.stdout:
         print("Head commit is already an autofix, skipping")
+        return
+
+    r = subprocess.run(["gh", "pr", "diff", pr_number, "--name-only", "--repo", repo],
+                       capture_output=True, text=True)
+    in_scope = set(r.stdout.split()) if r.returncode == 0 else set()
+    prepass = deterministic_pass(failed_job_names(repo, run_id), in_scope)
+    if prepass:
+        finish(repo, pr_number, head_ref, prepass,
+               "Fixed by deterministic fixers. No model call was made.")
         return
 
     # Fetch failure logs
@@ -266,48 +439,7 @@ def main():
             print(f"Stopping: unexpected stop_reason '{stop_reason}'")
             break
 
-    if not written:
-        body = (
-            "## Auto-fix Attempt\n\n"
-            "I analyzed the CI failures but could not determine an automated fix. "
-            "Please review manually.\n\n---\n*Automated by Claude*"
-        )
-    else:
-        subprocess.run(["git", "config", "user.name", "claude-autofix[bot]"], check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "claude-autofix@noreply.github.com"], check=True
-        )
-        subprocess.run(["git", "add", "--"] + [p.lstrip("/") for p in written], check=True)
-        r = subprocess.run(
-            ["git", "commit", "-m",
-             f"fix: auto-fix CI failures [autofix]\n\n{explanation[:400]}"],
-            capture_output=True, text=True,
-        )
-        if r.returncode != 0:
-            print(f"Nothing to commit or commit failed: {r.stderr}")
-            return
-        r = subprocess.run(
-            ["git", "push", "origin", f"HEAD:refs/heads/{head_ref}"],
-            capture_output=True, text=True,
-        )
-        if r.returncode != 0:
-            print(f"Push failed: {r.stderr}")
-            return
-        body = (
-            "## Auto-fix Applied\n\n"
-            f"Modified: {', '.join(f'`{p}`' for p in written)}\n\n"
-            f"{explanation}\n\n---\n*Automated by Claude*"
-        )
-
-    with open("/tmp/autofix-comment.md", "w") as f:
-        f.write(body)
-    subprocess.run(
-        ["gh", "pr", "comment", pr_number,
-         "--body-file", "/tmp/autofix-comment.md",
-         "--repo", repo],
-        check=True,
-    )
-    print("Done")
+    finish(repo, pr_number, head_ref, written, explanation)
 
 
 if __name__ == "__main__":
