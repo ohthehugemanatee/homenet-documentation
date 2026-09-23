@@ -95,13 +95,23 @@ run_scenario_expecting() {
   echo "  PASSED: ${name}"
 }
 
-# Same, but the playbook must fail AND its output must match the regex. A bare
-# non-zero exit would also be produced by a typo in the scenario file, so the
-# message is what distinguishes "refused for the right reason".
-# run_failing_scenario <name> <playbook> <vars_file> <expected regex> [extra args...]
+# Same, but the playbook must fail AND its output must match every regex. A
+# bare non-zero exit would also be produced by a typo in the scenario file, so
+# the message is what distinguishes "refused for the right reason". Extra
+# regexes cover what had to happen on the way down — monkeyble scores a
+# should_be_skipped assertion on a task that never ran as a pass, so a deleted
+# rescue task is invisible without one.
+# Regexes are the arguments before the first one starting with '-'; the rest are
+# passed through to ansible-playbook.
+# run_failing_scenario <name> <playbook> <vars_file> <expected regex>... [extra args...]
 run_failing_scenario() {
-  local name=$1 playbook=$2 vars_file=$3 expected=$4
-  shift 4
+  local name=$1 playbook=$2 vars_file=$3
+  shift 3
+  local -a expected_patterns=()
+  while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    expected_patterns+=("$1")
+    shift
+  done
   banner "${name} (expected to fail)"
   local output
   output=$(_play "$name" "$playbook" "$vars_file" "$@") && {
@@ -109,11 +119,14 @@ run_failing_scenario() {
     echo "  ERROR: expected ${name} to fail but it succeeded"
     exit 1
   }
-  if ! grep -Eq "$expected" <<<"$output"; then
-    echo "$output"
-    echo "  ERROR: ${name} failed, but not with the expected message: ${expected}"
-    exit 1
-  fi
+  local pattern
+  for pattern in "${expected_patterns[@]}"; do
+    if ! grep -Eq "$pattern" <<<"$output"; then
+      echo "$output"
+      echo "  ERROR: ${name} failed, but not with the expected message: ${pattern}"
+      exit 1
+    fi
+  done
   echo "  PASSED: ${name}"
 }
 
@@ -433,6 +446,56 @@ run_scenario_expecting "tls_cert_short_dated_fails" \
   "-e" "tls_cert_reload_command=/bin/true" \
   "-e" "tls_cert_dest_cert=${STATE_DIR}/tls-cert-short/combined.pem" \
   "--limit" "shoebox"
+
+# ── deliver-tls-certs.yaml: the playbook that runs tls_cert on a schedule (#365) ──
+# tls_deliveries lives on the host in inventory.yaml; here the destinations have
+# to sit under the temp dir, so it is passed as JSON — same reason the reload
+# command is (see the note above on the -e parser). The playbook is
+# `become: true` for /etc/ssl, which needs the runner's passwordless sudo.
+DELIVER_RELOAD_MARKER="${STATE_DIR}/deliver-tls/RELOAD_FIRED"
+DELIVER_PUSHOVER_ENV="${SCRIPT_DIR}/fixtures/pushover.env"
+
+_deliveries() {
+  cat <<JSON
+{"tls_deliveries": [{
+  "secret": "shoebox-tls",
+  "namespace": "offcluster-tls",
+  "format": "separate",
+  "dest_cert": "${STATE_DIR}/deliver-tls/tls.crt",
+  "dest_key": "${STATE_DIR}/deliver-tls/tls.key",
+  "owner": "$(id -un)",
+  "group": "$(id -gn)",
+  "mode": "0640",
+  "reload_command": "/usr/bin/touch ${DELIVER_RELOAD_MARKER}"
+}]}
+JSON
+}
+
+# Scenario: one delivery, first run. The playbook creates the destination
+# directory, maps the entry onto the role's variables, and the reload command
+# fires because the copy changed the files.
+run_scenario_expecting "deliver_tls_certs_delivers" \
+  deliver-tls-certs.yaml \
+  "${SCRIPT_DIR}/test_deliver_tls_certs_delivers.yml" \
+  "TASK \[Create the destination directories\]" \
+  "-e" "$(_deliveries)" \
+  "-e" "tls_pushover_env=${DELIVER_PUSHOVER_ENV}"
+if [[ ! -f "$DELIVER_RELOAD_MARKER" ]]; then
+  echo "  ERROR: deliver_tls_certs_delivers passed, but the reload command never ran"
+  exit 1
+fi
+echo "  PASSED: deliver_tls_certs_delivers ran the reload command"
+
+# Scenario: the Secret is missing. The rescue block alerts and then re-raises.
+# A rescue that only alerted would exit 0, and a scheduled delivery would go on
+# reporting success while delivering nothing.
+run_failing_scenario "deliver_tls_certs_alerts" \
+  deliver-tls-certs.yaml \
+  "${SCRIPT_DIR}/test_deliver_tls_certs_alerts.yml" \
+  "TASK \[Alert CRITICAL" \
+  "TLS certificate delivery to testshoebox failed" \
+  "-e" "$(_deliveries)" \
+  "-e" "tls_pushover_env=${DELIVER_PUSHOVER_ENV}"
 
 echo ""
 echo "All Monkeyble scenarios passed."

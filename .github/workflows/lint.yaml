@@ -301,7 +301,7 @@ jobs:
         working-directory: cluster/ansible
         run: |
           ansible-lint k3s-agent.yaml node-state.yaml rolling-upgrade.yaml \
-            ../../shoebox/shoebox-ansible-setup.yaml
+            deliver-tls-certs.yaml ../../shoebox/shoebox-ansible-setup.yaml
 
   policy:
     name: Kubernetes policy (advisory)

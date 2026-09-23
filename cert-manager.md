@@ -60,6 +60,34 @@ If the installation has drifted far enough that sequential hops are impractical,
 the supported escape hatch is a full teardown and reinstall — see below. That is
 how this installation got to v1.20.0 from v1.7.2.
 
+## Off-cluster certificates
+
+Hosts outside the cluster get certificates the same way the cluster does, because
+DNS-01 needs no inbound path to the host being certified.
+
+```
+Certificate in offcluster-tls
+  │  cluster/services/offcluster-certs.yaml, synced by the offcluster-certs Application
+  ▼
+Secret offcluster-tls/<host>-tls
+  │  cluster/ansible/deliver-tls-certs.yaml, daily on the Semaphore schedule
+  ▼
+/etc/ssl/shoebox/tls.{crt,key}
+```
+
+One `Certificate` per host, each with its own `Secret`, rather than exporting
+`kube-system/berlin-vertesi-com-wildcard-tls`. That key is Traefik's default
+certificate for every `*.berlin.vertesi.com` service, so putting it on a host outside
+the cluster puts the whole zone's TLS on the least defended machine on the network. A
+per-host key costs only the names it carries; `shoebox` carries `shoebox`, `semaphore`
+and `vault`, so adding a vhost needs no reissue.
+
+cert-manager renews at 60 of 90 days, so daily delivery leaves the full 30-day window
+as slack. Slack is only useful if something watches it: the `tls_cert` role reads the
+delivered certificate back and fails the run when `notAfter` is inside
+`tls_cert_min_days`, which turns a delivery job that quietly stopped running into a
+Pushover alert a month before anything expires.
+
 ## Verify
 
 ```sh
@@ -68,6 +96,7 @@ kubectl get clusterissuer letsencrypt-prod \
   -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'   # True
 kubectl get certificate -A          # every entry READY=True
 kubectl -n kube-system get certificate berlin-wildcard   # the default cert
+kubectl -n offcluster-tls get certificate    # the off-cluster hosts
 kubectl get challenge -A            # empty in steady state
 ```
 
