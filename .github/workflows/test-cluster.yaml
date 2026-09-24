@@ -69,6 +69,12 @@ jobs:
           kubectl rollout status deployment/cert-manager-webhook \
             -n cert-manager --timeout=120s
 
+      - name: Create the off-cluster TLS namespace
+        # The all-manifests dry-run below covers cluster/services/offcluster-certs.yaml
+        # and would fail on a namespace that does not exist. In the real cluster
+        # the offcluster-certs Application creates it with CreateNamespace=true.
+        run: kubectl create namespace offcluster-tls
+
       - name: Assert cert-manager stays on the manual-sync infra tier
         run: |
           # cert-manager is Tier C in #206: manually gated indefinitely. Auto-sync

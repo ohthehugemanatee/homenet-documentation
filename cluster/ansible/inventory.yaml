@@ -40,3 +40,20 @@ all:
         shoebox:
           ansible_host: 10.10.10.127
           ansible_user: ubuntu
+    # Hosts deliver-tls-certs.yaml delivers cluster-issued certificates to.
+    # Connection vars come from the group above; a host may be in both.
+    tls_clients:
+      hosts:
+        shoebox:
+          tls_deliveries:
+            - secret: shoebox-tls
+              namespace: offcluster-tls
+              format: separate
+              dest_cert: /etc/ssl/shoebox/tls.crt
+              dest_key: /etc/ssl/shoebox/tls.key
+              owner: root
+              group: root
+              mode: "0640"
+              # Nothing reads these files yet; #366's reverse proxy sets the
+              # command that restarts it.
+              reload_command: /bin/true

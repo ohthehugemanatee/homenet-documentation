@@ -60,6 +60,21 @@ Scheduled as a Semaphore task template with a cron expression (e.g. weekly
 log retention; configure project notifications (email/Slack/webhook) to surface
 failures, or point the notification email at a Pushover email-to-app address.
 
+### deliver-tls-certs.yaml — Semaphore daily schedule
+
+Copies each cluster-issued certificate in `offcluster-tls` onto the host that serves
+it, and fails the run when the delivered certificate is inside its renewal window.
+Targets the `tls_clients` group. See `cert-manager.md` for the issuance side.
+
+Scheduled as a Semaphore task template on `0 4 * * *`, clear of node-state's Sunday
+02:00. Daily because cert-manager renews at 60 of 90 days: the on-host copy stays
+within a day of the Secret, and the remaining 30 days are slack.
+
+Failure raises a CRITICAL Pushover alert from the playbook's own rescue block rather
+than from Semaphore's notifications, with credentials read from
+`/etc/ansible/pushover.env`. The playbook reads no vault secrets at all; the reason is
+in its contract in `cluster/ansible/CLAUDE.md`.
+
 ### rolling-upgrade.yaml — manual via Semaphore
 
 Run order: agents → multimasters → masters. Always pass `-e strict_mode=true` for
@@ -289,6 +304,16 @@ kubectl scale statefulset nextcloud --replicas=1
 
 Vault secrets consumed from `vault_file`: `k3s_token`, `pushover_app_token`, `pushover_user_key`. (`k3s_api_server_url` is a non-secret default in `group_vars/all.yaml`, not a vault secret.)
 
+### deliver-tls-certs.yaml
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `tls_deliveries` | **Yes** | — | Per-host list of deliveries, set in `inventory.yaml`. Keys: `secret`, `namespace`, `format`, `dest_cert`, `dest_key`, `owner`, `group`, `mode`, `reload_command` |
+| `k8s_kubeconfig` | No | `$KUBECONFIG`, else `$HOME/.kube/config` | Reads the TLS Secrets through shoebox's kubeconfig |
+| `tls_pushover_env` | No | `/etc/ansible/pushover.env` | Pushover credentials for the failure alert, read only when a delivery fails |
+
+Consumes no vault secrets and needs no `vault_file`.
+
 ### shoebox/shoebox-ansible-setup.yaml
 
 One-time bootstrap, run from the operator's workstation.
@@ -363,6 +388,7 @@ After `shoebox/shoebox-ansible-setup.yaml` runs:
 8. **Task templates** (playbook path relative to repo root; vault_file relative to playbook dir):
    - node-state: `ansible-playbook -i cluster/ansible/inventory.yaml --vault-password-file /etc/ansible/vault-password cluster/ansible/node-state.yaml`
    - rolling-upgrade: `ansible-playbook -i cluster/ansible/inventory.yaml --vault-password-file /etc/ansible/vault-password -e vault_file=group_vars/vault.yaml -e strict_mode=true cluster/ansible/rolling-upgrade.yaml`
+   - deliver-tls-certs: `ansible-playbook -i cluster/ansible/inventory.yaml cluster/ansible/deliver-tls-certs.yaml` — no vault password and no `vault_file`, deliberately; see the playbook contract in `cluster/ansible/CLAUDE.md`. Schedule it on `0 4 * * *`.
 
 > All required bind mounts (vault-password, kubeconfigs, kubectl binary, SSH keys, state dirs) are configured in `shoebox/semaphore/docker-compose.yaml` and set up by the bootstrap playbook.
 

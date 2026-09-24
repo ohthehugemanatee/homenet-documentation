@@ -1,0 +1,27 @@
+---
+# Scenario: the Secret is missing, so delivery fails. The rescue block must
+# send the CRITICAL alert and then re-raise — a rescue that swallowed the
+# failure would leave a scheduled run green while no cert was delivered.
+# The alert task is mocked so nothing is POSTed to Pushover. The failing
+# assert is deliberately not declared should_fail: monkeyble scores a
+# declared failure as a pass and the run would exit 0, which is the very
+# thing this scenario has to rule out.
+
+monkeyble_scenarios:
+  deliver_tls_certs_alerts:
+    tasks_to_test:
+
+      - task: "Read the TLS Secret"
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
+              result_dict:
+                resources: []
+
+      - task: "Alert CRITICAL — TLS certificate delivery failed"
+        should_be_skipped: false
+        mock:
+          config:
+            hpe.monkeyble.monkeyble_module:
+              consider_changed: false
