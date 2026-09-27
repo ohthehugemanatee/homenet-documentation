@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prowlarr
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      run: prowlarr
+  replicas: 1
+  serviceName: prowlarr
+  volumeClaimTemplates:
+    - metadata:
+        name: prowlarr-config
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "longhorn"
+        resources:
+          requests:
+            storage: 3Gi
+  template:
+    metadata:
+      labels:
+        run: prowlarr
+    spec:
+      containers:
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls162
+          ports:
+            - containerPort: 9696
+          env:
+            - name: PGID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: TZ
+              value: "Europe/Berlin"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: prowlarr-config
+              mountPath: /config
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: 9696
+            periodSeconds: 30
+            failureThreshold: 10  # 5 min grace; linuxserver s6-overlay init
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 9696
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 9696
+            periodSeconds: 30
+            failureThreshold: 3
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: default
+  labels:
+    run: prowlarr
+spec:
+  ports:
+  - port: 9696
+    protocol: TCP
+  selector:
+    run: prowlarr
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prowlarr
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+spec:
+  rules:
+  - host: prowlarr.cluster.vert
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prowlarr
+            port:
+              number: 9696
+  - host: prowlarr.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prowlarr
+            port:
+              number: 9696
+  tls:
+  - hosts:
+    - prowlarr.berlin.vertesi.com
