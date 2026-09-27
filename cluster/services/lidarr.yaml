@@ -99,16 +99,6 @@ metadata:
     ingress.kubernetes.io/hsts-preload: "true"
 spec:
   rules:
-  - host: lidarr.cluster.vert
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: lidarr
-            port:
-              number: 8686
   - host: lidarr.berlin.vertesi.com
     http:
       paths:
