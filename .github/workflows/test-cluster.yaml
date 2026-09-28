@@ -910,6 +910,60 @@ jobs:
             || { echo "FAILED: /config is not on the volumeClaimTemplate"; exit 1; }
           echo "starloom web UI and config volume OK"
 
+      - name: Deploy prowlarr and lidarr (real smoke test)
+        run: |
+          # Stand-in for the shoebox NFS media claim lidarr mounts; removed
+          # after the verify step so the all-manifests dry-run sees no conflict.
+          kubectl apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: media
+            namespace: default
+          spec:
+            accessModes: [ReadWriteOnce]
+            storageClassName: longhorn
+            resources:
+              requests:
+                storage: 1Gi
+          EOF
+          kubectl apply -f cluster/services/prowlarr.yaml -f cluster/services/lidarr.yaml
+          kubectl -n default rollout status statefulset/prowlarr --timeout=300s
+          kubectl -n default rollout status statefulset/lidarr --timeout=300s
+
+      - name: Diagnose prowlarr/lidarr failure
+        if: failure()
+        run: |
+          for APP in prowlarr lidarr; do
+            kubectl -n default describe pod -l run=$APP
+            kubectl -n default logs -l run=$APP --tail=200 || true
+          done
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify prowlarr and lidarr answer /ping and keep /config on their own PVC
+        run: |
+          # 8007/8008: 8000-8006 are taken by the forwards above.
+          for PAIR in prowlarr:8007:9696 lidarr:8008:8686; do
+            IFS=: read -r APP LOCAL PORT <<< "$PAIR"
+            kubectl -n default port-forward "svc/$APP" "$LOCAL:$PORT" &
+            PF_PID=$!
+            for i in $(seq 1 15); do
+              curl -fsS "http://127.0.0.1:$LOCAL/ping" >/dev/null 2>&1 && break
+              sleep 2
+            done
+            BODY=$(curl -fsS "http://127.0.0.1:$LOCAL/ping")
+            kill $PF_PID
+            echo "$APP: $BODY"
+            echo "$BODY" | grep -q '"status": *"OK"' \
+              || { echo "FAILED: $APP /ping did not report OK"; exit 1; }
+            CLAIM=$(kubectl -n default get pod "$APP-0" -o jsonpath="{.spec.volumes[?(@.name==\"$APP-config\")].persistentVolumeClaim.claimName}")
+            [ "$CLAIM" = "$APP-config-$APP-0" ] \
+              || { echo "FAILED: $APP /config is not on the volumeClaimTemplate"; exit 1; }
+          done
+          echo "prowlarr and lidarr health and config volumes OK"
+          kubectl -n default delete statefulset lidarr --wait
+          kubectl -n default delete pvc media --wait
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -943,7 +997,7 @@ jobs:
           # each app joins this set in the PR that converts it. radarr/sonarr are
           # deliberately absent: they overlay only /db and keep /config on NFS.
           CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn", "tautulli",
-                                "starloom"}
+                                "starloom", "prowlarr", "lidarr"}
           failed = 0
           for app in sorted(CONFIG_ON_LONGHORN):
               bad = 0
