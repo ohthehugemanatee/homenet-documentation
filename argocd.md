@@ -13,7 +13,7 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Media | auto | yes | yes | plex, tautulli, radarr, sonarr, lidarr, prowlarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
 | Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade, starloom |
 | Stateful | manual | no | no | nextcloud, collabora |
-| Infrastructure | manual | no | no | cert-manager, longhorn, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
+| Infrastructure | manual | no | no | cert-manager, longhorn, snapshot-controller, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 | Default TLS | auto | yes | no | traefik-default-tls |
 

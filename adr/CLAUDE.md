@@ -31,3 +31,4 @@ Start from [`template.md`](template.md).
 | [0005](0005-cluster-operations-are-ansible-playbooks.md) | Cluster-workload operations are Ansible playbooks | accepted |
 | [0006](0006-memory-limits-sized-from-the-image.md) | Memory limits are sized from the image; CPU is requests-only | accepted |
 | [0007](0007-off-cluster-tls-is-delivered-from-the-cluster.md) | Off-cluster TLS is delivered from the cluster on a schedule | accepted |
+| [0008](0008-csi-snapshots-not-velero.md) | Volume restore points use the CSI snapshot API, not Velero | accepted |
