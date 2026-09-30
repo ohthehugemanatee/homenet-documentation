@@ -239,6 +239,54 @@ jobs:
           kubectl logs -n longhorn-system job/longhorn-preflight \
             | grep -q 'Longhorn is ready to upgrade.'
 
+      - name: Assert the snapshot-controller pin tracks Longhorn's csi-snapshotter
+        # A Longhorn bump that leaves this pin behind has to fail here.
+        run: python3 .github/scripts/check_snapshotter_pin.py /tmp/longhorn.yaml
+
+      - name: Assert snapshot-controller stays on the manual-sync infra tier
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/snapshot-controller.yaml"))
+          policy = app["spec"].get("syncPolicy", {})
+          errs = []
+          if "automated" in policy:
+              errs.append("syncPolicy.automated is set; the pin moves with Longhorn's manual sync")
+          if app["metadata"].get("finalizers"):
+              errs.append("finalizer present; an Application delete would take the CRDs and every VolumeSnapshot")
+          if "notifications.argoproj.io/subscribe.on-out-of-sync.pushover" \
+                  not in app["metadata"].get("annotations", {}):
+              errs.append("missing on-out-of-sync Pushover annotation required of manual-sync apps")
+          if app["spec"]["source"].get("path") != "cluster/operators/snapshot-controller":
+              errs.append("source.path must be cluster/operators/snapshot-controller")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Install snapshot-controller (real smoke test)
+        # The pull also proves upstream published the pinned image.
+        run: |
+          kubectl apply --server-side -k cluster/operators/snapshot-controller
+          kubectl wait --for condition=established --timeout=60s \
+            crd/volumesnapshots.snapshot.storage.k8s.io \
+            crd/volumesnapshotcontents.snapshot.storage.k8s.io \
+            crd/volumesnapshotclasses.snapshot.storage.k8s.io
+          kubectl -n kube-system rollout status deploy/snapshot-controller --timeout=180s
+          PIN=$(python3 -c 'import yaml; k = yaml.safe_load(open("cluster/operators/snapshot-controller/kustomization.yaml")); print(k["images"][0]["newTag"])')
+          WANT="registry.k8s.io/sig-storage/snapshot-controller:${PIN}"
+          GOT=$(kubectl -n kube-system get pods -l app.kubernetes.io/name=snapshot-controller \
+            -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)
+          echo "running: ${GOT}"
+          [ "$GOT" = "$WANT" ] || { echo "FAILED: expected only ${WANT}"; exit 1; }
+
+      - name: Diagnose snapshot-controller failure
+        if: failure()
+        run: |
+          kubectl -n kube-system describe deploy/snapshot-controller || true
+          kubectl -n kube-system describe pods -l app.kubernetes.io/name=snapshot-controller || true
+          kubectl -n kube-system logs -l app.kubernetes.io/name=snapshot-controller --tail=100 || true
+
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
           kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml

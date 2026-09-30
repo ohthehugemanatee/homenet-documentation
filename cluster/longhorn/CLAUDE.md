@@ -22,6 +22,13 @@ a job to an explicit group drops every volume lacking that group's label.
 Guessing a `retain` for a `backup` task and applying it changes live retention.
 Read the CR or the UI first, or record the job as a gap in `README.md`.
 
+## A chart bump carries the snapshot-controller pin
+
+`cluster/operators/snapshot-controller/` is pinned to the `csi-snapshotter` tag
+this chart ships. Bump both in the same PR: `check_snapshotter_pin.py` reads the
+tag from the rendered chart and fails CI when the git refs or the image tag in
+that kustomization disagree.
+
 ## Verification
 
 Namespace rules, kubeconform, kube-score and polaris are in `cluster/CLAUDE.md`.
