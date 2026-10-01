@@ -316,7 +316,7 @@ jobs:
           NS: hostpath-smoke
         run: |
           kubectl create namespace "$NS"
-          kubectl -n "$NS" apply -f - <<EOF
+          kubectl -n "$NS" apply -f - <<'EOF'
           apiVersion: v1
           kind: PersistentVolumeClaim
           metadata: {name: src}
@@ -327,18 +327,18 @@ jobs:
           metadata: {name: writer}
           spec:
             restartPolicy: Never
-            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "echo $GITHUB_RUN_ID > /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
+            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "echo roundtrip > /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
             volumes: [{name: v, persistentVolumeClaim: {claimName: src}}]
           EOF
           kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/writer --timeout=180s
-          kubectl -n "$NS" apply -f - <<EOF
+          kubectl -n "$NS" apply -f - <<'EOF'
           apiVersion: snapshot.storage.k8s.io/v1
           kind: VolumeSnapshot
           metadata: {name: snap}
           spec: {volumeSnapshotClassName: csi-hostpath-snapclass, source: {persistentVolumeClaimName: src}}
           EOF
           kubectl -n "$NS" wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/snap --timeout=180s
-          kubectl -n "$NS" apply -f - <<EOF
+          kubectl -n "$NS" apply -f - <<'EOF'
           apiVersion: v1
           kind: PersistentVolumeClaim
           metadata: {name: restored}
@@ -353,7 +353,7 @@ jobs:
           metadata: {name: reader}
           spec:
             restartPolicy: Never
-            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "grep -qx $GITHUB_RUN_ID /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
+            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "grep -qx roundtrip /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
             volumes: [{name: v, persistentVolumeClaim: {claimName: restored}}]
           EOF
           kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/reader --timeout=180s
