@@ -25,6 +25,9 @@
   vars:
     openbao_dir: /opt/openbao
     openbao_data_dir: /opt/openbao/data
+    # The image runs as non-root 100:1000 . Ensure file perms match.
+    openbao_uid: 100
+    openbao_gid: 1000
 
   tasks:
     - name: Install Docker
@@ -47,12 +50,13 @@
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: directory
-        owner: root
-        group: root
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
         mode: "{{ item.mode }}"
       loop:
-        - {path: "{{ openbao_dir }}", mode: '0755'}
-        - {path: "{{ openbao_data_dir }}", mode: '0700'}
+        # Parent stays root-owned; 0755 lets the openbao uid traverse into data.
+        - {path: "{{ openbao_dir }}", owner: root, group: root, mode: '0755'}
+        - {path: "{{ openbao_data_dir }}", owner: "{{ openbao_uid }}", group: "{{ openbao_gid }}", mode: '0700'}
 
     - name: Copy OpenBao config
       ansible.builtin.copy:

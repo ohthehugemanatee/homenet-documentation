@@ -956,17 +956,6 @@ exceptions:
       bootstrap material; its exposure is the same as the existing
       vault-password-file pattern it replaces.
 
-  - pattern: "Container runs as root / no user directive"
-    files:
-      - shoebox/openbao/docker-compose.yaml
-    reason: >-
-      Partially mitigated in this PR (security_opt: no-new-privileges:true
-      added). Full non-root requires knowing the openbao container UID/GID
-      and updating /opt/openbao/data ownership in deploy-openbao.yaml
-      simultaneously. Deferred to a hardening pass once the UID is confirmed
-      from the upstream image manifest; adding user: openbao and chowning
-      /opt/openbao/data can be done in one atomic follow-up commit.
-
   - pattern: "changed_when docker compose stderr fragile across versions"
     files:
       - cluster/ansible/deploy-openbao.yaml
