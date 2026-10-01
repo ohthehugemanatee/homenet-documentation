@@ -3,8 +3,7 @@ services:
     image: ghcr.io/openbao/openbao:2
     container_name: openbao
     restart: unless-stopped
-    # Pin the image's non-root openbao user; deploy-openbao.yaml chowns the
-    # bind-mounted data dir to this uid:gid so the Raft store is writable.
+    # Pin the image's non-root openbao user
     user: "100:1000"
     cap_add:
       - IPC_LOCK
