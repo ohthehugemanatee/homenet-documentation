@@ -34,8 +34,8 @@ def pod(name='app-0', ready=True, finished_at=None, app='app',
     if deleting:
         meta['deletionTimestamp'] = '2026-10-01T11:59:00Z'
     return {'metadata': meta,
-            'status': {'conditions': [{'type': 'Ready',
-                                       'status': str(ready)}],
+            'status': {'conditions': [
+                {'type': 'Ready', 'status': 'True' if ready else 'False'}],
                        'containerStatuses': [container]}}
 
 
