@@ -267,11 +267,21 @@ jobs:
       - name: Install snapshot-controller (real smoke test)
         # The pull also proves upstream published the pinned image.
         run: |
-          kubectl apply --server-side -k cluster/operators/snapshot-controller
+          # kubectl maps every kind up front, so the class needs its CRD established first.
+          kubectl kustomize cluster/operators/snapshot-controller > /tmp/snapshot-controller.yaml
+          python3 - <<'PY' > /tmp/snapshot-crds.yaml
+          import yaml
+          docs = [d for d in yaml.safe_load_all(open('/tmp/snapshot-controller.yaml'))
+                  if d and d.get('kind') == 'CustomResourceDefinition']
+          assert docs, 'no CRDs in the snapshot-controller build'
+          print(yaml.dump_all(docs))
+          PY
+          kubectl apply --server-side -f /tmp/snapshot-crds.yaml
           kubectl wait --for condition=established --timeout=60s \
             crd/volumesnapshots.snapshot.storage.k8s.io \
             crd/volumesnapshotcontents.snapshot.storage.k8s.io \
             crd/volumesnapshotclasses.snapshot.storage.k8s.io
+          kubectl apply --server-side -f /tmp/snapshot-controller.yaml
           kubectl -n kube-system rollout status deploy/snapshot-controller --timeout=180s
           PIN=$(python3 -c 'import yaml; k = yaml.safe_load(open("cluster/operators/snapshot-controller/kustomization.yaml")); print(k["images"][0]["newTag"])')
           WANT="registry.k8s.io/sig-storage/snapshot-controller:${PIN}"
@@ -279,6 +289,15 @@ jobs:
             -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)
           echo "running: ${GOT}"
           [ "$GOT" = "$WANT" ] || { echo "FAILED: expected only ${WANT}"; exit 1; }
+
+      - name: Assert the Longhorn VolumeSnapshotClass survives source deletion
+        # type: snap cannot restore once its source volume is gone; restore needs bak.
+        run: |
+          GOT=$(kubectl get volumesnapshotclass longhorn-backup \
+            -o jsonpath='{.driver} {.parameters.type} {.deletionPolicy}')
+          echo "longhorn-backup: ${GOT}"
+          [ "$GOT" = "driver.longhorn.io bak Delete" ] \
+            || { echo "FAILED: expected 'driver.longhorn.io bak Delete'"; exit 1; }
 
       - name: Diagnose snapshot-controller failure
         if: failure()
