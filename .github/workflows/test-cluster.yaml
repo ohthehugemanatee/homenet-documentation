@@ -372,6 +372,28 @@ jobs:
           kubectl -n hostpath-smoke get pod,pvc,volumesnapshot,volumesnapshotcontent -o wide || true
           kubectl -n hostpath-smoke describe pod,pvc,volumesnapshot || true
 
+      - name: Run the upgrade gate against an unhealthy and a healthy app
+        run: |
+          gate() {
+            kubectl delete job toy-upgrade-gate --ignore-not-found --wait=true >&2
+            kubectl apply -k .github/k3d/upgrade-hooks >&2
+            kubectl wait --for=condition="$1" job/toy-upgrade-gate --timeout=120s >&2 || {
+              kubectl describe job/toy-upgrade-gate >&2
+              kubectl logs job/toy-upgrade-gate --all-containers --prefix >&2
+              return 1; }
+            kubectl logs job/toy-upgrade-gate --all-containers --prefix
+          }
+          kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
+          kubectl rollout status statefulset/toy --timeout=120s
+          kubectl exec toy-0 -- rm /tmp/ready
+          kubectl wait --for=condition=Ready=false pod/toy-0 --timeout=60s
+          out=$(gate Failed); echo "$out"
+          grep -q 'pod toy-0 is not Ready' <<<"$out"
+          kubectl exec toy-0 -- touch /tmp/ready
+          kubectl wait --for=condition=Ready pod/toy-0 --timeout=60s
+          out=$(gate Complete); echo "$out"
+          grep -q 'StatefulSet/toy is ready to upgrade.' <<<"$out"
+
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
           kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml

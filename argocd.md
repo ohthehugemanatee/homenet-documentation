@@ -70,6 +70,8 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 
 A detached volume reports robustness `unknown` because no engine is running to evaluate its replicas; the gate reads robustness only as a defect when it is `faulted`, so idle volumes do not block a sync.
 
+`hooks/upgrade/` is the shared base for app upgrades. An app's hook directory instantiates it with `namePrefix: <app>-` and sets `WORKLOAD_KIND` and `WORKLOAD_NAME` in `upgrade-params`. Its PreSync gate aborts the sync unless the workload's rollout is complete, every pod is Ready, and no container has restarted in the last 15 minutes. No app uses it yet.
+
 ## Helm-sourced Applications
 
 Monitoring stack, NFS provisioner, cert-manager and Longhorn use ArgoCD multi-source: the chart comes from an upstream registry, values come from this git repo via `$values` ref. Pin chart versions in `spec.sources[].targetRevision`.

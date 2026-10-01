@@ -1,0 +1,23 @@
+---
+# Shared upgrade hooks. A per-app overlay sets namePrefix: <app>- and merges
+# its values into upgrade-params. See cluster/argocd/CLAUDE.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: default
+resources:
+  - rbac.yaml
+  - gate-job.yaml
+configMapGenerator:
+  - name: upgrade-scripts
+    files:
+      - gate.py
+  - name: upgrade-params
+    literals:
+      - WORKLOAD_KIND=
+      - WORKLOAD_NAME=
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-3"
