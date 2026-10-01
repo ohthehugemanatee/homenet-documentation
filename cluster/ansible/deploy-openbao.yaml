@@ -25,9 +25,7 @@
   vars:
     openbao_dir: /opt/openbao
     openbao_data_dir: /opt/openbao/data
-    # The Alpine openbao image runs as the non-root openbao user (uid 100, gid
-    # 1000). The bind-mounted data dir must be owned by it or the Raft store
-    # fails with EACCES on vault.db. docker-compose.yaml pins the same uid:gid.
+    # The image runs as non-root 100:1000 . Ensure file perms match.
     openbao_uid: 100
     openbao_gid: 1000
 
