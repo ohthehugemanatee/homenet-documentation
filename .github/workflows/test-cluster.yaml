@@ -306,6 +306,72 @@ jobs:
           kubectl -n kube-system describe pods -l app.kubernetes.io/name=snapshot-controller || true
           kubectl -n kube-system logs -l app.kubernetes.io/name=snapshot-controller --tail=100 || true
 
+      - name: Install csi-driver-host-path (snapshot-capable test driver)
+        run: |
+          kubectl apply -k .github/k3d/csi-hostpath
+          kubectl rollout status statefulset/csi-hostpathplugin --timeout=300s
+
+      - name: Snapshot and restore a hostpath PVC
+        env:
+          NS: hostpath-smoke
+        run: |
+          kubectl create namespace "$NS"
+          kubectl -n "$NS" apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata: {name: src}
+          spec: {storageClassName: csi-hostpath-sc, accessModes: [ReadWriteOnce], resources: {requests: {storage: 16Mi}}}
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata: {name: writer}
+          spec:
+            restartPolicy: Never
+            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "echo roundtrip > /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
+            volumes: [{name: v, persistentVolumeClaim: {claimName: src}}]
+          EOF
+          kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/writer --timeout=180s
+          kubectl -n "$NS" apply -f - <<'EOF'
+          apiVersion: snapshot.storage.k8s.io/v1
+          kind: VolumeSnapshot
+          metadata: {name: snap}
+          spec: {volumeSnapshotClassName: csi-hostpath-snapclass, source: {persistentVolumeClaimName: src}}
+          EOF
+          kubectl -n "$NS" wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/snap --timeout=180s
+          kubectl -n "$NS" apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata: {name: restored}
+          spec:
+            storageClassName: csi-hostpath-sc
+            accessModes: [ReadWriteOnce]
+            resources: {requests: {storage: 16Mi}}
+            dataSource: {apiGroup: snapshot.storage.k8s.io, kind: VolumeSnapshot, name: snap}
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata: {name: reader}
+          spec:
+            restartPolicy: Never
+            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "grep -qx roundtrip /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
+            volumes: [{name: v, persistentVolumeClaim: {claimName: restored}}]
+          EOF
+          kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/reader --timeout=180s
+          # A Completed pod still holds its claim, so pods go before claims.
+          kubectl -n "$NS" delete pod writer reader --timeout=60s
+          kubectl -n "$NS" delete pvc restored --timeout=60s
+          kubectl -n "$NS" delete volumesnapshot snap --timeout=60s
+          kubectl -n "$NS" delete pvc src --timeout=60s
+          kubectl delete namespace "$NS" --timeout=60s
+
+      - name: Diagnose csi-driver-host-path failure
+        if: failure()
+        run: |
+          kubectl describe statefulset/csi-hostpathplugin || true
+          kubectl logs csi-hostpathplugin-0 --all-containers --tail=50 || true
+          kubectl -n hostpath-smoke get pod,pvc,volumesnapshot,volumesnapshotcontent -o wide || true
+          kubectl -n hostpath-smoke describe pod,pvc,volumesnapshot || true
+
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
           kubectl apply -f cluster/services/claude-remote-debug-rbac.yaml
