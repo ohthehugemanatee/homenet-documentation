@@ -3,6 +3,9 @@ services:
     image: ghcr.io/openbao/openbao:2
     container_name: openbao
     restart: unless-stopped
+    # Pin the image's non-root openbao user; deploy-openbao.yaml chowns the
+    # bind-mounted data dir to this uid:gid so the Raft store is writable.
+    user: "100:1000"
     cap_add:
       - IPC_LOCK
     security_opt:
@@ -12,7 +15,7 @@ services:
       # 8201 (Raft peer) intentionally not published — single-node deployment
     volumes:
       - ./config.hcl:/openbao/config/config.hcl:ro
-      # Plain bind mount: /opt/openbao/data is Ansible-managed (0700 root:root).
+      # Plain bind mount: /opt/openbao/data is Ansible-managed (0700, uid 100).
       # A named volume would let `docker compose down -v` wipe the secret store.
       - /opt/openbao/data:/openbao/data
     command: server
