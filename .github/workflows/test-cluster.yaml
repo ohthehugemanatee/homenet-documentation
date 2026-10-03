@@ -408,8 +408,9 @@ jobs:
           hook snapshot Failed
           test "$(replicas)" = 1
           kubectl rollout status statefulset/toy --timeout=120s
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
           setup
-          kubectl get configmap toy-upgrade-state
+          kubectl create configmap toy-upgrade-state --from-literal=snapshot=stale
           hook gate Complete
           test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
 

@@ -30,7 +30,6 @@ restore() {
 }
 trap restore EXIT
 
-record --from-literal=replicas="$replicas"
 k scale "$target" --replicas=0
 until_empty 300 k get pods -l "${selector%,}" -o name
 # Detach follows unmount, so the filesystem is flushed before the snapshot.
