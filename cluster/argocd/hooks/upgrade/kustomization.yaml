@@ -15,6 +15,7 @@ configMapGenerator:
     literals:
       - WORKLOAD_KIND=
       - WORKLOAD_NAME=
+      - INTEGRITY_COMMAND=
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

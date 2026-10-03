@@ -23,7 +23,11 @@ rules:
     verbs: ["get"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["list"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    # Apiservers authorize kubectl exec as get (WebSocket) or create, depending on version.
+    verbs: ["get", "create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
