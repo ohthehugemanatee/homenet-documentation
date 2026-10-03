@@ -70,7 +70,11 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 
 A detached volume reports robustness `unknown` because no engine is running to evaluate its replicas; the gate reads robustness only as a defect when it is `faulted`, so idle volumes do not block a sync.
 
-`hooks/upgrade/` is the shared base for app upgrades. An app's hook directory instantiates it with `namePrefix: <app>-` and sets `WORKLOAD_KIND` and `WORKLOAD_NAME` in `upgrade-params`. Its PreSync gate aborts the sync unless the workload's rollout is complete, every pod is Ready, and no container has restarted in the last 15 minutes. If an app sets `INTEGRITY_COMMAND`, the gate also runs it through `kubectl exec` as `sh -c` in the workload's default container, and a non-zero exit aborts the sync. No app uses it yet.
+`hooks/upgrade/` is the shared base for app upgrades (ADR-0009). An app's hook directory instantiates it with `namePrefix: <app>-` and sets `WORKLOAD_KIND`, `WORKLOAD_NAME` and `CLAIM_NAME` in `upgrade-params`. No app uses it yet. It runs three Jobs:
+
+- **PreSync gate (wave -2):** deletes the `<workload>-upgrade-state` ConfigMap, then aborts the sync unless the workload's rollout is complete, every pod is Ready, and no container has restarted in the last 15 minutes. If an app sets `INTEGRITY_COMMAND`, the gate also runs it through `kubectl exec` as `sh -c` in the workload's default container, and a non-zero exit aborts the sync.
+- **PreSync snapshot (wave -1):** scales the workload to 0, waits for its pods to go and its volume to detach, takes a `VolumeSnapshot` of `CLAIM_NAME` through `SNAPSHOT_CLASS` (default `longhorn-backup`), and records the replica count and snapshot name in `<workload>-upgrade-state`. If any of that fails, it scales the workload back to its original replica count and aborts the sync. Otherwise the sync's apply restores the replica count from git.
+- **PostSync cleanup:** deletes the recorded snapshot, which also deletes its backup on shoebox, and the state ConfigMap. A sync that never becomes healthy never reaches PostSync, so its snapshot stays.
 
 ## Helm-sourced Applications
 
