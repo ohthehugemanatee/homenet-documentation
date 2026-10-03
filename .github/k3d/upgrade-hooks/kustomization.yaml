@@ -11,3 +11,4 @@ configMapGenerator:
     literals:
       - WORKLOAD_KIND=statefulset
       - WORKLOAD_NAME=toy
+      - INTEGRITY_COMMAND=test ! -e /tmp/corrupt

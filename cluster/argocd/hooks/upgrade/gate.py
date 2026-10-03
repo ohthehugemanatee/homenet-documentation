@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Shared upgrade PreSync gate. See cluster/argocd/CLAUDE.md."""
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -8,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 RESTART_WINDOW = timedelta(minutes=15)
 
 
-def blockers(workload, pods, now):
+def blockers(workload, pods, now, integrity=None):
     spec = workload.get('spec') or {}
     status = workload.get('status') or {}
     want = spec.get('replicas', 1)
@@ -44,6 +45,10 @@ def blockers(workload, pods, now):
                     finished.replace('Z', '+00:00')) < RESTART_WINDOW:
                 found.append(f"container {container['name']} in pod "
                              f"{meta['name']} restarted at {finished}")
+    if integrity and integrity[0] != 0:
+        lines = [line for line in integrity[1].splitlines() if line.strip()]
+        found.append(f'integrity check exited {integrity[0]}'
+                     + (f': {lines[-1]}' if lines else ''))
     return found
 
 
@@ -53,17 +58,27 @@ def main(argv, now=None):
             workload = json.load(handle)
         with open(argv[2], encoding='utf-8') as handle:
             pods = json.load(handle).get('items') or []
-    except (OSError, json.JSONDecodeError) as exc:
+        integrity = None
+        # The fetch writes these only when INTEGRITY_COMMAND is set.
+        if len(argv) > 4 and os.path.exists(argv[3]):
+            with open(argv[3], encoding='utf-8') as handle:
+                rc = int(handle.read())
+            with open(argv[4], encoding='utf-8') as handle:
+                integrity = (rc, handle.read())
+    except (OSError, ValueError) as exc:
         print(f'upgrade gate could not read fetched state: {exc}',
               file=sys.stderr)
         return 1
 
     name = f"{workload['kind']}/{workload['metadata']['name']}"
-    found = blockers(workload, pods, now or datetime.now(timezone.utc))
+    found = blockers(workload, pods, now or datetime.now(timezone.utc),
+                     integrity)
     if not found:
         print(f'{name} is ready to upgrade.')
         return 0
 
+    if integrity and integrity[0] != 0:
+        print(integrity[1], file=sys.stderr)
     print(f'{name} is not ready to upgrade:', file=sys.stderr)
     for reason in found:
         print(f'  {reason}', file=sys.stderr)

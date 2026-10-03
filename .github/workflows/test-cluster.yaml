@@ -372,7 +372,7 @@ jobs:
           kubectl -n hostpath-smoke get pod,pvc,volumesnapshot,volumesnapshotcontent -o wide || true
           kubectl -n hostpath-smoke describe pod,pvc,volumesnapshot || true
 
-      - name: Run the upgrade gate against an unhealthy and a healthy app
+      - name: Run the upgrade gate against unhealthy, healthy and corrupt apps
         run: |
           gate() {
             kubectl delete job toy-upgrade-gate --ignore-not-found --wait=true >&2
@@ -393,6 +393,10 @@ jobs:
           kubectl wait --for=condition=Ready pod/toy-0 --timeout=60s
           out=$(gate Complete); echo "$out"
           grep -q 'StatefulSet/toy is ready to upgrade.' <<<"$out"
+          kubectl exec toy-0 -- touch /tmp/corrupt
+          out=$(gate Failed); echo "$out"
+          grep -q 'integrity check exited 1' <<<"$out"
+          kubectl exec toy-0 -- rm /tmp/corrupt
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |

@@ -35,6 +35,12 @@ spec:
               kubectl get "${WORKLOAD_KIND:?}/${WORKLOAD_NAME:?}" \
                 -o json --cache-dir=/data/kube-cache > /data/workload.json
               kubectl get pods -o json --cache-dir=/data/kube-cache > /data/pods.json
+              if [ -n "${INTEGRITY_COMMAND:-}" ]; then
+                rc=0
+                kubectl exec "$WORKLOAD_KIND/$WORKLOAD_NAME" --cache-dir=/data/kube-cache \
+                  -- sh -c "$INTEGRITY_COMMAND" > /data/integrity.log 2>&1 || rc=$?
+                echo "$rc" > /data/integrity.rc
+              fi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -57,6 +63,8 @@ spec:
             - /hook/gate.py
             - /data/workload.json
             - /data/pods.json
+            - /data/integrity.rc
+            - /data/integrity.log
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

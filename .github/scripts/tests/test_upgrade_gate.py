@@ -80,6 +80,19 @@ class TestBlockers(unittest.TestCase):
         self.assertEqual(len(found), 3)
 
 
+class TestIntegrity(unittest.TestCase):
+
+    def test_passing_check_does_not_block(self):
+        self.assertEqual(
+            gate.blockers(workload(), [pod()], NOW, integrity=(0, 'ok')), [])
+
+    def test_failing_check_blocks_with_its_last_line(self):
+        found = gate.blockers(workload(), [pod()], NOW,
+                              integrity=(1, 'checking\nrow 7 missing\n\n'))
+        self.assertEqual(found,
+                         ['integrity check exited 1: row 7 missing'])
+
+
 class TestExitCode(unittest.TestCase):
 
     def setUp(self):
@@ -102,6 +115,21 @@ class TestExitCode(unittest.TestCase):
 
     def test_unhealthy_exits_nonzero(self):
         self.assertEqual(self._run(workload(), [pod(ready=False)]), 1)
+
+    def _run_integrity(self, rc):
+        args = ['gate.py',
+                self._write('workload.json', json.dumps(workload())),
+                self._write('pods.json', json.dumps({'items': [pod()]})),
+                os.path.join(self.tmpdir, 'integrity.rc'),
+                self._write('integrity.log', 'checked\n')]
+        if rc is not None:
+            self._write('integrity.rc', rc)
+        return gate.main(args, NOW)
+
+    def test_integrity_result_sets_the_exit_code(self):
+        for rc, want in ((None, 0), ('0\n', 0), ('1\n', 1), ('x', 1)):
+            with self.subTest(rc=rc):
+                self.assertEqual(self._run_integrity(rc), want)
 
     def test_unreadable_state_exits_nonzero(self):
         app = self._write('workload.json', json.dumps(workload()))
