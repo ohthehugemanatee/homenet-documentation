@@ -4,6 +4,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: upgrade-gate
+  labels:
+    app.kubernetes.io/component: gate
   annotations:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
@@ -32,6 +34,9 @@ spec:
             - -c
             - |
               set -eu
+              # A stale record would point a restore at an earlier sync's snapshot.
+              kubectl delete configmap "${WORKLOAD_NAME:?}-upgrade-state" --ignore-not-found \
+                --cache-dir=/data/kube-cache
               kubectl get "${WORKLOAD_KIND:?}/${WORKLOAD_NAME:?}" \
                 -o json --cache-dir=/data/kube-cache > /data/workload.json
               kubectl get pods -o json --cache-dir=/data/kube-cache > /data/pods.json

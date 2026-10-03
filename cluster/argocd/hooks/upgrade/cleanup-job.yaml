@@ -1,0 +1,54 @@
+---
+# See cluster/argocd/CLAUDE.md.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: upgrade-cleanup
+  labels:
+    app.kubernetes.io/component: cleanup
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      serviceAccountName: upgrade-hooks
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cleanup
+          image: alpine/kubectl:1.36.4
+          command: [sh, /hook/cleanup.sh]
+          envFrom:
+            - configMapRef:
+                name: upgrade-params
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: hook
+          configMap:
+            name: upgrade-scripts
+        - name: tmp
+          emptyDir: {}

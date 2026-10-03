@@ -7,15 +7,22 @@ namespace: default
 resources:
   - rbac.yaml
   - gate-job.yaml
+  - snapshot-job.yaml
+  - cleanup-job.yaml
 configMapGenerator:
   - name: upgrade-scripts
     files:
       - gate.py
+      - snapshot.sh
+      - cleanup.sh
   - name: upgrade-params
     literals:
       - WORKLOAD_KIND=
       - WORKLOAD_NAME=
       - INTEGRITY_COMMAND=
+      - CLAIM_NAME=
+      - SNAPSHOT_CLASS=longhorn-backup
+      - SNAPSHOT_TIMEOUT=45m
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
