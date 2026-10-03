@@ -70,3 +70,13 @@ misconfigurations:
       grants get/list/watch only and omits the core API group, so Secrets stay
       unreadable. Scoped to this file so the rule still catches a wildcard
       paired with write verbs elsewhere.
+
+  - id: KSV-0047
+    paths:
+      - "**/hooks/upgrade/rbac.yaml"
+    statement: >-
+      The upgrade gate's PreSync Job runs an optional INTEGRITY_COMMAND via
+      `kubectl exec` against the workload it is gating, to verify data
+      integrity before a sync proceeds. This requires create/get on
+      pods/exec, scoped to this single Role used only by that Job's
+      ServiceAccount.
