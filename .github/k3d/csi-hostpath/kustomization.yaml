@@ -1,0 +1,14 @@
+# CI-only snapshot-capable CSI driver for the k3d job; never deployed to the cluster.
+# Sidecar RBAC refs match the sidecar image tags in csi-hostpath-plugin.yaml at the driver ref.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/v5.2.0/deploy/kubernetes/rbac.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/external-attacher/v4.8.0/deploy/kubernetes/rbac.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/external-resizer/v1.13.1/deploy/kubernetes/rbac.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/v8.2.0/deploy/kubernetes/csi-snapshotter/rbac-csi-snapshotter.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/external-health-monitor/v0.14.0/deploy/kubernetes/external-health-monitor-controller/rbac.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/v1.17.0/deploy/kubernetes-1.30/hostpath/csi-hostpath-driverinfo.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/v1.17.0/deploy/kubernetes-1.30/hostpath/csi-hostpath-plugin.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/v1.17.0/deploy/kubernetes-1.30/hostpath/csi-hostpath-snapshotclass.yaml
+  - https://raw.githubusercontent.com/kubernetes-csi/csi-driver-host-path/v1.17.0/examples/csi-storageclass.yaml

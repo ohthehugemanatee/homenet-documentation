@@ -32,3 +32,9 @@ all:
           ansible_host: localhost
           ansible_python_interpreter: "{{ ansible_playbook_python }}"
           ansible_hostname: testshoebox
+    # deliver-tls-certs.yaml targets this group. The host and its connection
+    # vars are defined once above; tls_deliveries comes from run-tests.sh,
+    # because the destination paths live under its temp dir.
+    tls_clients:
+      hosts:
+        testshoebox:
