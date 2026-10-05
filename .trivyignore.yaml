@@ -70,3 +70,15 @@ misconfigurations:
       grants get/list/watch only and omits the core API group, so Secrets stay
       unreadable. Scoped to this file so the rule still catches a wildcard
       paired with write verbs elsewhere.
+
+  - id: KSV-0053
+    paths:
+      - "**/hooks/upgrade/rbac.yaml"
+    statement: >-
+      The upgrade gate runs an app's optional INTEGRITY_COMMAND with kubectl
+      exec in the app's own container, which has the tools the check needs.
+      The Role is namespaced to default and bound only to the ServiceAccount
+      that the ArgoCD hook Job mounts. A check pod mounting the claim instead
+      would need pod create/delete and would hold the claim through
+      pvc-protection when it completes. Scoped to this file so the rule still
+      catches exec grants elsewhere.

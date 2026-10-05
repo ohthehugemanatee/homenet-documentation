@@ -1,0 +1,19 @@
+---
+# CI-only stand-in for an app: Ready while /tmp/ready exists.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: toy
+spec:
+  replicas: 1
+  serviceName: toy
+  selector: {matchLabels: {app: toy}}
+  template:
+    metadata: {labels: {app: toy}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: toy
+          image: busybox:1.37
+          command: [sh, -c, "touch /tmp/ready && exec sleep 86400"]
+          readinessProbe: {exec: {command: [test, -f, /tmp/ready]}, periodSeconds: 2}

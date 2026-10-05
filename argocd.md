@@ -10,10 +10,10 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 
 | Category | Sync | Self-heal | Prune | Apps |
 |---|---|---|---|---|
-| Media | auto | yes | yes | plex, tautulli, radarr, sonarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
+| Media | auto | yes | yes | plex, tautulli, radarr, sonarr, lidarr, prowlarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
 | Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade, starloom |
 | Stateful | manual | no | no | nextcloud, collabora |
-| Infrastructure | manual | no | no | cert-manager, longhorn, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
+| Infrastructure | manual | no | no | cert-manager, longhorn, snapshot-controller, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 | Default TLS | auto | yes | no | traefik-default-tls |
 
@@ -69,6 +69,8 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 `hooks/longhorn/` gates the Longhorn upgrade chain: it reads `volumes.longhorn.io` and `backingimages.longhorn.io` over the in-cluster API and exits non-zero on a faulted volume or a backing image with a failed disk file, which aborts the sync before the upgrade starts. Longhorn cannot be rolled back once a minor upgrade completes, so the check runs on the sync rather than as an operator step that can be skipped.
 
 A detached volume reports robustness `unknown` because no engine is running to evaluate its replicas; the gate reads robustness only as a defect when it is `faulted`, so idle volumes do not block a sync.
+
+`hooks/upgrade/` is the shared base for app upgrades. An app's hook directory instantiates it with `namePrefix: <app>-` and sets `WORKLOAD_KIND` and `WORKLOAD_NAME` in `upgrade-params`. Its PreSync gate aborts the sync unless the workload's rollout is complete, every pod is Ready, and no container has restarted in the last 15 minutes. If an app sets `INTEGRITY_COMMAND`, the gate also runs it through `kubectl exec` as `sh -c` in the workload's default container, and a non-zero exit aborts the sync. No app uses it yet.
 
 ## Helm-sourced Applications
 

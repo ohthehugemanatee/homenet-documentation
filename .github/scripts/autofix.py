@@ -48,6 +48,7 @@ _BASH_BLOCKED = ("curl", "wget", "nc ", "ncat", "netcat", "/dev/tcp",
 
 
 ANSIBLE_TARGETS = ["k3s-agent.yaml", "node-state.yaml", "rolling-upgrade.yaml",
+                   "deliver-tls-certs.yaml",
                    "../../shoebox/shoebox-ansible-setup.yaml"]
 
 # Keyed by failing CI job name; {"setup": [argv], "fix": argv, "check": argv, "cwd": path}.

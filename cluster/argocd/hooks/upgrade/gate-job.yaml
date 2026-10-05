@@ -1,0 +1,91 @@
+---
+# See cluster/argocd/CLAUDE.md.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: upgrade-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      serviceAccountName: upgrade-hooks
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: fetch
+          image: alpine/kubectl:1.36.4
+          envFrom:
+            - configMapRef:
+                name: upgrade-params
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              kubectl get "${WORKLOAD_KIND:?}/${WORKLOAD_NAME:?}" \
+                -o json --cache-dir=/data/kube-cache > /data/workload.json
+              kubectl get pods -o json --cache-dir=/data/kube-cache > /data/pods.json
+              if [ -n "${INTEGRITY_COMMAND:-}" ]; then
+                rc=0
+                kubectl exec "$WORKLOAD_KIND/$WORKLOAD_NAME" --cache-dir=/data/kube-cache \
+                  -- sh -c "$INTEGRITY_COMMAND" > /data/integrity.log 2>&1 || rc=$?
+                echo "$rc" > /data/integrity.rc
+              fi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      containers:
+        - name: gate
+          image: python:3.12-alpine
+          command:
+            - python3
+            - /hook/gate.py
+            - /data/workload.json
+            - /data/pods.json
+            - /data/integrity.rc
+            - /data/integrity.log
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: data
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: hook
+          configMap:
+            name: upgrade-scripts
+        - name: data
+          emptyDir: {}
