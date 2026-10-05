@@ -1,5 +1,5 @@
 ---
-# CI-only stand-in for an app: Ready while /tmp/ready exists.
+# CI-only stand-in for an app: Ready while /tmp/ready exists, data on a snapshot-capable claim.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -17,3 +17,7 @@ spec:
           image: busybox:1.37
           command: [sh, -c, "touch /tmp/ready && exec sleep 86400"]
           readinessProbe: {exec: {command: [test, -f, /tmp/ready]}, periodSeconds: 2}
+          volumeMounts: [{name: data, mountPath: /data}]
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec: {storageClassName: csi-hostpath-sc, accessModes: [ReadWriteOnce], resources: {requests: {storage: 16Mi}}}
