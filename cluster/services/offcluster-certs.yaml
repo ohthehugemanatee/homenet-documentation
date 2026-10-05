@@ -1,0 +1,23 @@
+# Certificates for hosts outside the cluster. Delivered by
+# cluster/ansible/deliver-tls-certs.yaml — see cert-manager.md.
+#
+# Deliberately not kube-system/berlin-vertesi-com-wildcard-tls: that key is
+# Traefik's default certificate for every *.berlin.vertesi.com service, so
+# copying it onto a host outside the cluster puts the whole zone's TLS there.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: shoebox
+  namespace: offcluster-tls
+spec:
+  secretName: shoebox-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  # Every name the shoebox reverse proxy will serve, so later vhosts need no
+  # reissue. None of these hosts is reachable from the internet; the
+  # letsencrypt-prod ClusterIssuer solves vertesi.com over Cloudflare DNS-01.
+  dnsNames:
+    - shoebox.berlin.vertesi.com
+    - semaphore.berlin.vertesi.com
+    - vault.berlin.vertesi.com

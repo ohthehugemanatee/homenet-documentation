@@ -10,20 +10,15 @@
 
 ## Part 2: MANDATORY AI-Specific Validation Checklist
 
-- [ ] **Omission Check**: What security controls is this code missing? (input validation, output encoding, authorization)
+- [ ] **Omission Check**: Did the change omit required behavior, tests, docs, or rollback steps implied by the PR description or touched files?
 - [ ] **Logic Check**: Is there a subtle logic error? (`==` vs `in`, off-by-one, inverted condition)
-- [ ] **Dependency Check**: Are all new packages real, secure, and approved? (no hallucinated dependencies)
+- [ ] **Idempotency Check**: Does an Ansible task, controller config, or workflow step create repeated side effects when it runs twice?
+- [ ] **Dependency Check**: Are all new packages real and verifiable? (no hallucinated dependencies)
 - [ ] **Context Check**: Did the AI take a dangerous shortcut (e.g., `eval()`, `--no-verify`, disabled auth) that violates our security posture?
-- [ ] **Drift Check**: Did the AI change security-critical code (auth, crypto, RBAC, network policy) outside the PR's declared scope?
+- [ ] **Drift Check**: Did the AI change infrastructure, workflow, or documentation areas outside the PR's declared scope?
+- [ ] **Doc Drift Check**: Do changed docs contradict manifests, Ansible, workflows, or scripts?
+- [ ] **Rollback Check**: Is the stated rollback path real for the resources changed?
 - [ ] **Comment Budget Check**: Do added comments, docstrings, and doc lines state non-obvious invariants only, or do they narrate the change? (compare added comment lines against added code lines)
-
-## Part 3: Security & Privacy Review
-
-- [ ] **Secrets**: No plaintext secrets, unresolved `CHANGEME_*` placeholders, or credentials in the diff
-- [ ] **RBAC & Access Control**: RBAC rules follow least-privilege; no overly broad `ClusterRole` bindings or wildcard verbs
-- [ ] **Network Exposure**: Service types, ingress rules, and network policies expose only what the change requires
-- [ ] **Container Security**: No new privileged containers, host namespaces, or unnecessary capabilities
-- [ ] **Privacy**: Change does not log, expose, or persist personal data (home topology, device schedules, user activity) beyond its intended scope
 
 ---
 

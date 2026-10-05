@@ -69,6 +69,12 @@ jobs:
           kubectl rollout status deployment/cert-manager-webhook \
             -n cert-manager --timeout=120s
 
+      - name: Create the off-cluster TLS namespace
+        # The all-manifests dry-run below covers cluster/services/offcluster-certs.yaml
+        # and would fail on a namespace that does not exist. In the real cluster
+        # the offcluster-certs Application creates it with CreateNamespace=true.
+        run: kubectl create namespace offcluster-tls
+
       - name: Assert cert-manager stays on the manual-sync infra tier
         run: |
           # cert-manager is Tier C in #206: manually gated indefinitely. Auto-sync
@@ -232,6 +238,165 @@ jobs:
               exit 1; }
           kubectl logs -n longhorn-system job/longhorn-preflight \
             | grep -q 'Longhorn is ready to upgrade.'
+
+      - name: Assert the snapshot-controller pin tracks Longhorn's csi-snapshotter
+        # A Longhorn bump that leaves this pin behind has to fail here.
+        run: python3 .github/scripts/check_snapshotter_pin.py /tmp/longhorn.yaml
+
+      - name: Assert snapshot-controller stays on the manual-sync infra tier
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/snapshot-controller.yaml"))
+          policy = app["spec"].get("syncPolicy", {})
+          errs = []
+          if "automated" in policy:
+              errs.append("syncPolicy.automated is set; the pin moves with Longhorn's manual sync")
+          if app["metadata"].get("finalizers"):
+              errs.append("finalizer present; an Application delete would take the CRDs and every VolumeSnapshot")
+          if "notifications.argoproj.io/subscribe.on-out-of-sync.pushover" \
+                  not in app["metadata"].get("annotations", {}):
+              errs.append("missing on-out-of-sync Pushover annotation required of manual-sync apps")
+          if app["spec"]["source"].get("path") != "cluster/operators/snapshot-controller":
+              errs.append("source.path must be cluster/operators/snapshot-controller")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Install snapshot-controller (real smoke test)
+        # The pull also proves upstream published the pinned image.
+        run: |
+          # kubectl maps every kind up front, so the class needs its CRD established first.
+          kubectl kustomize cluster/operators/snapshot-controller > /tmp/snapshot-controller.yaml
+          python3 - <<'PY' > /tmp/snapshot-crds.yaml
+          import yaml
+          docs = [d for d in yaml.safe_load_all(open('/tmp/snapshot-controller.yaml'))
+                  if d and d.get('kind') == 'CustomResourceDefinition']
+          assert docs, 'no CRDs in the snapshot-controller build'
+          print(yaml.dump_all(docs))
+          PY
+          kubectl apply --server-side -f /tmp/snapshot-crds.yaml
+          kubectl wait --for condition=established --timeout=60s \
+            crd/volumesnapshots.snapshot.storage.k8s.io \
+            crd/volumesnapshotcontents.snapshot.storage.k8s.io \
+            crd/volumesnapshotclasses.snapshot.storage.k8s.io
+          kubectl apply --server-side -f /tmp/snapshot-controller.yaml
+          kubectl -n kube-system rollout status deploy/snapshot-controller --timeout=180s
+          PIN=$(python3 -c 'import yaml; k = yaml.safe_load(open("cluster/operators/snapshot-controller/kustomization.yaml")); print(k["images"][0]["newTag"])')
+          WANT="registry.k8s.io/sig-storage/snapshot-controller:${PIN}"
+          GOT=$(kubectl -n kube-system get pods -l app.kubernetes.io/name=snapshot-controller \
+            -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)
+          echo "running: ${GOT}"
+          [ "$GOT" = "$WANT" ] || { echo "FAILED: expected only ${WANT}"; exit 1; }
+
+      - name: Assert the Longhorn VolumeSnapshotClass survives source deletion
+        # type: snap cannot restore once its source volume is gone; restore needs bak.
+        run: |
+          GOT=$(kubectl get volumesnapshotclass longhorn-backup \
+            -o jsonpath='{.driver} {.parameters.type} {.deletionPolicy}')
+          echo "longhorn-backup: ${GOT}"
+          [ "$GOT" = "driver.longhorn.io bak Delete" ] \
+            || { echo "FAILED: expected 'driver.longhorn.io bak Delete'"; exit 1; }
+
+      - name: Diagnose snapshot-controller failure
+        if: failure()
+        run: |
+          kubectl -n kube-system describe deploy/snapshot-controller || true
+          kubectl -n kube-system describe pods -l app.kubernetes.io/name=snapshot-controller || true
+          kubectl -n kube-system logs -l app.kubernetes.io/name=snapshot-controller --tail=100 || true
+
+      - name: Install csi-driver-host-path (snapshot-capable test driver)
+        run: |
+          kubectl apply -k .github/k3d/csi-hostpath
+          kubectl rollout status statefulset/csi-hostpathplugin --timeout=300s
+
+      - name: Snapshot and restore a hostpath PVC
+        env:
+          NS: hostpath-smoke
+        run: |
+          kubectl create namespace "$NS"
+          kubectl -n "$NS" apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata: {name: src}
+          spec: {storageClassName: csi-hostpath-sc, accessModes: [ReadWriteOnce], resources: {requests: {storage: 16Mi}}}
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata: {name: writer}
+          spec:
+            restartPolicy: Never
+            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "echo roundtrip > /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
+            volumes: [{name: v, persistentVolumeClaim: {claimName: src}}]
+          EOF
+          kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/writer --timeout=180s
+          kubectl -n "$NS" apply -f - <<'EOF'
+          apiVersion: snapshot.storage.k8s.io/v1
+          kind: VolumeSnapshot
+          metadata: {name: snap}
+          spec: {volumeSnapshotClassName: csi-hostpath-snapclass, source: {persistentVolumeClaimName: src}}
+          EOF
+          kubectl -n "$NS" wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/snap --timeout=180s
+          kubectl -n "$NS" apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata: {name: restored}
+          spec:
+            storageClassName: csi-hostpath-sc
+            accessModes: [ReadWriteOnce]
+            resources: {requests: {storage: 16Mi}}
+            dataSource: {apiGroup: snapshot.storage.k8s.io, kind: VolumeSnapshot, name: snap}
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata: {name: reader}
+          spec:
+            restartPolicy: Never
+            containers: [{name: c, image: busybox:1.37, command: [sh, -c, "grep -qx roundtrip /data/marker"], volumeMounts: [{name: v, mountPath: /data}]}]
+            volumes: [{name: v, persistentVolumeClaim: {claimName: restored}}]
+          EOF
+          kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/reader --timeout=180s
+          # A Completed pod still holds its claim, so pods go before claims.
+          kubectl -n "$NS" delete pod writer reader --timeout=60s
+          kubectl -n "$NS" delete pvc restored --timeout=60s
+          kubectl -n "$NS" delete volumesnapshot snap --timeout=60s
+          kubectl -n "$NS" delete pvc src --timeout=60s
+          kubectl delete namespace "$NS" --timeout=60s
+
+      - name: Diagnose csi-driver-host-path failure
+        if: failure()
+        run: |
+          kubectl describe statefulset/csi-hostpathplugin || true
+          kubectl logs csi-hostpathplugin-0 --all-containers --tail=50 || true
+          kubectl -n hostpath-smoke get pod,pvc,volumesnapshot,volumesnapshotcontent -o wide || true
+          kubectl -n hostpath-smoke describe pod,pvc,volumesnapshot || true
+
+      - name: Run the upgrade gate against unhealthy, healthy and corrupt apps
+        run: |
+          gate() {
+            kubectl delete job toy-upgrade-gate --ignore-not-found --wait=true >&2
+            kubectl apply -k .github/k3d/upgrade-hooks >&2
+            kubectl wait --for=condition="$1" job/toy-upgrade-gate --timeout=120s >&2 || {
+              kubectl describe job/toy-upgrade-gate >&2
+              kubectl logs job/toy-upgrade-gate --all-containers --prefix >&2
+              return 1; }
+            kubectl logs job/toy-upgrade-gate --all-containers --prefix
+          }
+          kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
+          kubectl rollout status statefulset/toy --timeout=120s
+          kubectl exec toy-0 -- rm /tmp/ready
+          kubectl wait --for=condition=Ready=false pod/toy-0 --timeout=60s
+          out=$(gate Failed); echo "$out"
+          grep -q 'pod toy-0 is not Ready' <<<"$out"
+          kubectl exec toy-0 -- touch /tmp/ready
+          kubectl wait --for=condition=Ready pod/toy-0 --timeout=60s
+          out=$(gate Complete); echo "$out"
+          grep -q 'StatefulSet/toy is ready to upgrade.' <<<"$out"
+          kubectl exec toy-0 -- touch /tmp/corrupt
+          out=$(gate Failed); echo "$out"
+          grep -q 'integrity check exited 1' <<<"$out"
+          kubectl exec toy-0 -- rm /tmp/corrupt
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
@@ -904,6 +1069,60 @@ jobs:
             || { echo "FAILED: /config is not on the volumeClaimTemplate"; exit 1; }
           echo "starloom web UI and config volume OK"
 
+      - name: Deploy prowlarr and lidarr (real smoke test)
+        run: |
+          # Stand-in for the shoebox NFS media claim lidarr mounts; removed
+          # after the verify step so the all-manifests dry-run sees no conflict.
+          kubectl apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: media
+            namespace: default
+          spec:
+            accessModes: [ReadWriteOnce]
+            storageClassName: longhorn
+            resources:
+              requests:
+                storage: 1Gi
+          EOF
+          kubectl apply -f cluster/services/prowlarr.yaml -f cluster/services/lidarr.yaml
+          kubectl -n default rollout status statefulset/prowlarr --timeout=300s
+          kubectl -n default rollout status statefulset/lidarr --timeout=300s
+
+      - name: Diagnose prowlarr/lidarr failure
+        if: failure()
+        run: |
+          for APP in prowlarr lidarr; do
+            kubectl -n default describe pod -l run=$APP
+            kubectl -n default logs -l run=$APP --tail=200 || true
+          done
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify prowlarr and lidarr answer /ping and keep /config on their own PVC
+        run: |
+          # 8007/8008: 8000-8006 are taken by the forwards above.
+          for PAIR in prowlarr:8007:9696 lidarr:8008:8686; do
+            IFS=: read -r APP LOCAL PORT <<< "$PAIR"
+            kubectl -n default port-forward "svc/$APP" "$LOCAL:$PORT" &
+            PF_PID=$!
+            for i in $(seq 1 15); do
+              curl -fsS "http://127.0.0.1:$LOCAL/ping" >/dev/null 2>&1 && break
+              sleep 2
+            done
+            BODY=$(curl -fsS "http://127.0.0.1:$LOCAL/ping")
+            kill $PF_PID
+            echo "$APP: $BODY"
+            echo "$BODY" | grep -q '"status": *"OK"' \
+              || { echo "FAILED: $APP /ping did not report OK"; exit 1; }
+            CLAIM=$(kubectl -n default get pod "$APP-0" -o jsonpath="{.spec.volumes[?(@.name==\"$APP-config\")].persistentVolumeClaim.claimName}")
+            [ "$CLAIM" = "$APP-config-$APP-0" ] \
+              || { echo "FAILED: $APP /config is not on the volumeClaimTemplate"; exit 1; }
+          done
+          echo "prowlarr and lidarr health and config volumes OK"
+          kubectl -n default delete statefulset lidarr --wait
+          kubectl -n default delete pvc media --wait
+
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
@@ -937,7 +1156,7 @@ jobs:
           # each app joins this set in the PR that converts it. radarr/sonarr are
           # deliberately absent: they overlay only /db and keep /config on NFS.
           CONFIG_ON_LONGHORN = {"ombi", "jackett", "nzbget", "delugevpn", "tautulli",
-                                "starloom"}
+                                "starloom", "prowlarr", "lidarr"}
           failed = 0
           for app in sorted(CONFIG_ON_LONGHORN):
               bad = 0

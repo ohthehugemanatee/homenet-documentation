@@ -1,0 +1,14 @@
+---
+# CI-only instance of the upgrade hook base for toy.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namePrefix: toy-
+resources:
+  - ../../../cluster/argocd/hooks/upgrade
+configMapGenerator:
+  - name: upgrade-params
+    behavior: merge
+    literals:
+      - WORKLOAD_KIND=statefulset
+      - WORKLOAD_NAME=toy
+      - INTEGRITY_COMMAND=test ! -e /tmp/corrupt

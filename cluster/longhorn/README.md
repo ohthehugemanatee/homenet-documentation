@@ -141,6 +141,24 @@ that Duplicacy carries offsite. Losing `backups` while keeping the snapshot jobs
 leaves a healthy-looking UI covering nothing durable, and the weekly cadence
 leaves a volume created on a Tuesday with no durable copy for six days.
 
+## CSI snapshots
+
+`snapshot-controller` serves the `snapshot.storage.k8s.io` API that Longhorn's
+`csi-snapshotter` sidecar answers to. ArgoCD deploys it from
+`cluster/operators/snapshot-controller/`, upstream external-snapshotter pinned
+to the sidecar's release: chart 1.11.3 ships `csi-snapshotter` v8.6.0, so the
+controller is v8.6.0. The pin sets the image as well as the git refs, because
+upstream's deploy manifest at `v8.6.0` still names the v8.5.0 image.
+
+The one `VolumeSnapshotClass`, `longhorn-backup`, ships in the same directory
+with `type: bak`, so every `VolumeSnapshot` taken through it is a Longhorn
+backup on the shoebox target. `type: snap` is faster but lives inside its
+source volume: once the PVC is deleted, `reclaimPolicy: Delete` takes the volume
+and a restore from it fails with `failed to verify data source`. Restoring a
+StatefulSet's claim means deleting and recreating it under the same name, so
+only `bak` works. No `RecurringJob` prunes these backups, so whatever takes one
+has to delete it.
+
 ## Coverage
 
 Every job selects `groups: [default]`, and Longhorn stamps

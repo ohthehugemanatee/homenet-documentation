@@ -42,12 +42,14 @@ rules:
       - discovery.k8s.io
       - events.k8s.io
       - flowcontrol.apiserver.k8s.io
+      - groupsnapshot.storage.k8s.io
       - metrics.k8s.io
       - networking.k8s.io
       - node.k8s.io
       - policy
       - rbac.authorization.k8s.io
       - scheduling.k8s.io
+      - snapshot.storage.k8s.io
       - storage.k8s.io
       - acme.cert-manager.io
       - argoproj.io

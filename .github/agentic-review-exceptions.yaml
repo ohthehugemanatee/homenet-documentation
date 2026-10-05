@@ -753,6 +753,8 @@ exceptions:
     files:
       - cluster/services/radarr.yaml
       - cluster/services/sonarr.yaml
+      - cluster/services/prowlarr.yaml
+      - cluster/services/lidarr.yaml
       - cluster/services/plex.yaml
       - cluster/services/ombi.yaml
       - cluster/services/jackett.yaml
@@ -787,6 +789,8 @@ exceptions:
     files:
       - cluster/services/radarr.yaml
       - cluster/services/sonarr.yaml
+      - cluster/services/prowlarr.yaml
+      - cluster/services/lidarr.yaml
       - cluster/services/plex.yaml
       - cluster/services/ombi.yaml
       - cluster/services/jackett.yaml
@@ -831,6 +835,8 @@ exceptions:
       - cluster/services/ombi.yaml
       - cluster/services/radarr.yaml
       - cluster/services/sonarr.yaml
+      - cluster/services/prowlarr.yaml
+      - cluster/services/lidarr.yaml
     reason: >-
       Advisory (kube-score), accepted. A headless Service exists to give each
       pod a stable per-ordinal DNS name, which matters when replicas address
@@ -949,17 +955,6 @@ exceptions:
       step is bao token revoke <root-token>. The root token is ephemeral
       bootstrap material; its exposure is the same as the existing
       vault-password-file pattern it replaces.
-
-  - pattern: "Container runs as root / no user directive"
-    files:
-      - shoebox/openbao/docker-compose.yaml
-    reason: >-
-      Partially mitigated in this PR (security_opt: no-new-privileges:true
-      added). Full non-root requires knowing the openbao container UID/GID
-      and updating /opt/openbao/data ownership in deploy-openbao.yaml
-      simultaneously. Deferred to a hardening pass once the UID is confirmed
-      from the upstream image manifest; adding user: openbao and chowning
-      /opt/openbao/data can be done in one atomic follow-up commit.
 
   - pattern: "changed_when docker compose stderr fragile across versions"
     files:
@@ -1174,3 +1169,17 @@ factual_corrections:
       container specs. The prepare container uses the same resolved version as
       the upgrade container. No post-deploy check is required beyond confirming
       the Plan shows a resolved LatestVersion in its status.
+
+  - pattern: "prowlarr/lidarr kube-score advisory findings (identical probes, low uid/gid, read-only rootfs, ephemeral storage, cpu limit, pull policy)"
+    files:
+      - cluster/services/prowlarr.yaml
+      - cluster/services/lidarr.yaml
+    reason: >-
+      Advisory, accepted; same shape as radarr/sonarr. /ping is the only
+      health endpoint Servarr apps expose, so all three probes share it and
+      differ in timing only. The LinuxServer image starts s6-overlay as root
+      and drops to PUID/PGID 1000, which rules out runAsUser>10000 and a
+      read-only root filesystem. No CPU limit, to avoid throttling during
+      library scans; no ephemeral-storage request, as state lives on the
+      Longhorn volume. The image tag is pinned, so pull policy Always adds a
+      registry round-trip per restart without changing what runs.
