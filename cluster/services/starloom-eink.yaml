@@ -1,0 +1,120 @@
+# Renders the E1002 panel image from StarLoom. Source: ohthehugemanatee/StarLoom-eink.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starloom-eink
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: starloom-eink
+  template:
+    metadata:
+      labels:
+        run: starloom-eink
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: starloom-eink
+          # Published by the StarLoom-eink CI on every push to main; the
+          # ghcr package must be public.
+          image: ghcr.io/ohthehugemanatee/starloom-eink:sha-ca88ded
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: STARLOOM_URL
+              value: http://starloom.default.svc.cluster.local:8080
+            - name: TZ
+              value: Europe/Berlin
+            - name: STARLOOM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  # CHANGEME: created out-of-band, never committed. Use a
+                  # read-only StarLoom API key:
+                  #   kubectl create secret generic starloom-eink-credentials \
+                  #     --from-literal=api-key=<read-only-api-key> -n default
+                  name: starloom-eink-credentials
+                  key: api-key
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          # Not measured on a live pod yet (ADR-0006): re-size from observed usage.
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: starloom-eink
+  namespace: default
+  labels:
+    run: starloom-eink
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+  selector:
+    run: starloom-eink
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: starloom-eink
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    ingress.kubernetes.io/hsts-max-age: "15552000"
+    ingress.kubernetes.io/hsts-include-subdomains: "true"
+    ingress.kubernetes.io/hsts-preload: "true"
+spec:
+  rules:
+  - host: stars-eink.berlin.vertesi.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: starloom-eink
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - stars-eink.berlin.vertesi.com
