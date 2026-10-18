@@ -1,0 +1,56 @@
+---
+# See cluster/argocd/CLAUDE.md.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: upgrade-snapshot
+  labels:
+    app.kubernetes.io/component: snapshot
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  backoffLimit: 0
+  # Outlasts the script's own waits, so its EXIT trap restores the replicas.
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      serviceAccountName: upgrade-hooks
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: snapshot
+          image: alpine/kubectl:1.36.4
+          command: [sh, /hook/snapshot.sh]
+          envFrom:
+            - configMapRef:
+                name: upgrade-params
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: hook
+          configMap:
+            name: upgrade-scripts
+        - name: tmp
+          emptyDir: {}

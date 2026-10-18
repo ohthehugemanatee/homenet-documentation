@@ -12,3 +12,5 @@ configMapGenerator:
       - WORKLOAD_KIND=statefulset
       - WORKLOAD_NAME=toy
       - INTEGRITY_COMMAND=test ! -e /tmp/corrupt
+      - CLAIM_NAME=data-toy-0
+      - SNAPSHOT_CLASS=csi-hostpath-snapclass
