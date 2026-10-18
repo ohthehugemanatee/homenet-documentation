@@ -372,31 +372,58 @@ jobs:
           kubectl -n hostpath-smoke get pod,pvc,volumesnapshot,volumesnapshotcontent -o wide || true
           kubectl -n hostpath-smoke describe pod,pvc,volumesnapshot || true
 
-      - name: Run the upgrade gate against unhealthy, healthy and corrupt apps
+      - name: Run the upgrade hooks against a toy app
         run: |
-          gate() {
-            kubectl delete job toy-upgrade-gate --ignore-not-found --wait=true >&2
-            kubectl apply -k .github/k3d/upgrade-hooks >&2
-            kubectl wait --for=condition="$1" job/toy-upgrade-gate --timeout=120s >&2 || {
-              kubectl describe job/toy-upgrade-gate >&2
-              kubectl logs job/toy-upgrade-gate --all-containers --prefix >&2
+          # kubectl ignores sync waves, so each Job is applied on its own, in ArgoCD's order.
+          setup() { kubectl apply -k .github/k3d/upgrade-hooks -l '!app.kubernetes.io/component' >&2; }
+          hook() {
+            kubectl delete job "toy-upgrade-$1" --ignore-not-found --wait=true >&2
+            kubectl apply -k .github/k3d/upgrade-hooks -l "app.kubernetes.io/component=$1" >&2
+            kubectl wait --for=condition="$2" "job/toy-upgrade-$1" --timeout=180s >&2 || {
+              kubectl describe "job/toy-upgrade-$1" >&2
+              kubectl logs "job/toy-upgrade-$1" --all-containers --prefix >&2
               return 1; }
-            kubectl logs job/toy-upgrade-gate --all-containers --prefix
+            kubectl logs "job/toy-upgrade-$1" --all-containers --prefix
           }
+          replicas() { kubectl get statefulset toy -o jsonpath='{.spec.replicas}'; }
           kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
           kubectl rollout status statefulset/toy --timeout=120s
+          setup
           kubectl exec toy-0 -- rm /tmp/ready
           kubectl wait --for=condition=Ready=false pod/toy-0 --timeout=60s
-          out=$(gate Failed); echo "$out"
+          out=$(hook gate Failed); echo "$out"
           grep -q 'pod toy-0 is not Ready' <<<"$out"
           kubectl exec toy-0 -- touch /tmp/ready
           kubectl wait --for=condition=Ready pod/toy-0 --timeout=60s
-          out=$(gate Complete); echo "$out"
+          out=$(hook gate Complete); echo "$out"
           grep -q 'StatefulSet/toy is ready to upgrade.' <<<"$out"
           kubectl exec toy-0 -- touch /tmp/corrupt
-          out=$(gate Failed); echo "$out"
+          out=$(hook gate Failed); echo "$out"
           grep -q 'integrity check exited 1' <<<"$out"
           kubectl exec toy-0 -- rm /tmp/corrupt
+
+          # A snapshot that never becomes ready must put the replicas back.
+          kubectl patch configmap toy-upgrade-params --type merge \
+            -p '{"data":{"SNAPSHOT_CLASS":"missing","SNAPSHOT_TIMEOUT":"20s"}}'
+          hook snapshot Failed
+          test "$(replicas)" = 1
+          kubectl rollout status statefulset/toy --timeout=120s
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+          setup
+          kubectl create configmap toy-upgrade-state --from-literal=snapshot=stale
+          hook gate Complete
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+
+          hook snapshot Complete
+          snap=$(kubectl get configmap toy-upgrade-state -o jsonpath='{.data.snapshot}')
+          test "$(kubectl get volumesnapshot "$snap" -o jsonpath='{.status.readyToUse}')" = true
+          test "$(replicas)" = 0
+          # The sync's apply brings the replicas back before PostSync runs.
+          kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
+          kubectl rollout status statefulset/toy --timeout=120s
+          hook cleanup Complete
+          test -z "$(kubectl get volumesnapshot "$snap" --ignore-not-found -o name)"
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
