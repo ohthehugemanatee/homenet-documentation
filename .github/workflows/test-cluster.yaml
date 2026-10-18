@@ -1096,6 +1096,52 @@ jobs:
             || { echo "FAILED: /config is not on the volumeClaimTemplate"; exit 1; }
           echo "starloom web UI and config volume OK"
 
+      - name: Deploy starloom-eink (real smoke test)
+        run: |
+          kubectl create secret generic starloom-eink-credentials \
+            --from-literal=api-key=ci-test-token \
+            -n default
+          kubectl apply -f cluster/services/starloom-eink.yaml
+          kubectl -n default rollout status deployment/starloom-eink --timeout=180s
+
+      - name: Diagnose starloom-eink failure
+        if: failure()
+        run: |
+          kubectl -n default describe pod -l run=starloom-eink
+          echo "=== logs ==="
+          kubectl -n default logs -l run=starloom-eink --tail=200 || true
+          echo "=== events ==="
+          kubectl -n default get events --sort-by=.lastTimestamp | tail -40
+
+      - name: Verify starloom-eink wiring and health
+        run: |
+          ENV_PATH=.spec.template.spec.containers[0].env
+          GOT=$(kubectl -n default get deploy starloom-eink -o \
+            jsonpath="{$ENV_PATH[?(@.name=='STARLOOM_URL')].value}")
+          echo "STARLOOM_URL: $GOT"
+          [ "$GOT" = "http://starloom.default.svc.cluster.local:8080" ] \
+            || { echo "FAILED: STARLOOM_URL does not target the starloom Service"; exit 1; }
+          GOT=$(kubectl -n default get deploy starloom-eink -o \
+            jsonpath="{$ENV_PATH[?(@.name=='STARLOOM_API_KEY')].valueFrom.secretKeyRef.name}")
+          echo "STARLOOM_API_KEY: from secret '$GOT'"
+          [ "$GOT" = "starloom-eink-credentials" ] \
+            || { echo "FAILED: STARLOOM_API_KEY is not sourced from the Secret"; exit 1; }
+
+          # 8007: 8006 is the starloom forward above.
+          kubectl -n default port-forward svc/starloom-eink 8007:8080 &
+          PF_PID=$!
+          trap 'kill $PF_PID' EXIT
+          for i in $(seq 1 15); do
+            curl -fsS http://127.0.0.1:8007/healthz >/dev/null 2>&1 && break
+            sleep 2
+          done
+          [ "$(curl -fsS http://127.0.0.1:8007/healthz)" = "ok" ] \
+            || { echo "FAILED: /healthz did not return ok"; exit 1; }
+          curl -fsS http://127.0.0.1:8007/test.png -o /tmp/test.png
+          file /tmp/test.png | grep -q 'PNG image data, 800 x 480' \
+            || { echo "FAILED: /test.png is not an 800x480 PNG"; exit 1; }
+          echo "starloom-eink OK"
+
       - name: Deploy prowlarr and lidarr (real smoke test)
         run: |
           # Stand-in for the shoebox NFS media claim lidarr mounts; removed
@@ -1113,9 +1159,48 @@ jobs:
               requests:
                 storage: 1Gi
           EOF
-          kubectl apply -f cluster/services/prowlarr.yaml -f cluster/services/lidarr.yaml
+          kubectl apply -f cluster/services/lidarr.yaml
+          # Seed the Allowed Hosts state production keeps in its persisted /config.
+          python3 - <<'PY' | kubectl apply -f -
+          import sys, yaml
+          docs = [d for d in yaml.safe_load_all(open("cluster/services/prowlarr.yaml")) if d]
+          sts = next(d for d in docs if d["kind"] == "StatefulSet")
+          sts["spec"]["template"]["spec"]["containers"][0]["env"].append(
+              {"name": "PROWLARR__SERVER__ALLOWEDHOSTS", "value": "prowlarr.berlin.vertesi.com,prowlarr"})
+          yaml.safe_dump_all(docs, sys.stdout)
+          PY
           kubectl -n default rollout status statefulset/prowlarr --timeout=300s
           kubectl -n default rollout status statefulset/lidarr --timeout=300s
+
+      - name: Verify prowlarr probes pass with Allowed Hosts set
+        run: |
+          POD_IP=$(kubectl -n default get pod prowlarr-0 -o jsonpath='{.status.podIP}')
+          kubectl -n default port-forward svc/prowlarr 8009:9696 &
+          PF_PID=$!
+          for i in $(seq 1 15); do
+            curl -s -o /dev/null -H 'Host: localhost' http://127.0.0.1:8009/ping && break
+            sleep 2
+          done
+          POD_IP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $POD_IP:9696" http://127.0.0.1:8009/ping)
+          LOCALHOST_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1:8009/ping)
+          kill $PF_PID
+          # The pod IP must be rejected, or a probe without the header would pass vacuously.
+          [ "$POD_IP_STATUS" = 400 ] \
+            || { echo "FAILED: Allowed Hosts did not reject the pod IP (got $POD_IP_STATUS)"; exit 1; }
+          [ "$LOCALHOST_STATUS" = 200 ] \
+            || { echo "FAILED: Allowed Hosts rejected Host: localhost (got $LOCALHOST_STATUS)"; exit 1; }
+          python3 - <<'PY'
+          import sys, yaml
+          sts = next(d for d in yaml.safe_load_all(open("cluster/services/prowlarr.yaml"))
+                     if d and d["kind"] == "StatefulSet")
+          container = sts["spec"]["template"]["spec"]["containers"][0]
+          # Liveness only runs after startup passes, so the rollout alone cannot catch its header missing.
+          bad = [p for p in ("startupProbe", "livenessProbe", "readinessProbe")
+                 if {"name": "Host", "value": "localhost"} not in container[p]["httpGet"].get("httpHeaders", [])]
+          if bad:
+              sys.exit(f"FAILED: prowlarr probes without Host: localhost: {', '.join(bad)}")
+          PY
+          echo "prowlarr probes OK with Allowed Hosts set"
 
       - name: Diagnose prowlarr/lidarr failure
         if: failure()
@@ -1163,7 +1248,6 @@ jobs:
             ! -path "*/argocd/*" \
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
-            ! -name "cert-manager.yaml" \
             ! -name "l2-config.yaml" \
             ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
