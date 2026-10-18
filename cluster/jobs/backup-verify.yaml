@@ -1,0 +1,121 @@
+---
+# Weekly check that the Longhorn backups exist; failure raises KubeJobFailed.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backup-verify
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-verify
+  namespace: backup-verify
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backup-verify
+  namespace: longhorn-system
+rules:
+  - apiGroups: ["longhorn.io"]
+    resources: ["volumes", "backups"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backup-verify
+  namespace: longhorn-system
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: backup-verify
+roleRef:
+  kind: Role
+  name: backup-verify
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-verify
+  namespace: backup-verify
+spec:
+  # Monday's 05:00 UTC backups run one volume at a time; this leaves them six hours.
+  schedule: "0 11 * * 1"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          serviceAccountName: backup-verify
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: fetch
+              image: alpine/kubectl:1.36.4
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  kubectl get volumes.longhorn.io -n longhorn-system \
+                    -o json --cache-dir=/data/kube-cache > /data/volumes.json
+                  kubectl get backups.longhorn.io -n longhorn-system \
+                    -o json --cache-dir=/data/kube-cache > /data/backups.json
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+          containers:
+            - name: currency
+              image: python:3.12-alpine
+              command:
+                - python3
+                - /scripts/backup_currency.py
+                - /data/volumes.json
+                - /data/backups.json
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-verify-scripts
+            - name: data
+              emptyDir: {}
