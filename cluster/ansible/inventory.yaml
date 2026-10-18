@@ -32,6 +32,8 @@ all:
               ansible_user: ohthehugemanatee
             celery:
               ansible_user: ohthehugemanatee
+            lenouveau:
+              ansible_user: ohthehugemanatee
             ubuntu:
           vars:
             cluster_role: "agent"
