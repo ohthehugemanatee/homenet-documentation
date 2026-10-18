@@ -1,5 +1,5 @@
 ---
-# Weekly check that the Longhorn backups exist; failure raises KubeJobFailed.
+# Weekly check that the Longhorn backups exist and restore; failure raises KubeJobFailed.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -20,6 +20,58 @@ rules:
   - apiGroups: ["longhorn.io"]
     resources: ["volumes", "backups"]
     verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backup-verify-restore
+  namespace: backup-verify
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backup-verify-restore
+  namespace: backup-verify
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: backup-verify
+roleRef:
+  kind: Role
+  name: backup-verify-restore
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-verify-restore
+rules:
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-verify-restore
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: backup-verify
+roleRef:
+  kind: ClusterRole
+  name: backup-verify-restore
+  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -50,7 +102,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 300
+      activeDeadlineSeconds: 3600
       template:
         spec:
           serviceAccountName: backup-verify
@@ -87,7 +139,6 @@ spec:
                   memory: 64Mi
                 limits:
                   memory: 64Mi
-          containers:
             - name: currency
               image: python:3.12-alpine
               command:
@@ -107,6 +158,34 @@ spec:
                 - name: data
                   mountPath: /data
                   readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+          containers:
+            - name: restore
+              image: alpine/kubectl:1.36.4
+              command: [sh, /scripts/restore.sh]
+              env:
+                - name: DRIVER
+                  value: driver.longhorn.io
+                - name: SNAPSHOT_CLASS
+                  value: longhorn-backup
+                - name: STORAGE_CLASS
+                  value: longhorn
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: data
+                  mountPath: /data
               resources:
                 requests:
                   cpu: 50m

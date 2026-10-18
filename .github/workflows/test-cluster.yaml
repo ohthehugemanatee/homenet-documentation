@@ -425,16 +425,26 @@ jobs:
           test -z "$(kubectl get volumesnapshot "$snap" --ignore-not-found -o name)"
           test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
 
-      - name: Run the weekly backup check against fake Longhorn state
+      - name: Run the weekly backup check against fake Longhorn state and a hostpath restore
         run: |
-          check() {
-            kubectl -n backup-verify delete job ci --ignore-not-found --wait=true >&2
-            kubectl -n backup-verify create job ci --from=cronjob/backup-verify >&2
-            kubectl -n backup-verify wait --for=condition="$1" job/ci --timeout=120s >&2 || {
-              kubectl -n backup-verify describe job/ci >&2
-              kubectl -n backup-verify logs job/ci --all-containers --prefix >&2
+          # run JOB CONDITION [NAME=VALUE...]: a Job from the CronJob, env overrides on its restore container.
+          run() {
+            job=$1 cond=$2; shift 2
+            kubectl -n backup-verify delete job "$job" --ignore-not-found --wait=true >&2
+            kubectl -n backup-verify create job "$job" --from=cronjob/backup-verify --dry-run=client -o json \
+              | python3 -c '
+          import json, sys
+          job, env = json.load(sys.stdin), dict(a.split("=", 1) for a in sys.argv[1:])
+          for c in job["spec"]["template"]["spec"]["containers"]:
+              if c["name"] == "restore":
+                  c["env"] = [e for e in c.get("env", []) if e["name"] not in env]
+                  c["env"] += [{"name": k, "value": v} for k, v in env.items()]
+          print(json.dumps(job))' "$@" | kubectl apply -f - >&2
+            kubectl -n backup-verify wait --for=condition="$cond" "job/$job" --timeout=300s >&2 || {
+              kubectl -n backup-verify describe "job/$job" >&2
+              kubectl -n backup-verify logs "job/$job" --all-containers --prefix >&2
               return 1; }
-            kubectl -n backup-verify logs job/ci --all-containers --prefix
+            kubectl -n backup-verify logs "job/$job" --all-containers --prefix
           }
           backed_up() {
             kubectl -n longhorn-system patch backup backup-ci --subresource=status --type=merge -p \
@@ -454,12 +464,55 @@ jobs:
           metadata: {name: backup-ci}
           spec: {}
           EOF
-          backed_up '1 day ago'
-          out=$(check Complete); echo "$out"
-          grep -q 'backed up within 8 days' <<<"$out"
           backed_up '9 days ago'
-          out=$(check Failed); echo "$out"
+          out=$(run ci Failed); echo "$out"
           grep -q 'pvc-ci' <<<"$out"
+          backed_up '1 day ago'
+          out=$(run ci Complete); echo "$out"
+          grep -q 'backed up within 8 days' <<<"$out"
+          grep -q 'no restore target' <<<"$out"
+
+          # A hostpath snapshot stands in for a Longhorn backup. Restoring it twice proves cleanup left it alone.
+          kubectl create namespace restore-src
+          kubectl -n restore-src apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata: {name: src}
+          spec: {storageClassName: csi-hostpath-sc, accessModes: [ReadWriteOnce], resources: {requests: {storage: 16Mi}}}
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata: {name: writer}
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: c
+                image: busybox:1.37
+                command: [sh, -c, "echo ok > /data/app.db && chown -R 1000:1000 /data"]
+                volumeMounts: [{name: v, mountPath: /data}]
+            volumes: [{name: v, persistentVolumeClaim: {claimName: src}}]
+          EOF
+          kubectl -n restore-src wait --for=jsonpath='{.status.phase}'=Succeeded pod/writer --timeout=180s
+          kubectl -n restore-src delete pod writer
+          kubectl -n restore-src apply -f - <<'EOF'
+          apiVersion: snapshot.storage.k8s.io/v1
+          kind: VolumeSnapshot
+          metadata: {name: src}
+          spec: {volumeSnapshotClassName: csi-hostpath-snapclass, source: {persistentVolumeClaimName: src}}
+          EOF
+          kubectl -n restore-src wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/src --timeout=180s
+          content=$(kubectl -n restore-src get volumesnapshot src -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+          handle=$(kubectl get volumesnapshotcontent "$content" -o jsonpath='{.status.snapshotHandle}')
+          for attempt in 1 2; do
+            out=$(run restore-ci Complete SNAPSHOT_HANDLE="$handle" SIZE=16Mi CLAIM="restore-src/src ($attempt)" \
+              DRIVER=hostpath.csi.k8s.io SNAPSHOT_CLASS=csi-hostpath-snapclass STORAGE_CLASS=csi-hostpath-sc)
+            echo "$out"
+            grep -q 'restored and read back' <<<"$out"
+          done
+          test -z "$(kubectl -n backup-verify get pod,pvc,volumesnapshot -l app.kubernetes.io/name=backup-restore -o name)"
+          test -z "$(kubectl get volumesnapshotcontent -l app.kubernetes.io/name=backup-restore -o name)"
+          kubectl -n restore-src delete volumesnapshot src --timeout=120s
+          kubectl delete namespace restore-src --timeout=120s
           kubectl -n longhorn-system delete volume/pvc-ci backup/backup-ci
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
