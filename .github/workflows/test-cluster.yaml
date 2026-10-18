@@ -1515,7 +1515,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       K3D_VERSION: v5.7.5
-      AM_VERSION: "0.27.0"
+      # The Alertmanager the chart deploys; the template check renders with this engine.
+      AM_VERSION: "0.28.1"
 
     steps:
       - uses: actions/checkout@v4
@@ -1610,6 +1611,12 @@ jobs:
           open("/tmp/am.yaml", "w").write(yaml.safe_dump(v["alertmanager"]["config"]))
           PY
           "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
+
+      - name: Assert Alertmanager notifications name the firing workload
+        run: |
+          python3 .github/scripts/check_alertmanager_templates.py \
+            --overrides cluster/helm/kube-prometheus-stack/values.yaml \
+            --amtool "./alertmanager-${AM_VERSION}.linux-amd64/amtool"
 
       - name: Resolve the loki chart pin
         id: loki-chart
