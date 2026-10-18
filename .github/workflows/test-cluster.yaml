@@ -223,7 +223,7 @@ jobs:
           kubectl apply --server-side -f /tmp/longhorn-crds.yaml
           kubectl wait --for condition=established --timeout=60s \
             crd/recurringjobs.longhorn.io crd/backuptargets.longhorn.io \
-            crd/volumes.longhorn.io crd/settings.longhorn.io
+            crd/volumes.longhorn.io crd/settings.longhorn.io crd/backups.longhorn.io
 
       - name: Run the Longhorn PreSync gate
         # The unit tests import preflight.py and never start the Job, so a
@@ -424,6 +424,43 @@ jobs:
           hook cleanup Complete
           test -z "$(kubectl get volumesnapshot "$snap" --ignore-not-found -o name)"
           test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+
+      - name: Run the weekly backup check against fake Longhorn state
+        run: |
+          check() {
+            kubectl -n backup-verify delete job ci --ignore-not-found --wait=true >&2
+            kubectl -n backup-verify create job ci --from=cronjob/backup-verify >&2
+            kubectl -n backup-verify wait --for=condition="$1" job/ci --timeout=120s >&2 || {
+              kubectl -n backup-verify describe job/ci >&2
+              kubectl -n backup-verify logs job/ci --all-containers --prefix >&2
+              return 1; }
+            kubectl -n backup-verify logs job/ci --all-containers --prefix
+          }
+          backed_up() {
+            kubectl -n longhorn-system patch backup backup-ci --subresource=status --type=merge -p \
+              "{\"status\":{\"state\":\"Completed\",\"volumeName\":\"pvc-ci\",\"backupCreatedAt\":\"$(date -u -d "$1" +%FT%TZ)\"}}"
+          }
+          kubectl apply -k cluster/jobs
+          kubectl -n longhorn-system apply -f - <<'EOF'
+          apiVersion: longhorn.io/v1beta2
+          kind: Volume
+          metadata:
+            name: pvc-ci
+            labels: {recurring-job-group.longhorn.io/default: enabled}
+          spec: {}
+          ---
+          apiVersion: longhorn.io/v1beta2
+          kind: Backup
+          metadata: {name: backup-ci}
+          spec: {}
+          EOF
+          backed_up '1 day ago'
+          out=$(check Complete); echo "$out"
+          grep -q 'backed up within 8 days' <<<"$out"
+          backed_up '9 days ago'
+          out=$(check Failed); echo "$out"
+          grep -q 'pvc-ci' <<<"$out"
+          kubectl -n longhorn-system delete volume/pvc-ci backup/backup-ci
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
@@ -1238,6 +1275,7 @@ jobs:
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
+          # cluster/jobs is a kustomization; the backup check step applies it whole.
           while IFS= read -r f; do
             echo "==> $f"
             kubectl apply --dry-run=server -f "$f" || { echo "FAILED: $f"; FAILED=1; }
@@ -1248,6 +1286,7 @@ jobs:
             ! -path "*/argocd/*" \
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
+            ! -path "*/jobs/*" \
             ! -name "l2-config.yaml" \
             ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
@@ -1610,6 +1649,9 @@ jobs:
           open("/tmp/am.yaml", "w").write(yaml.safe_dump(v["alertmanager"]["config"]))
           PY
           "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
+          # The weekly backup check reports only through KubeJobFailed.
+          test "$("./alertmanager-${AM_VERSION}.linux-amd64/amtool" config routes test \
+            --config.file=/tmp/am.yaml alertname=KubeJobFailed namespace=backup-verify)" = pushover
 
       - name: Resolve the loki chart pin
         id: loki-chart

@@ -141,6 +141,13 @@ that Duplicacy carries offsite. Losing `backups` while keeping the snapshot jobs
 leaves a healthy-looking UI covering nothing durable, and the weekly cadence
 leaves a volume created on a Tuesday with no durable copy for six days.
 
+`cluster/jobs/backup-verify.yaml` checks the job ran. Every Monday at 11:00 UTC
+it fails if any volume in the `default` group lacks a `Completed` backup from
+the last 8 days, which raises `KubeJobFailed` to Pushover. A volume younger than
+8 days passes until its first backup is due. Detached volumes count: with
+`allow-recurring-job-while-volume-detached` at its default `false`, a volume
+detached all week gets no backup and fails the check.
+
 ## CSI snapshots
 
 `snapshot-controller` serves the `snapshot.storage.k8s.io` API that Longhorn's
