@@ -113,6 +113,7 @@ spec:
             runAsGroup: 65534
             seccompProfile:
               type: RuntimeDefault
+          # Init containers run in order, so a stale backup fails the Job before any restore starts.
           initContainers:
             - name: fetch
               image: alpine/kubectl:1.36.4
