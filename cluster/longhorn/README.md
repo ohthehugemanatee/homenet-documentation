@@ -148,6 +148,16 @@ the last 8 days, which raises `KubeJobFailed` to Pushover. A volume younger than
 `allow-recurring-job-while-volume-detached` at its default `false`, a volume
 detached all week gets no backup and fails the check.
 
+The same run then restores one backup. It picks one of the `RESTORE_CLAIMS` in
+the CronJob (the radarr, sonarr, prowlarr and lidarr volumes) at random and
+restores that volume's newest `Completed` backup into a scratch claim in
+`backup-verify`. The restore goes through a `VolumeSnapshotContent` with
+`snapshotHandle: bak://<volume>/<backup>` and `deletionPolicy: Retain`, so
+deleting it never deletes the backup. A pod mounts the claim read-only and
+passes if a `*.db` file exists and every file reads to the end. It checks the
+filesystem only, not the app's data. Cleanup deletes the pod, then the claim,
+the snapshot and the content.
+
 ## CSI snapshots
 
 `snapshot-controller` serves the `snapshot.storage.k8s.io` API that Longhorn's

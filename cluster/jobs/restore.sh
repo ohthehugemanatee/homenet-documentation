@@ -2,6 +2,9 @@
 # Weekly restore check: restore one backup into a scratch claim and read it all back.
 # See cluster/longhorn/README.md.
 set -eu
+# restore_target.py writes this when it chose a backup.
+# shellcheck source=/dev/null
+[ ! -f /data/restore.env ] || . /data/restore.env
 if [ -z "${SNAPSHOT_HANDLE:-}" ]; then
   echo "no restore target; skipping restore"
   exit 0

@@ -165,6 +165,35 @@ spec:
                   memory: 64Mi
                 limits:
                   memory: 64Mi
+            - name: select
+              image: python:3.12-alpine
+              env:
+                # A random one of these is restored each week.
+                - name: RESTORE_CLAIMS
+                  value: default/radarr-db-radarr-0,default/sonarr-db-sonarr-0,default/prowlarr-config-prowlarr-0,default/lidarr-config-lidarr-0
+              command:
+                - python3
+                - /scripts/restore_target.py
+                - /data/volumes.json
+                - /data/backups.json
+                - /data/restore.env
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: data
+                  mountPath: /data
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
           containers:
             - name: restore
               image: alpine/kubectl:1.36.4
