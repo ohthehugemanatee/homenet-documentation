@@ -452,6 +452,9 @@ jobs:
               "{\"status\":{\"state\":\"Completed\",\"volumeName\":\"pvc-ci\",\"backupCreatedAt\":\"$(date -u -d "$1" +%FT%TZ)\"}}"
           }
           kubectl apply -k cluster/jobs
+          # The fake Longhorn state has no *arr claim to pick; the hostpath case below restores instead.
+          kubectl -n backup-verify patch cronjob backup-verify --type strategic -p \
+            '{"spec":{"jobTemplate":{"spec":{"template":{"spec":{"initContainers":[{"name":"select","env":[{"name":"RESTORE_CLAIMS","value":""}]}]}}}}}}'
           kubectl -n longhorn-system apply -f - <<'EOF'
           apiVersion: longhorn.io/v1beta2
           kind: Volume

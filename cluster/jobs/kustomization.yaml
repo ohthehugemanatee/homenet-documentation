@@ -8,6 +8,7 @@ configMapGenerator:
     namespace: backup-verify
     files:
       - backup_currency.py
+      - restore_target.py
       - restore.sh
 generatorOptions:
   disableNameSuffixHash: true
