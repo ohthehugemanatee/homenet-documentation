@@ -444,8 +444,10 @@ jobs:
               kubectl -n backup-verify describe "job/$job" >&2
               kubectl -n backup-verify logs "job/$job" --all-containers --prefix >&2
               return 1; }
-            # After a failed init container the restore container never started and has no log.
-            kubectl -n backup-verify logs "job/$job" --all-containers --prefix || true
+            # --all-containers returns at the first container that never started, in no fixed order, so read each one.
+            for c in fetch currency select restore; do
+              kubectl -n backup-verify logs "job/$job" -c "$c" --prefix 2>/dev/null || true
+            done
           }
           backed_up() {
             kubectl -n longhorn-system patch backup backup-ci --subresource=status --type=merge -p \
