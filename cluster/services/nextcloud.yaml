@@ -51,7 +51,8 @@ spec:
         nvme: "1"
       containers:
         - name: nextcloud
-          image: lscr.io/linuxserver/nextcloud:version-34.0.3
+          # linuxserver publishes 34.x under the previous- prefix; version-34.* tags are frozen
+          image: lscr.io/linuxserver/nextcloud:previous-34.0.5-ls124
           imagePullPolicy: IfNotPresent
           resources:
             requests:
