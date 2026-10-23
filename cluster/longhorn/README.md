@@ -177,14 +177,22 @@ class exists to declare regenerable, and both cost the Longhorn I/O this cluster
 runs out of first. `recurringJobSelector` applies at volume creation, so an
 existing volume keeps whatever label it already carries until relabelled.
 
-The other 18 Longhorn-backed PVCs carry `default`: ten stateful app volumes
-(`duplicacy`, `its-mytabs`, `mariadb`, `nextcloud-www`, `ombi`, `plex`,
-`radarr`, `sonarr`, `songhub`, `unifi-db`), three `/config` volumes migrated off
-NFS (`jackett`, `nzbget`, `delugevpn`), `nextcloud-previews`, `nextcloud-mcp`,
-`calibre` (#268), and `grafana`, which holds users and API keys that no sidecar
-rebuilds. `nextcloud-previews` is regenerable scratch on
-`longhorn-ephemeral-fast` and still carries `default`. Plex transcode was the
-other exception and is now an `emptyDir` (#277).
+Twenty-two PVC-backed Longhorn volumes currently carry `default`:
+`calibre-config-calibre-0`, `datadir-mariadb-0`,
+`delugevpn-config-delugevpn-0`, `duplicacy-db-duplicacy-0`,
+`its-mytabs-data-its-mytabs-0`, `jackett-config-jackett-0`,
+`kube-prometheus-stack-grafana`, `lidarr-config-lidarr-0`,
+`nextcloud-config-nextcloud-0`,
+`nextcloud-mcp-nextcloud-mcp-server-data-storage`, `nextcloud-previews`,
+`nextcloud-www-nextcloud-0`, `nzbget-config-nzbget-0`, `ombi-config-ombi-0`,
+`plex-live-db-plex-0`, `prowlarr-config-prowlarr-0`, `radarr-db-radarr-0`,
+`sonarr-db-sonarr-0`, `songhub-saved-tabs-songhub-0`,
+`starloom-config-starloom-0`, `tautulli-config-tautulli-0`, and
+`unifi-db-unifi-db-0`. Nextcloud uses `nextcloud-config-nextcloud-0`; the old
+`nextcloud-www-nextcloud-0` volume is detached and retained for rollback.
+`nextcloud-previews` is regenerable scratch on `longhorn-ephemeral-fast` and
+still carries `default`. Plex transcode was the other exception and is now an
+`emptyDir` (#277).
 
 ## Audit, 23 Aug 2026
 
