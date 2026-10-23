@@ -80,7 +80,16 @@ alertmanager:
           - token_file: /etc/alertmanager/secrets/alertmanager-pushover/token
             user_key_file: /etc/alertmanager/secrets/alertmanager-pushover/user_key
             title: 'k8s alert: {{ .GroupLabels.alertname }}'
-            message: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            # Stock descriptions end "on cluster {{ $labels.cluster }}." and no cluster label is set, so drop the empty clause.
+            message: |-
+              {{- range $i, $a := .Alerts -}}
+              {{ if $i }}{{ "\n" }}{{ end -}}
+              {{ if $a.Annotations.description -}}
+              {{ reReplaceAll " on cluster \\.$" "." $a.Annotations.description -}}
+              {{ else -}}
+              {{ $a.Annotations.summary -}}
+              {{ end -}}
+              {{ end }}
             priority: "0"
             # Deep link to workload-debug dashboard, pre-scoped to firing namespace/pod.
             url: 'https://grafana.berlin.vertesi.com/d/workload-debug?var-namespace={{ .CommonLabels.namespace }}&var-pod={{ .CommonLabels.pod }}'

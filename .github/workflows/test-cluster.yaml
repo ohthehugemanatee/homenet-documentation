@@ -223,7 +223,7 @@ jobs:
           kubectl apply --server-side -f /tmp/longhorn-crds.yaml
           kubectl wait --for condition=established --timeout=60s \
             crd/recurringjobs.longhorn.io crd/backuptargets.longhorn.io \
-            crd/volumes.longhorn.io crd/settings.longhorn.io
+            crd/volumes.longhorn.io crd/settings.longhorn.io crd/backups.longhorn.io
 
       - name: Run the Longhorn PreSync gate
         # The unit tests import preflight.py and never start the Job, so a
@@ -372,31 +372,154 @@ jobs:
           kubectl -n hostpath-smoke get pod,pvc,volumesnapshot,volumesnapshotcontent -o wide || true
           kubectl -n hostpath-smoke describe pod,pvc,volumesnapshot || true
 
-      - name: Run the upgrade gate against unhealthy, healthy and corrupt apps
+      - name: Run the upgrade hooks against a toy app
         run: |
-          gate() {
-            kubectl delete job toy-upgrade-gate --ignore-not-found --wait=true >&2
-            kubectl apply -k .github/k3d/upgrade-hooks >&2
-            kubectl wait --for=condition="$1" job/toy-upgrade-gate --timeout=120s >&2 || {
-              kubectl describe job/toy-upgrade-gate >&2
-              kubectl logs job/toy-upgrade-gate --all-containers --prefix >&2
+          # kubectl ignores sync waves, so each Job is applied on its own, in ArgoCD's order.
+          setup() { kubectl apply -k .github/k3d/upgrade-hooks -l '!app.kubernetes.io/component' >&2; }
+          hook() {
+            kubectl delete job "toy-upgrade-$1" --ignore-not-found --wait=true >&2
+            kubectl apply -k .github/k3d/upgrade-hooks -l "app.kubernetes.io/component=$1" >&2
+            kubectl wait --for=condition="$2" "job/toy-upgrade-$1" --timeout=180s >&2 || {
+              kubectl describe "job/toy-upgrade-$1" >&2
+              kubectl logs "job/toy-upgrade-$1" --all-containers --prefix >&2
               return 1; }
-            kubectl logs job/toy-upgrade-gate --all-containers --prefix
+            kubectl logs "job/toy-upgrade-$1" --all-containers --prefix
           }
+          replicas() { kubectl get statefulset toy -o jsonpath='{.spec.replicas}'; }
           kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
           kubectl rollout status statefulset/toy --timeout=120s
+          setup
           kubectl exec toy-0 -- rm /tmp/ready
           kubectl wait --for=condition=Ready=false pod/toy-0 --timeout=60s
-          out=$(gate Failed); echo "$out"
+          out=$(hook gate Failed); echo "$out"
           grep -q 'pod toy-0 is not Ready' <<<"$out"
           kubectl exec toy-0 -- touch /tmp/ready
           kubectl wait --for=condition=Ready pod/toy-0 --timeout=60s
-          out=$(gate Complete); echo "$out"
+          out=$(hook gate Complete); echo "$out"
           grep -q 'StatefulSet/toy is ready to upgrade.' <<<"$out"
           kubectl exec toy-0 -- touch /tmp/corrupt
-          out=$(gate Failed); echo "$out"
+          out=$(hook gate Failed); echo "$out"
           grep -q 'integrity check exited 1' <<<"$out"
           kubectl exec toy-0 -- rm /tmp/corrupt
+
+          # A snapshot that never becomes ready must put the replicas back.
+          kubectl patch configmap toy-upgrade-params --type merge \
+            -p '{"data":{"SNAPSHOT_CLASS":"missing","SNAPSHOT_TIMEOUT":"20s"}}'
+          hook snapshot Failed
+          test "$(replicas)" = 1
+          kubectl rollout status statefulset/toy --timeout=120s
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+          setup
+          kubectl create configmap toy-upgrade-state --from-literal=snapshot=stale
+          hook gate Complete
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+
+          hook snapshot Complete
+          snap=$(kubectl get configmap toy-upgrade-state -o jsonpath='{.data.snapshot}')
+          test "$(kubectl get volumesnapshot "$snap" -o jsonpath='{.status.readyToUse}')" = true
+          test "$(replicas)" = 0
+          # The sync's apply brings the replicas back before PostSync runs.
+          kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
+          kubectl rollout status statefulset/toy --timeout=120s
+          hook cleanup Complete
+          test -z "$(kubectl get volumesnapshot "$snap" --ignore-not-found -o name)"
+          test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+
+      - name: Run the weekly backup check against fake Longhorn state and a hostpath restore
+        run: |
+          # run JOB CONDITION [NAME=VALUE...]: a Job from the CronJob, env overrides on its restore container.
+          run() {
+            job=$1 cond=$2; shift 2
+            kubectl -n backup-verify delete job "$job" --ignore-not-found --wait=true >&2
+            kubectl -n backup-verify create job "$job" --from=cronjob/backup-verify --dry-run=client -o json \
+              | python3 -c '
+          import json, sys
+          job, env = json.load(sys.stdin), dict(a.split("=", 1) for a in sys.argv[1:])
+          for c in job["spec"]["template"]["spec"]["containers"]:
+              if c["name"] == "restore":
+                  c["env"] = [e for e in c.get("env", []) if e["name"] not in env]
+                  c["env"] += [{"name": k, "value": v} for k, v in env.items()]
+          print(json.dumps(job))' "$@" | kubectl apply -f - >&2
+            kubectl -n backup-verify wait --for=condition="$cond" "job/$job" --timeout=300s >&2 || {
+              kubectl -n backup-verify describe "job/$job" >&2
+              kubectl -n backup-verify logs "job/$job" --all-containers --prefix >&2
+              return 1; }
+            # --all-containers returns at the first container that never started, in no fixed order, so read each one.
+            for c in fetch currency select restore; do
+              kubectl -n backup-verify logs "job/$job" -c "$c" --prefix 2>/dev/null || true
+            done
+          }
+          backed_up() {
+            kubectl -n longhorn-system patch backup backup-ci --subresource=status --type=merge -p \
+              "{\"status\":{\"state\":\"Completed\",\"volumeName\":\"pvc-ci\",\"backupCreatedAt\":\"$(date -u -d "$1" +%FT%TZ)\"}}"
+          }
+          kubectl apply -k cluster/jobs
+          # The fake Longhorn state has no *arr claim to pick; the hostpath case below restores instead.
+          kubectl -n backup-verify patch cronjob backup-verify --type strategic -p \
+            '{"spec":{"jobTemplate":{"spec":{"template":{"spec":{"initContainers":[{"name":"select","env":[{"name":"RESTORE_CLAIMS","value":""}]}]}}}}}}'
+          kubectl -n longhorn-system apply -f - <<'EOF'
+          apiVersion: longhorn.io/v1beta2
+          kind: Volume
+          metadata:
+            name: pvc-ci
+            labels: {recurring-job-group.longhorn.io/default: enabled}
+          spec: {}
+          ---
+          apiVersion: longhorn.io/v1beta2
+          kind: Backup
+          metadata: {name: backup-ci}
+          spec: {}
+          EOF
+          backed_up '9 days ago'
+          out=$(run ci Failed); echo "$out"
+          grep -q 'pvc-ci' <<<"$out"
+          backed_up '1 day ago'
+          out=$(run ci Complete); echo "$out"
+          grep -q 'backed up within 8 days' <<<"$out"
+          grep -q 'no restore target' <<<"$out"
+
+          # A hostpath snapshot stands in for a Longhorn backup. Restoring it twice proves cleanup left it alone.
+          kubectl create namespace restore-src
+          kubectl -n restore-src apply -f - <<'EOF'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata: {name: src}
+          spec: {storageClassName: csi-hostpath-sc, accessModes: [ReadWriteOnce], resources: {requests: {storage: 16Mi}}}
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata: {name: writer}
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: c
+                image: busybox:1.37
+                command: [sh, -c, "echo ok > /data/app.db && chown -R 1000:1000 /data"]
+                volumeMounts: [{name: v, mountPath: /data}]
+            volumes: [{name: v, persistentVolumeClaim: {claimName: src}}]
+          EOF
+          kubectl -n restore-src wait --for=jsonpath='{.status.phase}'=Succeeded pod/writer --timeout=180s
+          kubectl -n restore-src delete pod writer
+          kubectl -n restore-src apply -f - <<'EOF'
+          apiVersion: snapshot.storage.k8s.io/v1
+          kind: VolumeSnapshot
+          metadata: {name: src}
+          spec: {volumeSnapshotClassName: csi-hostpath-snapclass, source: {persistentVolumeClaimName: src}}
+          EOF
+          kubectl -n restore-src wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/src --timeout=180s
+          content=$(kubectl -n restore-src get volumesnapshot src -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+          handle=$(kubectl get volumesnapshotcontent "$content" -o jsonpath='{.status.snapshotHandle}')
+          for attempt in 1 2; do
+            out=$(run restore-ci Complete SNAPSHOT_HANDLE="$handle" SIZE=16Mi CLAIM="restore-src/src ($attempt)" \
+              DRIVER=hostpath.csi.k8s.io SNAPSHOT_CLASS=csi-hostpath-snapclass STORAGE_CLASS=csi-hostpath-sc)
+            echo "$out"
+            grep -q 'restored and read back' <<<"$out"
+          done
+          test -z "$(kubectl -n backup-verify get pod,pvc,volumesnapshot -l app.kubernetes.io/name=backup-restore -o name)"
+          test -z "$(kubectl get volumesnapshotcontent -l app.kubernetes.io/name=backup-restore -o name)"
+          kubectl -n restore-src delete volumesnapshot src --timeout=120s
+          kubectl delete namespace restore-src --timeout=120s
+          kubectl -n longhorn-system delete volume/pvc-ci backup/backup-ci
 
       - name: Apply and verify claude-remote-debug RBAC (read-only auth matrix)
         run: |
@@ -1132,9 +1255,48 @@ jobs:
               requests:
                 storage: 1Gi
           EOF
-          kubectl apply -f cluster/services/prowlarr.yaml -f cluster/services/lidarr.yaml
+          kubectl apply -f cluster/services/lidarr.yaml
+          # Seed the Allowed Hosts state production keeps in its persisted /config.
+          python3 - <<'PY' | kubectl apply -f -
+          import sys, yaml
+          docs = [d for d in yaml.safe_load_all(open("cluster/services/prowlarr.yaml")) if d]
+          sts = next(d for d in docs if d["kind"] == "StatefulSet")
+          sts["spec"]["template"]["spec"]["containers"][0]["env"].append(
+              {"name": "PROWLARR__SERVER__ALLOWEDHOSTS", "value": "prowlarr.berlin.vertesi.com,prowlarr"})
+          yaml.safe_dump_all(docs, sys.stdout)
+          PY
           kubectl -n default rollout status statefulset/prowlarr --timeout=300s
           kubectl -n default rollout status statefulset/lidarr --timeout=300s
+
+      - name: Verify prowlarr probes pass with Allowed Hosts set
+        run: |
+          POD_IP=$(kubectl -n default get pod prowlarr-0 -o jsonpath='{.status.podIP}')
+          kubectl -n default port-forward svc/prowlarr 8009:9696 &
+          PF_PID=$!
+          for i in $(seq 1 15); do
+            curl -s -o /dev/null -H 'Host: localhost' http://127.0.0.1:8009/ping && break
+            sleep 2
+          done
+          POD_IP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $POD_IP:9696" http://127.0.0.1:8009/ping)
+          LOCALHOST_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1:8009/ping)
+          kill $PF_PID
+          # The pod IP must be rejected, or a probe without the header would pass vacuously.
+          [ "$POD_IP_STATUS" = 400 ] \
+            || { echo "FAILED: Allowed Hosts did not reject the pod IP (got $POD_IP_STATUS)"; exit 1; }
+          [ "$LOCALHOST_STATUS" = 200 ] \
+            || { echo "FAILED: Allowed Hosts rejected Host: localhost (got $LOCALHOST_STATUS)"; exit 1; }
+          python3 - <<'PY'
+          import sys, yaml
+          sts = next(d for d in yaml.safe_load_all(open("cluster/services/prowlarr.yaml"))
+                     if d and d["kind"] == "StatefulSet")
+          container = sts["spec"]["template"]["spec"]["containers"][0]
+          # Liveness only runs after startup passes, so the rollout alone cannot catch its header missing.
+          bad = [p for p in ("startupProbe", "livenessProbe", "readinessProbe")
+                 if {"name": "Host", "value": "localhost"} not in container[p]["httpGet"].get("httpHeaders", [])]
+          if bad:
+              sys.exit(f"FAILED: prowlarr probes without Host: localhost: {', '.join(bad)}")
+          PY
+          echo "prowlarr probes OK with Allowed Hosts set"
 
       - name: Diagnose prowlarr/lidarr failure
         if: failure()
@@ -1172,6 +1334,7 @@ jobs:
       - name: Server-side dry-run — all manifests
         run: |
           FAILED=0
+          # cluster/jobs is a kustomization; the backup check step applies it whole.
           while IFS= read -r f; do
             echo "==> $f"
             kubectl apply --dry-run=server -f "$f" || { echo "FAILED: $f"; FAILED=1; }
@@ -1182,7 +1345,7 @@ jobs:
             ! -path "*/argocd/*" \
             ! -path "*/operators/*" \
             ! -path "*/priorityClasses/*" \
-            ! -name "cert-manager.yaml" \
+            ! -path "*/jobs/*" \
             ! -name "l2-config.yaml" \
             ! -name "traefik-default-tls.yaml" \
             ! -name "elasticsearch.yaml" \
@@ -1450,7 +1613,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       K3D_VERSION: v5.7.5
-      AM_VERSION: "0.27.0"
+      # The Alertmanager the chart deploys; the template check renders with this engine.
+      AM_VERSION: "0.28.1"
 
     steps:
       - uses: actions/checkout@v4
@@ -1545,6 +1709,15 @@ jobs:
           open("/tmp/am.yaml", "w").write(yaml.safe_dump(v["alertmanager"]["config"]))
           PY
           "./alertmanager-${AM_VERSION}.linux-amd64/amtool" check-config /tmp/am.yaml
+          # The weekly backup check reports only through KubeJobFailed.
+          test "$("./alertmanager-${AM_VERSION}.linux-amd64/amtool" config routes test \
+            --config.file=/tmp/am.yaml alertname=KubeJobFailed namespace=backup-verify)" = pushover
+
+      - name: Assert Alertmanager notifications name the firing workload
+        run: |
+          python3 .github/scripts/check_alertmanager_templates.py \
+            --overrides cluster/helm/kube-prometheus-stack/values.yaml \
+            --amtool "./alertmanager-${AM_VERSION}.linux-amd64/amtool"
 
       - name: Resolve the loki chart pin
         id: loki-chart

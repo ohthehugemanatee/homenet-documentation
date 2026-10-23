@@ -1,0 +1,230 @@
+---
+# Weekly check that the Longhorn backups exist and restore; failure raises KubeJobFailed.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backup-verify
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-verify
+  namespace: backup-verify
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backup-verify
+  namespace: longhorn-system
+rules:
+  - apiGroups: ["longhorn.io"]
+    resources: ["volumes", "backups"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backup-verify-restore
+  namespace: backup-verify
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backup-verify-restore
+  namespace: backup-verify
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: backup-verify
+roleRef:
+  kind: Role
+  name: backup-verify-restore
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-verify-restore
+rules:
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-verify-restore
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: backup-verify
+roleRef:
+  kind: ClusterRole
+  name: backup-verify-restore
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backup-verify
+  namespace: longhorn-system
+subjects:
+  - kind: ServiceAccount
+    name: backup-verify
+    namespace: backup-verify
+roleRef:
+  kind: Role
+  name: backup-verify
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-verify
+  namespace: backup-verify
+spec:
+  # Monday's 05:00 UTC backups run one volume at a time; this leaves them six hours.
+  schedule: "0 11 * * 1"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          serviceAccountName: backup-verify
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          # Init containers run in order, so a stale backup fails the Job before any restore starts.
+          initContainers:
+            - name: fetch
+              image: alpine/kubectl:1.36.4
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  kubectl get volumes.longhorn.io -n longhorn-system \
+                    -o json --cache-dir=/data/kube-cache > /data/volumes.json
+                  kubectl get backups.longhorn.io -n longhorn-system \
+                    -o json --cache-dir=/data/kube-cache > /data/backups.json
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+            - name: currency
+              image: python:3.12-alpine
+              command:
+                - python3
+                - /scripts/backup_currency.py
+                - /data/volumes.json
+                - /data/backups.json
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+            - name: select
+              image: python:3.12-alpine
+              env:
+                # A random one of these is restored each week.
+                - name: RESTORE_CLAIMS
+                  value: default/radarr-db-radarr-0,default/sonarr-db-sonarr-0,default/prowlarr-config-prowlarr-0,default/lidarr-config-lidarr-0
+              command:
+                - python3
+                - /scripts/restore_target.py
+                - /data/volumes.json
+                - /data/backups.json
+                - /data/restore.env
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: data
+                  mountPath: /data
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+          containers:
+            - name: restore
+              image: alpine/kubectl:1.36.4
+              command: [sh, /scripts/restore.sh]
+              env:
+                - name: DRIVER
+                  value: driver.longhorn.io
+                - name: SNAPSHOT_CLASS
+                  value: longhorn-backup
+                - name: STORAGE_CLASS
+                  value: longhorn
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: data
+                  mountPath: /data
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 64Mi
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-verify-scripts
+            - name: data
+              emptyDir: {}
