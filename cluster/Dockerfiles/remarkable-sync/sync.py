@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Watches a SongHub saved-tabs directory and pushes new tabs to reMarkable Cloud."""
 
+import hashlib
 import html
 import json
 import logging
@@ -121,6 +122,14 @@ CHORD_TAG = re.compile(r"\[ch\](.*?)\[/ch\]", re.DOTALL)
 
 STRING_LINE_RE = re.compile(r"^([A-Za-z0-9#]{1,3})\|")
 
+# Port of SongHub's src/lib/core/transpose.ts; keep the spelling rules in step.
+SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+NATURALS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+FLAT_MAJOR_KEYS = {0, 5, 10, 3, 8, 1}
+FLAT_MINOR_KEYS = {9, 2, 7, 0, 5, 10, 3}
+NOTE_RE = re.compile(r"^([A-G])([#b]?)")
+
 # Widest a line fits in a .tab-block without wrapping - tighter than the
 # ~76-char page width since border-left+padding-left eat into it. Measured
 # empirically by rendering "e|"+dashes+"|" and finding the exact N (73)
@@ -148,6 +157,62 @@ class MalformedTabError(Exception):
     TypeError means the JSON parsed fine but the structure is simply wrong -
     that won't fix itself on retry.
     """
+
+
+def _pitch_class(note: str):
+    m = NOTE_RE.match(note)
+    if not m:
+        return None
+    offset = {"#": 1, "b": -1}.get(m.group(2), 0)
+    return (NATURALS[m.group(1)] + offset) % 12
+
+
+def _shift_note(note: str, semitones: int, flats: bool) -> str:
+    m = NOTE_RE.match(note)
+    if not m:
+        return note
+    pc = (_pitch_class(note) + semitones) % 12
+    return (FLATS if flats else SHARPS)[pc] + note[m.end():]
+
+
+def _prefers_flats(key_chord, semitones: int) -> bool:
+    pc = _pitch_class(key_chord.strip()) if key_chord else None
+    if pc is None:
+        return False
+    suffix = NOTE_RE.sub("", key_chord.strip(), count=1)
+    minor = suffix.startswith("m") and not suffix.startswith("maj")
+    return (pc + semitones) % 12 in (FLAT_MINOR_KEYS if minor else FLAT_MAJOR_KEYS)
+
+
+def _transpose_chord(chord: str, semitones: int, flats: bool) -> str:
+    root, sep, bass = chord.partition("/")
+    shifted = _shift_note(root, semitones, flats)
+    if not sep:
+        return shifted
+    return f"{shifted}/{_shift_note(bass, semitones, flats)}"
+
+
+def transposed_raw_tabs(tab: dict) -> str:
+    """tab["raw_tabs"] with every [ch] chord shifted by tab["transpose"] semitones."""
+    raw_tabs = tab["raw_tabs"]
+    semitones = int(tab.get("transpose") or 0)
+    if semitones % 12 == 0:
+        return raw_tabs
+    tonality = tab.get("tonality")
+    if tonality and _pitch_class(tonality) is not None:
+        key = tonality
+    else:
+        first = CHORD_TAG.search(raw_tabs)
+        key = first.group(1).strip() if first else None
+    flats = _prefers_flats(key, semitones)
+
+    def shift(m):
+        chord = m.group(1)
+        lead = chord[: len(chord) - len(chord.lstrip())]
+        trail = chord[len(chord.rstrip()):]
+        return f"[ch]{lead}{_transpose_chord(chord.strip(), semitones, flats)}{trail}[/ch]"
+
+    return CHORD_TAG.sub(shift, raw_tabs)
 
 
 def _reflow_tab_block(tab_block_text: str, max_width: int = TAB_SYSTEM_MAX_WIDTH) -> str:
@@ -270,13 +335,17 @@ def render_body_html(raw_tabs: str) -> str:
     return body
 
 
-def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
+def load_raw_tabs(tab_file: Path) -> str:
+    """The tab's raw_tabs with SongHub's saved transposition applied."""
     data = json.loads(tab_file.read_text())
     try:
-        raw_tabs = data["tab"]["raw_tabs"]
-    except (KeyError, TypeError) as exc:
+        return transposed_raw_tabs(data["tab"])
+    except (KeyError, TypeError, ValueError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
-    body = render_body_html(raw_tabs)
+
+
+def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
+    body = render_body_html(load_raw_tabs(tab_file))
     try:
         WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
     except Exception:
@@ -291,7 +360,9 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
 def upload_to_remarkable(pdf_file: Path) -> None:
     try:
         subprocess.run(
-            ["rmapi", "put", str(pdf_file), REMARKABLE_TARGET_FOLDER],
+            # --content-only creates the document, or replaces its PDF in
+            # place (keeping annotations) when a re-saved tab is re-synced.
+            ["rmapi", "put", "--content-only", str(pdf_file), REMARKABLE_TARGET_FOLDER],
             check=True,
             capture_output=True,
             text=True,
@@ -311,6 +382,16 @@ def upload_to_remarkable(pdf_file: Path) -> None:
 
 
 def sync_one(tab_file: Path) -> None:
+    digest = hashlib.sha256(load_raw_tabs(tab_file).encode()).hexdigest()
+    marker = marker_for(tab_file)
+    if marker.exists():
+        recorded = marker.read_text()
+        if recorded == digest:
+            return
+        # Markers written before content digests are empty files.
+        if not recorded and tab_file.stat().st_mtime <= marker.stat().st_mtime:
+            marker.write_text(digest)
+            return
     with tempfile.TemporaryDirectory() as tmp:
         pdf_file = Path(tmp) / f"{tab_file.stem}.pdf"
         log.info("converting %s", tab_file.name)
@@ -322,14 +403,14 @@ def sync_one(tab_file: Path) -> None:
             "converted %s -> %d bytes", tab_file.name, pdf_file.stat().st_size
         )
         upload_to_remarkable(pdf_file)
-    marker_for(tab_file).touch()
+    marker.write_text(digest)
     log.info("synced %s", tab_file.name)
 
 
 def run_cycle() -> None:
     STATE_DIR.mkdir(exist_ok=True)
     for tab_file in sorted(TAB_DIR.glob("*.ultimatetab.json")):
-        if marker_for(tab_file).exists() or failed_marker_for(tab_file).exists():
+        if failed_marker_for(tab_file).exists():
             continue
         try:
             sync_one(tab_file)
@@ -362,10 +443,10 @@ def _run_cycle_locked() -> None:
 
 
 class NewTabHandler(FileSystemEventHandler):
-    """Triggers a sync cycle when a new *.ultimatetab.json appears,
-    instead of waiting for the next periodic cycle. Watches for both
-    creation and move-into-place, since SongHub (or the filesystem) may
-    write to a temp name and rename.
+    """Triggers a sync cycle when a *.ultimatetab.json appears or changes,
+    instead of waiting for the next periodic cycle. Watches creation,
+    move-into-place (SongHub or the filesystem may write to a temp name and
+    rename), and in-place modification (re-saving a tab).
 
     Debounced: rapid bursts (several tabs downloaded at once) coalesce
     into one cycle, and the delay gives SongHub's write time to finish -
@@ -390,6 +471,10 @@ class NewTabHandler(FileSystemEventHandler):
             self._timer.start()
 
     def on_created(self, event):
+        if not event.is_directory:
+            self._schedule(event.src_path)
+
+    def on_modified(self, event):
         if not event.is_directory:
             self._schedule(event.src_path)
 

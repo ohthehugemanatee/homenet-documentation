@@ -26,7 +26,7 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 
 ## Operating notes
 
-- **New tabs sync immediately**, via a `watchdog` filesystem watch on
+- **New and re-saved tabs sync immediately**, via a `watchdog` filesystem watch on
   `TAB_DIR` (debounced by `WATCH_DEBOUNCE_SECONDS`, default 2s, to coalesce
   bursts and let SongHub finish writing). `SYNC_INTERVAL_SECONDS` (default
   1800) is now just a fallback poll in case an event is missed - relevant
@@ -45,18 +45,24 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 - Invalid JSON (as opposed to valid-but-wrong-shaped JSON) is treated as
   transient - no `.failed` marker, keeps retrying - since it can happen if
   the sidecar reads a file mid-write by SongHub.
-- **Forcing a re-sync after a rendering change.** A tab that already
-  uploaded successfully gets a `.synced` marker and is never re-converted or
-  re-uploaded, even if `sync.py`'s PDF rendering later changes (e.g. the
-  raw_tabs-vs-htmlTab / portrait fix). To regenerate specific tabs already
-  on the tablet, clear their markers the same way as `.failed` ones:
+- **Re-saved tabs.** The `.synced` marker holds a sha256 of the tab's
+  `raw_tabs` after SongHub's `tab.transpose` is applied. A save that changes
+  that text (new transposition, edited chords) re-uploads with
+  `rmapi put --content-only`, which replaces the PDF of the existing
+  document in place and keeps its annotations. Saves that leave it
+  unchanged (A/F marks, a re-save with no edits) upload nothing. An empty
+  marker from an older image is treated as synced unless the tab file is
+  newer than the marker.
+- **Forcing a re-sync after a rendering change.** Changes to `sync.py`'s
+  PDF rendering do not change the digest, so tabs already on the tablet
+  are not regenerated. Clear their markers the same way as `.failed` ones:
   ```
   kubectl exec -n default songhub-0 -c remarkable-sync -- \
     rm -f "/app/saved-tabs/.remarkable-sync-state/<filename>.ultimatetab.json.synced"
   ```
   or `rm -f /app/saved-tabs/.remarkable-sync-state/*.synced` to force
-  everything to re-upload (creates duplicate documents on reMarkable Cloud
-  next to the old ones - delete the stale copies there manually).
+  everything to re-upload. Existing documents get their PDF replaced in
+  place.
 - **A green pod does not mean uploads are succeeding.** The readiness/
   liveness probes only check that the sync loop is alive (heartbeat file
   freshness), not that `rmapi put` is actually succeeding. A persistent
