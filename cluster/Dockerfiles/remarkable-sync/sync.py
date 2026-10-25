@@ -122,14 +122,6 @@ CHORD_TAG = re.compile(r"\[ch\](.*?)\[/ch\]", re.DOTALL)
 
 STRING_LINE_RE = re.compile(r"^([A-Za-z0-9#]{1,3})\|")
 
-# Port of SongHub's src/lib/core/transpose.ts; keep the spelling rules in step.
-SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
-NATURALS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
-FLAT_MAJOR_KEYS = {0, 5, 10, 3, 8, 1}
-FLAT_MINOR_KEYS = {9, 2, 7, 0, 5, 10, 3}
-NOTE_RE = re.compile(r"^([A-G])([#b]?)")
-
 # Widest a line fits in a .tab-block without wrapping - tighter than the
 # ~76-char page width since border-left+padding-left eat into it. Measured
 # empirically by rendering "e|"+dashes+"|" and finding the exact N (73)
@@ -157,62 +149,6 @@ class MalformedTabError(Exception):
     TypeError means the JSON parsed fine but the structure is simply wrong -
     that won't fix itself on retry.
     """
-
-
-def _pitch_class(note: str):
-    m = NOTE_RE.match(note)
-    if not m:
-        return None
-    offset = {"#": 1, "b": -1}.get(m.group(2), 0)
-    return (NATURALS[m.group(1)] + offset) % 12
-
-
-def _shift_note(note: str, semitones: int, flats: bool) -> str:
-    m = NOTE_RE.match(note)
-    if not m:
-        return note
-    pc = (_pitch_class(note) + semitones) % 12
-    return (FLATS if flats else SHARPS)[pc] + note[m.end():]
-
-
-def _prefers_flats(key_chord, semitones: int) -> bool:
-    pc = _pitch_class(key_chord.strip()) if key_chord else None
-    if pc is None:
-        return False
-    suffix = NOTE_RE.sub("", key_chord.strip(), count=1)
-    minor = suffix.startswith("m") and not suffix.startswith("maj")
-    return (pc + semitones) % 12 in (FLAT_MINOR_KEYS if minor else FLAT_MAJOR_KEYS)
-
-
-def _transpose_chord(chord: str, semitones: int, flats: bool) -> str:
-    root, sep, bass = chord.partition("/")
-    shifted = _shift_note(root, semitones, flats)
-    if not sep:
-        return shifted
-    return f"{shifted}/{_shift_note(bass, semitones, flats)}"
-
-
-def transposed_raw_tabs(tab: dict) -> str:
-    """tab["raw_tabs"] with every [ch] chord shifted by tab["transpose"] semitones."""
-    raw_tabs = tab["raw_tabs"]
-    semitones = int(tab.get("transpose") or 0)
-    if semitones % 12 == 0:
-        return raw_tabs
-    tonality = tab.get("tonality")
-    if tonality and _pitch_class(tonality) is not None:
-        key = tonality
-    else:
-        first = CHORD_TAG.search(raw_tabs)
-        key = first.group(1).strip() if first else None
-    flats = _prefers_flats(key, semitones)
-
-    def shift(m):
-        chord = m.group(1)
-        lead = chord[: len(chord) - len(chord.lstrip())]
-        trail = chord[len(chord.rstrip()):]
-        return f"[ch]{lead}{_transpose_chord(chord.strip(), semitones, flats)}{trail}[/ch]"
-
-    return CHORD_TAG.sub(shift, raw_tabs)
 
 
 def _reflow_tab_block(tab_block_text: str, max_width: int = TAB_SYSTEM_MAX_WIDTH) -> str:
@@ -336,11 +272,12 @@ def render_body_html(raw_tabs: str) -> str:
 
 
 def load_raw_tabs(tab_file: Path) -> str:
-    """The tab's raw_tabs with SongHub's saved transposition applied."""
+    """The text to render: SongHub's transposed raw_tabs if it saved one."""
     data = json.loads(tab_file.read_text())
     try:
-        return transposed_raw_tabs(data["tab"])
-    except (KeyError, TypeError, ValueError) as exc:
+        tab = data["tab"]
+        return tab.get("raw_tabs_transposed") or tab["raw_tabs"]
+    except (KeyError, TypeError, AttributeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
 
 

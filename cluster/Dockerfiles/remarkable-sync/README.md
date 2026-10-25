@@ -45,9 +45,10 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 - Invalid JSON (as opposed to valid-but-wrong-shaped JSON) is treated as
   transient - no `.failed` marker, keeps retrying - since it can happen if
   the sidecar reads a file mid-write by SongHub.
-- **Re-saved tabs.** The `.synced` marker holds a sha256 of the tab's
-  `raw_tabs` after SongHub's `tab.transpose` is applied. A save that changes
-  that text (new transposition, edited chords) re-uploads with
+- **Re-saved tabs.** The `.synced` marker holds a sha256 of the text the
+  PDF renders: `tab.raw_tabs_transposed` when SongHub saved a transposition,
+  else `tab.raw_tabs`. A save that changes that text (new transposition,
+  edited chords) re-uploads with
   `rmapi put --content-only`, which replaces the PDF of the existing
   document in place and keeps its annotations. Saves that leave it
   unchanged (A/F marks, a re-save with no edits) upload nothing. An empty

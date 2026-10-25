@@ -128,10 +128,9 @@ def _edit_tab(tab_file, **fields):
 
 
 def test_changed_transpose_is_reuploaded(tab_dir, monkeypatch):
-    _edit_tab(tab_dir / GOOD, raw_tabs="[ch]C[/ch]")
     fail_uploads_for(monkeypatch)
     sync.run_cycle()
-    _edit_tab(tab_dir / GOOD, transpose=1)
+    _edit_tab(tab_dir / GOOD, transpose=1, raw_tabs_transposed="[ch]C#[/ch]")
     attempted = fail_uploads_for(monkeypatch)
     sync.run_cycle()
     assert attempted == [Path(GOOD).stem]
