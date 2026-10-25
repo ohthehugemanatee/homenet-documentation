@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Watches a SongHub saved-tabs directory and pushes new tabs to reMarkable Cloud."""
 
+import hashlib
 import html
 import json
 import logging
@@ -270,13 +271,18 @@ def render_body_html(raw_tabs: str) -> str:
     return body
 
 
-def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
+def load_raw_tabs(tab_file: Path) -> str:
+    """The text to render: SongHub's transposed raw_tabs if it saved one."""
     data = json.loads(tab_file.read_text())
     try:
-        raw_tabs = data["tab"]["raw_tabs"]
-    except (KeyError, TypeError) as exc:
+        tab = data["tab"]
+        return tab.get("raw_tabs_transposed") or tab["raw_tabs"]
+    except (KeyError, TypeError, AttributeError) as exc:
         raise MalformedTabError(f"{tab_file.name}: {exc}") from exc
-    body = render_body_html(raw_tabs)
+
+
+def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
+    body = render_body_html(load_raw_tabs(tab_file))
     try:
         WeasyHTML(string=HTML_TEMPLATE.format(body=body)).write_pdf(str(out_pdf))
     except Exception:
@@ -291,7 +297,9 @@ def convert_to_pdf(tab_file: Path, out_pdf: Path) -> None:
 def upload_to_remarkable(pdf_file: Path) -> None:
     try:
         subprocess.run(
-            ["rmapi", "put", str(pdf_file), REMARKABLE_TARGET_FOLDER],
+            # --content-only creates the document, or replaces its PDF in
+            # place (keeping annotations) when a re-saved tab is re-synced.
+            ["rmapi", "put", "--content-only", str(pdf_file), REMARKABLE_TARGET_FOLDER],
             check=True,
             capture_output=True,
             text=True,
@@ -311,6 +319,16 @@ def upload_to_remarkable(pdf_file: Path) -> None:
 
 
 def sync_one(tab_file: Path) -> None:
+    digest = hashlib.sha256(load_raw_tabs(tab_file).encode()).hexdigest()
+    marker = marker_for(tab_file)
+    if marker.exists():
+        recorded = marker.read_text()
+        if recorded == digest:
+            return
+        # Markers written before content digests are empty files.
+        if not recorded and tab_file.stat().st_mtime <= marker.stat().st_mtime:
+            marker.write_text(digest)
+            return
     with tempfile.TemporaryDirectory() as tmp:
         pdf_file = Path(tmp) / f"{tab_file.stem}.pdf"
         log.info("converting %s", tab_file.name)
@@ -322,14 +340,14 @@ def sync_one(tab_file: Path) -> None:
             "converted %s -> %d bytes", tab_file.name, pdf_file.stat().st_size
         )
         upload_to_remarkable(pdf_file)
-    marker_for(tab_file).touch()
+    marker.write_text(digest)
     log.info("synced %s", tab_file.name)
 
 
 def run_cycle() -> None:
     STATE_DIR.mkdir(exist_ok=True)
     for tab_file in sorted(TAB_DIR.glob("*.ultimatetab.json")):
-        if marker_for(tab_file).exists() or failed_marker_for(tab_file).exists():
+        if failed_marker_for(tab_file).exists():
             continue
         try:
             sync_one(tab_file)
@@ -362,10 +380,10 @@ def _run_cycle_locked() -> None:
 
 
 class NewTabHandler(FileSystemEventHandler):
-    """Triggers a sync cycle when a new *.ultimatetab.json appears,
-    instead of waiting for the next periodic cycle. Watches for both
-    creation and move-into-place, since SongHub (or the filesystem) may
-    write to a temp name and rename.
+    """Triggers a sync cycle when a *.ultimatetab.json appears or changes,
+    instead of waiting for the next periodic cycle. Watches creation,
+    move-into-place (SongHub or the filesystem may write to a temp name and
+    rename), and in-place modification (re-saving a tab).
 
     Debounced: rapid bursts (several tabs downloaded at once) coalesce
     into one cycle, and the delay gives SongHub's write time to finish -
@@ -390,6 +408,10 @@ class NewTabHandler(FileSystemEventHandler):
             self._timer.start()
 
     def on_created(self, event):
+        if not event.is_directory:
+            self._schedule(event.src_path)
+
+    def on_modified(self, event):
         if not event.is_directory:
             self._schedule(event.src_path)
 
