@@ -5,7 +5,8 @@ name: Build reMarkable sync image
 # entrypoint (cluster/Dockerfiles/remarkable-sync/), pushed to GHCR. Runs on
 # merge to master and on manual dispatch. Push builds use the Dockerfile's
 # RMAPI_REF and never write the :<rmapi_ref> tag that songhub.yaml pins: a
-# node with that tag cached would not pull a rebuilt one.
+# node with that tag cached would not pull a rebuilt one. Only push builds
+# write :devel, so it always matches master.
 'on':
   push:
     branches: [master]
@@ -59,6 +60,7 @@ jobs:
             ${{ inputs.rmapi_ref && format('RMAPI_REF={0}', inputs.rmapi_ref) || '' }}
           tags: |
             ${{ inputs.rmapi_ref && format('ghcr.io/ohthehugemanatee/remarkable-sync:{0}', inputs.rmapi_ref) || '' }}
+            ${{ github.event_name == 'push' && 'ghcr.io/ohthehugemanatee/remarkable-sync:devel' || '' }}
             ghcr.io/ohthehugemanatee/remarkable-sync:latest
             ghcr.io/ohthehugemanatee/remarkable-sync:sha-${{ github.sha }}
 

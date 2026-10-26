@@ -1,4 +1,4 @@
-"""build-remarkable-sync-image.yaml builds on merge to master. See #454."""
+"""build-remarkable-sync-image.yaml builds on merge to master. See #454, #457."""
 import os
 import unittest
 
@@ -42,6 +42,11 @@ class BuildRemarkableSyncTriggersTest(unittest.TestCase):
 
     def test_ref_tag_is_still_written_by_dispatch(self):
         self.assertIn(f"format('{IMAGE}:{{0}}', inputs.rmapi_ref)", self.build['tags'])
+
+    def test_devel_tag_is_written_only_by_push_builds(self):
+        lines = [l for l in self.build['tags'].splitlines() if f'{IMAGE}:devel' in l]
+        self.assertEqual(len(lines), 1)
+        self.assertIn("github.event_name == 'push' &&", lines[0])
 
     def test_concurrent_builds_queue_instead_of_cancelling(self):
         self.assertIs(self.workflow['concurrency']['cancel-in-progress'], False)
