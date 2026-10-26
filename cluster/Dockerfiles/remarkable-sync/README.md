@@ -24,6 +24,24 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
    `imagePullSecret` to the `remarkable-sync` container in `songhub.yaml` -
    otherwise the pod sits in `ImagePullBackOff`.
 
+## Deploying a build
+
+`songhub.yaml` runs `remarkable-sync:devel` and `songhub:main` with
+`imagePullPolicy: Always`. A merge to this repo's `master` that touches
+`cluster/Dockerfiles/remarkable-sync/`, or to SongHub's `main`, builds the
+tag; the pod picks it up on its next start. Wait for the build run to
+finish, then restart the pod and compare each container's `imageID` with the
+digest in the run's push log:
+```
+kubectl -n default delete pod songhub-0
+kubectl -n default get pod songhub-0 \
+  -o jsonpath='{range .status.containerStatuses[*]}{.name}{"\t"}{.imageID}{"\n"}{end}'
+```
+Both containers restart together, and SongHub is down for the 1 to 3 minutes
+the new images take to pull and pass the startup probe. A restart during a
+GHCR or WAN outage leaves the pod in `ErrImagePull`, because `Always` has no
+cache fallback.
+
 ## Operating notes
 
 - **New and re-saved tabs sync immediately**, via a `watchdog` filesystem watch on
