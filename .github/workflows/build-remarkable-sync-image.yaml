@@ -1,17 +1,27 @@
 name: Build reMarkable sync image
 
-# Manual only: bundles ddvk/rmapi (https://github.com/ddvk/rmapi, the
-# maintained fork of the now-archived juruen/rmapi) built from a pinned tag,
-# plus our own sync entrypoint (cluster/Dockerfiles/remarkable-sync/), pushed
-# to GHCR. No schedule/auto-trigger - bumping rmapi_ref is a deliberate,
-# reviewable action, same spirit as build-songhub-image.yaml.
+# Bundles ddvk/rmapi (https://github.com/ddvk/rmapi, the maintained fork of
+# the now-archived juruen/rmapi) built from a pinned tag, plus our own sync
+# entrypoint (cluster/Dockerfiles/remarkable-sync/), pushed to GHCR. Runs on
+# merge to master and on manual dispatch. Push builds use the Dockerfile's
+# RMAPI_REF and never write the :<rmapi_ref> tag that songhub.yaml pins: a
+# node with that tag cached would not pull a rebuilt one.
 'on':
+  push:
+    branches: [master]
+    paths:
+      - cluster/Dockerfiles/remarkable-sync/**
+      - .github/workflows/build-remarkable-sync-image.yaml
   workflow_dispatch:
     inputs:
       rmapi_ref:
         description: 'Upstream ddvk/rmapi git ref to build (tag preferred over branch)'
         required: true
         default: v0.0.35
+
+concurrency:
+  group: build-remarkable-sync-image
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -46,10 +56,11 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            RMAPI_REF=${{ inputs.rmapi_ref }}
+            ${{ inputs.rmapi_ref && format('RMAPI_REF={0}', inputs.rmapi_ref) || '' }}
           tags: |
-            ghcr.io/ohthehugemanatee/remarkable-sync:${{ inputs.rmapi_ref }}
+            ${{ inputs.rmapi_ref && format('ghcr.io/ohthehugemanatee/remarkable-sync:{0}', inputs.rmapi_ref) || '' }}
             ghcr.io/ohthehugemanatee/remarkable-sync:latest
+            ghcr.io/ohthehugemanatee/remarkable-sync:sha-${{ github.sha }}
 
       # GHCR packages default to private. The cluster has no imagePullSecret
       # configured, so this package must be made public one time in GHCR
