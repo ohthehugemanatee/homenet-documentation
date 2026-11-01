@@ -52,7 +52,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: starloom
-          image: ghcr.io/jamesread/starloom:1.7.0
+          image: ghcr.io/ohthehugemanatee/starloom:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
