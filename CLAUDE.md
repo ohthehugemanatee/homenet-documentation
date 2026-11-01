@@ -2,7 +2,7 @@
 
 A homelab k3s cluster's docs + IaC: K8s manifests and Helm overrides in `cluster/`, Ansible (playbooks + roles + tests) in `cluster/ansible/`, an external Ansible runner in `shoebox/`, CI in `.github/`.
 
-Root `*.md` files are operator architecture docs. They are not loaded into context — read the one matching the change: `README.md` for the cluster overview, `monitoring-and-compliance.md` for the Semaphore scheduler and the upgrade runbook, `argocd.md` for GitOps, `cert-manager.md` for TLS issuance, `dns.md` for Pi-hole, `warehouse.md` and `nextcloud.md` for the storage hosts, `remote-debugging.md`, `nextcloud-mcp.md` and `plex-mcp.md` for the MCP surfaces.
+Root `*.md` files are operator architecture docs. They are not loaded into context — read the one matching the change: `README.md` for the cluster overview, `monitoring-and-compliance.md` for the Semaphore scheduler and the upgrade runbook, `argocd.md` for GitOps, `cert-manager.md` for TLS issuance, `dns.md` for Pi-hole, `warehouse.md` and `nextcloud.md` for the storage hosts, `remote-debugging.md`, `nextcloud-mcp.md`, `plex-mcp.md` and `starloom-mcp.md` for the MCP surfaces.
 
 Directories with rules of their own carry a `CLAUDE.md` (plus an `AGENTS.md` symlink). Claude Code loads this file from the repo root and a nested one when it reads files in that directory, so this file holds only the cross-cutting rules.
 

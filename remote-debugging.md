@@ -204,7 +204,8 @@ kubectl rollout restart deployment/kubernetes-mcp-server -n default
   succeed and no destructive tool is exposed (see #142's CI check for the
   exec-suppression half of this) before relying on this day to day.
 - `cluster/services/cloudflared.yaml`'s image tag is pinned and will drift. This
-  pod fronts both the API server and kubernetes-mcp-server, so a stale tag here
+  pod fronts the API server, kubernetes-mcp-server and StarLoom's MCP endpoint
+  ([starloom-mcp.md](starloom-mcp.md)), so a stale tag here
   is higher-priority to keep current than most other workloads in this cluster —
   check [cloudflared releases](https://github.com/cloudflare/cloudflared/releases)
   periodically and bump manually; there's no Renovate/Dependabot wired up for
