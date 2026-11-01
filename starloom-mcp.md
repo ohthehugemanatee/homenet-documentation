@@ -32,12 +32,14 @@ The route and the Access policy live in the Cloudflare dashboard.
 ## One-time Cloudflare setup (operator-run)
 
 1. Zero Trust dashboard → Tunnels → `homenet-k8s-debug` → Public hostnames → add
-   `stars-mcp.vertesi.com`, path `^/mcp`, service `http://starloom.default.svc:8080`.
-   Plain `http://`: the pod has no TLS listener.
+   `stars-mcp.vertesi.com`, path `^/mcp`, service type HTTP, URL `starloom.default.svc:8080`.
+   HTTP, not HTTPS: the pod has no TLS listener.
 2. Access → Service Auth → Service Tokens → create `starloom-mcp`. The Client ID and
    Secret are shown once.
-3. Access → Applications → self-hosted app for `stars-mcp.vertesi.com`, policy action
-   Service Auth, allowing only the `starloom-mcp` token.
+3. Access → Applications → self-hosted app with one destination: type Public hostname,
+   `stars-mcp.vertesi.com`, path empty. A Private destination covers WARP clients only and
+   leaves the public hostname without an Access app. Policy action Service Auth, allowing
+   only the `starloom-mcp` token.
 4. StarLoom UI → create an API key for each client.
 
 ## Client configuration
