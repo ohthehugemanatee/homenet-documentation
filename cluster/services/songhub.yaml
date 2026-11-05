@@ -35,17 +35,13 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: songhub
-          # Built by .github/workflows/build-songhub-image.yaml — bump both
-          # together.
-          # TEMPORARY: pinned to a patch build from
-          # ohthehugemanatee/SongHub@claude/ultimate-guitar-search-encoding-40prc8
-          # (fixes Ultimate Guitar search encoding) while that fix is out for
-          # review upstream. Revert to the upstream ghcr.io/ohthehugemanatee/
-          # songhub:<tag> pin once it's merged and released in Cesc1986/SongHub.
+          # Tracks the main build of ohthehugemanatee/SongHub (build-image.yml).
+          # Mutable tag: deploy by deleting songhub-0, not by editing this file.
           # First deploy: the ghcr.io/ohthehugemanatee/songhub package
           # defaults to private and must be set public (or an
           # imagePullSecret added here) or this pod sits in ImagePullBackOff.
-          image: ghcr.io/ohthehugemanatee/songhub:claude-ultimate-guitar-search-encoding-40prc8
+          image: ghcr.io/ohthehugemanatee/songhub:main
+          imagePullPolicy: Always
           ports:
             - containerPort: 3005
           env:
@@ -119,8 +115,10 @@ spec:
           # SongHub's saved *.ultimatetab.json tabs to PDF and pushes them
           # to reMarkable Cloud via rmapi. Shares the songhub-saved-tabs
           # volume with the songhub container above (same pod, so no NFS/RWX
-          # needed) and never modifies the original tab files.
-          image: ghcr.io/ohthehugemanatee/remarkable-sync:v0.0.35
+          # needed) and never modifies the original tab files. :devel is
+          # written only by master builds; deploy as for songhub above.
+          image: ghcr.io/ohthehugemanatee/remarkable-sync:devel
+          imagePullPolicy: Always
           env:
             - name: RMAPI_CONFIG
               value: /secrets/rmapi/rmapi.conf

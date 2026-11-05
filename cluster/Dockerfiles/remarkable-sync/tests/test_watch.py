@@ -7,7 +7,7 @@ import sys
 import threading
 from pathlib import Path
 
-from watchdog.events import FileCreatedEvent, FileMovedEvent
+from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileMovedEvent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import sync  # noqa: E402
@@ -57,3 +57,11 @@ def test_debounces_bursts_into_one_trigger():
     # Give the debounce timer time to fire exactly once.
     threading.Event().wait(DEBOUNCE * 4)
     assert calls == [1]
+
+
+def test_triggers_on_tab_file_modified():
+    """SongHub overwrites the file in place when a saved tab is re-saved."""
+    triggered = threading.Event()
+    handler = sync.NewTabHandler(on_new_tab=triggered.set, debounce_seconds=DEBOUNCE)
+    handler.on_modified(FileModifiedEvent("/tabs/foo.ultimatetab.json"))
+    assert triggered.wait(timeout=1)

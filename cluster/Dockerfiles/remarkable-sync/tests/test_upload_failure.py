@@ -5,6 +5,7 @@ loki-rules-remarkable-sync.yaml's alert query.
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -38,7 +39,7 @@ def fail_uploads_for(monkeypatch, *tab_names):
     attempted = []
 
     def fake_run(cmd, **kwargs):
-        pdf = Path(cmd[2])
+        pdf = Path(next(arg for arg in cmd if arg.endswith(".pdf")))
         attempted.append(pdf.stem)
         if pdf.stem in failing:
             raise subprocess.CalledProcessError(
@@ -118,3 +119,61 @@ def test_success_log_matches_the_alert_query(tab_dir, monkeypatch, caplog):
     with caplog.at_level(logging.INFO, logger="remarkable-sync"):
         sync.run_cycle()
     assert f"synced {GOOD}" in caplog.text
+
+
+def _edit_tab(tab_file, **fields):
+    data = json.loads(tab_file.read_text())
+    data["tab"].update(fields)
+    tab_file.write_text(json.dumps(data))
+
+
+def test_changed_transpose_is_reuploaded(tab_dir, monkeypatch):
+    fail_uploads_for(monkeypatch)
+    sync.run_cycle()
+    _edit_tab(tab_dir / GOOD, transpose=1, raw_tabs_transposed="[ch]C#[/ch]")
+    attempted = fail_uploads_for(monkeypatch)
+    sync.run_cycle()
+    assert attempted == [Path(GOOD).stem]
+
+
+def test_marks_only_change_is_not_reuploaded(tab_dir, monkeypatch):
+    fail_uploads_for(monkeypatch)
+    sync.run_cycle()
+    data = json.loads((tab_dir / GOOD).read_text())
+    data["marks"] = {"A": True, "F": False}
+    (tab_dir / GOOD).write_text(json.dumps(data))
+    attempted = fail_uploads_for(monkeypatch)
+    sync.run_cycle()
+    assert attempted == []
+
+
+def test_legacy_empty_marker_is_adopted_without_upload(tab_dir, monkeypatch):
+    sync.STATE_DIR.mkdir()
+    for name in (FAILING, GOOD):
+        sync.marker_for(tab_dir / name).touch()
+    attempted = fail_uploads_for(monkeypatch)
+    sync.run_cycle()
+    assert attempted == []
+    assert sync.marker_for(tab_dir / GOOD).read_text()
+
+
+def test_legacy_marker_older_than_tab_is_reuploaded(tab_dir, monkeypatch):
+    sync.STATE_DIR.mkdir()
+    marker = sync.marker_for(tab_dir / GOOD)
+    marker.touch()
+    os.utime(marker, (0, 0))
+    attempted = fail_uploads_for(monkeypatch)
+    sync.run_cycle()
+    assert Path(GOOD).stem in attempted
+
+
+def test_upload_replaces_existing_document_content(tab_dir, monkeypatch):
+    commands = []
+
+    def fake_run(cmd, **kwargs):
+        commands.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(sync.subprocess, "run", fake_run)
+    sync.run_cycle()
+    assert commands and all(cmd[:3] == ["rmapi", "put", "--content-only"] for cmd in commands)
