@@ -33,3 +33,4 @@ Start from [`template.md`](template.md).
 | [0007](0007-off-cluster-tls-is-delivered-from-the-cluster.md) | Off-cluster TLS is delivered from the cluster on a schedule | accepted |
 | [0008](0008-csi-snapshots-not-velero.md) | Volume restore points use the CSI snapshot API, not Velero | accepted |
 | [0009](0009-upgrades-bracketed-by-shared-hooks.md) | App upgrades are bracketed by shared ArgoCD hooks | accepted |
+| [0010](0009-nextcloud-app-files-use-longhorn.md) | Nextcloud application files use Longhorn | accepted |
