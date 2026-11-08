@@ -71,23 +71,24 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 120
             successThreshold: 1
+          # Not /status.php: it needs MariaDB, and a restart cannot fix a database outage.
           livenessProbe:
-            httpGet:
-              path: /status.php
-              port: 80
-              httpHeaders:
-                - name: Host
-                  value: germany.vertesi.com  # must be in trusted_domains
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 10  # 5 min of failures before a restart
+            exec:
+              command:
+                - pgrep
+                - nginx
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 15
+            failureThreshold: 10
+            successThreshold: 1
           readinessProbe:
             httpGet:
               path: /status.php
               port: 80
               httpHeaders:
                 - name: Host
-                  value: germany.vertesi.com
+                  value: germany.vertesi.com  # must be in trusted_domains
             periodSeconds: 15
             timeoutSeconds: 10
             failureThreshold: 3

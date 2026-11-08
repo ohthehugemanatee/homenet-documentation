@@ -1183,13 +1183,3 @@ factual_corrections:
       library scans; no ephemeral-storage request, as state lives on the
       Longhorn volume. The image tag is pinned, so pull policy Always adds a
       registry round-trip per restart without changing what runs.
-
-  - pattern: "nextcloud kube-score advisory finding (identical probes)"
-    files:
-      - cluster/services/nextcloud.yaml
-    reason: >-
-      Advisory, accepted. /status.php is the only health endpoint Nextcloud
-      exposes, so readiness and liveness share it and differ in timing only.
-      Readiness fails after 45 s and takes the pod out of service; liveness
-      restarts it only after 5 minutes of consecutive failures, so the pod
-      leaves service first and restarts only if the failure lasts.
