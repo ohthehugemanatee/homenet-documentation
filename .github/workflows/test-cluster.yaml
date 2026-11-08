@@ -1648,6 +1648,7 @@ jobs:
           helm repo add jetstack https://charts.jetstack.io
           helm repo add longhorn https://charts.longhorn.io
           helm repo add collabora https://collaboraonline.github.io/online/
+          helm repo add traefik https://traefik.github.io/charts
           helm repo update
 
       - name: Dry-run argocd
@@ -1853,6 +1854,24 @@ jobs:
             nextcloud-mcp/nextcloud-mcp-server --version 0.102.7 \
             --namespace default \
             -f cluster/helm/nextcloud-mcp-basic/values.yaml > /dev/null
+
+      - name: Dry-run traefik HelmChartConfig values
+        run: |
+          python3 - <<'PY'
+          import yaml
+          cfg = yaml.safe_load(open("cluster/traefik.yaml"))
+          open("/tmp/traefik-values.yaml", "w").write(cfg["spec"]["valuesContent"])
+          PY
+          # k3s bundles this chart; keep the version in step with the bundled one.
+          helm template traefik traefik/traefik --version 41.6.1 \
+            --namespace kube-system \
+            -f /tmp/traefik-values.yaml > /tmp/traefik-rendered.yaml
+          python3 - <<'PY'
+          import yaml
+          docs = yaml.safe_load_all(open("/tmp/traefik-rendered.yaml"))
+          replicas = [d["spec"]["replicas"] for d in docs if d and d["kind"] == "Deployment"]
+          assert replicas == [2], replicas
+          PY
 
       - name: Resolve pinned Longhorn chart version
         run: |
