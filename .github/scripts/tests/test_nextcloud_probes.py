@@ -1,7 +1,7 @@
 """Tests for check_nextcloud_probes.
 
-nginx stays up while PHP is starved, so the old `pgrep nginx` probes passed
-through an outage while every request timed out (#472).
+Readiness may depend on MariaDB through /status.php; liveness may not, because
+a restart cannot fix a database outage (#472).
 """
 import os
 import sys
@@ -48,30 +48,37 @@ class NextcloudContainerTest(unittest.TestCase):
             self.assertIsNone(nextcloud_container(doc))
 
 
+EXEC_PROBE = {'exec': {'command': ['pgrep', 'nginx']}}
+
+
 class ProblemsTest(unittest.TestCase):
-    def test_http_probes_with_a_host_header_are_clean(self):
-        both = container(readinessProbe=http_probe(),
-                         livenessProbe=http_probe())
-        self.assertEqual(problems(both), [])
+    def test_http_readiness_with_a_non_http_liveness_is_clean(self):
+        ok = container(readinessProbe=http_probe(), livenessProbe=EXEC_PROBE)
+        self.assertEqual(problems(ok), [])
 
     def test_missing_readiness_probe_is_flagged(self):
-        found = problems(container(livenessProbe=http_probe()))
+        found = problems(container(livenessProbe=EXEC_PROBE))
         self.assertEqual(len(found), 1)
         self.assertIn('readinessProbe', found[0])
-
-    def test_exec_liveness_probe_is_flagged(self):
-        exec_probe = {'exec': {'command': ['pgrep', 'nginx']}}
-        found = problems(container(readinessProbe=http_probe(),
-                                   livenessProbe=exec_probe))
-        self.assertEqual(len(found), 1)
-        self.assertIn('livenessProbe', found[0])
 
     def test_wrong_path_and_missing_host_header_are_flagged(self):
         for probe in (http_probe(path='/'), http_probe(headers=()),
                       http_probe(headers=({'name': 'X-Other'},))):
             found = problems(container(readinessProbe=probe,
-                                       livenessProbe=http_probe()))
+                                       livenessProbe=EXEC_PROBE))
             self.assertEqual(len(found), 1)
+            self.assertIn('readinessProbe', found[0])
+
+    def test_liveness_on_status_php_is_flagged(self):
+        found = problems(container(readinessProbe=http_probe(),
+                                   livenessProbe=http_probe()))
+        self.assertEqual(len(found), 1)
+        self.assertIn('livenessProbe', found[0])
+
+    def test_missing_liveness_probe_is_flagged(self):
+        found = problems(container(readinessProbe=http_probe()))
+        self.assertEqual(len(found), 1)
+        self.assertIn('livenessProbe', found[0])
 
     def test_no_probes_reports_both(self):
         self.assertEqual(len(problems(container())), 2)
