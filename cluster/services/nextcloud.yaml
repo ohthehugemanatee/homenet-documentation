@@ -72,15 +72,25 @@ spec:
             failureThreshold: 120
             successThreshold: 1
           livenessProbe:
-            exec:
-              command:
-                - pgrep
-                - nginx
-            initialDelaySeconds: 60
+            httpGet:
+              path: /status.php
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: germany.vertesi.com  # must be in trusted_domains
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10  # 5 min of failures before a restart
+          readinessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: germany.vertesi.com
             periodSeconds: 15
-            timeoutSeconds: 15
-            failureThreshold: 10
-            successThreshold: 1
+            timeoutSeconds: 10
+            failureThreshold: 3
           env:
             - name: PUID
               value: "1000"
