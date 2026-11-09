@@ -1,4 +1,4 @@
-# ADR-0009: Nextcloud application files use Longhorn
+# ADR-0010: Nextcloud application files use Longhorn
 
 - **Status:** accepted
 - **Date:** 2026-10-22

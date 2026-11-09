@@ -9,7 +9,8 @@ spec:
     # ceiling; traefik proxies every ingress byte, so it belongs on amd64.
     nodeSelector:
       kubernetes.io/arch: amd64
-    replicas: 2
+    deployment:
+      replicas: 2
     affinity:
       podAntiAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
