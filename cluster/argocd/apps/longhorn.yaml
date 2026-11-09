@@ -16,7 +16,7 @@ spec:
     - chart: longhorn
       repoURL: https://charts.longhorn.io
       # Pin only, no bump.
-      targetRevision: 1.11.3
+      targetRevision: 1.12.1
       helm:
         valueFiles:
           - $values/cluster/helm/longhorn/values.yaml

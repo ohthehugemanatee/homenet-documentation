@@ -1,6 +1,6 @@
 # Longhorn
 
-Longhorn v1.11.3, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+Longhorn v1.12.1, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
 (chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
 in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
 `backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
@@ -25,7 +25,7 @@ longhorn-manager run UTC.
 
 ## Chart values
 
-`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.11.3
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.12.1
 values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
 cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
 chart and fails when the two part.
@@ -43,7 +43,11 @@ defaulting to `"default"`; pinned to `""` for the same reason, since adding it
 now would change the live, immutable `parameters`. 1.9 renamed
 `persistence.removeSnapshotsDuringFilesystemTrim` to
 `persistence.unmapMarkSnapChainRemoved`, matching the StorageClass field it
-feeds; same value, no behavior change.
+feeds; same value, no behavior change. 1.12 added
+`networkPolicies.restrictInternalTraffic`, defaulting to `true`; pinned to
+`false`. k3s enforces NetworkPolicy, and the chart's `longhorn-manager` policy
+admits only Longhorn pods, which would cut off the `monitoring` Prometheus
+scrape. `check_longhorn_render.py` fails a render that carries a NetworkPolicy.
 
 The three classes in `cluster/StorageClass/` are untouched. The chart renders no
 StorageClass object, so it cannot duplicate them.
@@ -130,8 +134,8 @@ diff.
 at runtime from the `longhorn-webhook-ca` Secret and the chart emits none, so
 the `caBundle` is per-cluster PKI that cannot live in git. A sync that manages
 it leaves `webhookClientConfig` with no `strategy`, which the API server
-rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.11.3
-sets it on none of its 22 CRDs; it stays because `test-cluster.yaml` asserts it.
+rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.12.1
+sets it on none of its 25 CRDs; it stays because `test-cluster.yaml` asserts it.
 
 ## Snapshot is not backup
 
@@ -163,7 +167,7 @@ the snapshot and the content.
 `snapshot-controller` serves the `snapshot.storage.k8s.io` API that Longhorn's
 `csi-snapshotter` sidecar answers to. ArgoCD deploys it from
 `cluster/operators/snapshot-controller/`, upstream external-snapshotter pinned
-to the sidecar's release: chart 1.11.3 ships `csi-snapshotter` v8.6.0, so the
+to the sidecar's release: chart 1.12.1 ships `csi-snapshotter` v8.6.0, so the
 controller is v8.6.0. The pin sets the image as well as the git refs, because
 upstream's deploy manifest at `v8.6.0` still names the v8.5.0 image.
 

@@ -29,6 +29,12 @@ def rendered_configmaps(path):
     return out
 
 
+def network_policies(docs):
+    """Names of rendered NetworkPolicies; the live cluster runs none."""
+    return [d["metadata"]["name"] for d in docs
+            if d and d.get("kind") == "NetworkPolicy"]
+
+
 def storage_class_facts(sc):
     """The fields live-state.yaml records, from a rendered StorageClass."""
     annotations = sc.get("metadata", {}).get("annotations", {})
@@ -95,7 +101,10 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     capture = yaml.safe_load(CAPTURE.read_text())
-    errors = mismatches(capture, rendered_configmaps(Path(sys.argv[1])))
+    render = Path(sys.argv[1])
+    errors = mismatches(capture, rendered_configmaps(render))
+    errors += [f"  chart renders NetworkPolicy {name}"
+               for name in network_policies(yaml.safe_load_all(render.read_text()))]
     if errors:
         print("Longhorn render no longer matches the live capture:", file=sys.stderr)
         print("\n".join(errors), file=sys.stderr)
