@@ -235,6 +235,42 @@ kubectl -n backup-verify create job --from=cronjob/backup-verify "backup-verify-
 kubectl -n backup-verify delete "$job"
 ```
 
+## After a watchdog safe stop
+
+An app whose upgrade fails the `<app>-upgrade-watchdog` checks ends at 0
+replicas, its claim restored to the pre-upgrade snapshot and its Application
+paused. `KubeJobFailed` pages for that Job. Read why it stopped:
+
+```sh
+kubectl -n default logs "job/$app-upgrade-watchdog" --all-containers --prefix
+```
+
+To recover:
+
+1. Revert the version bump in git and merge it.
+2. Lift the pause. An auto-sync app syncs itself; sync a manual-sync app by
+   hand. The gate lets the stopped app through because the state ConfigMap
+   records the stop, and the sync runs the full hook sequence on the reverted
+   version.
+
+   ```sh
+   kubectl -n argocd annotate application "$app" argocd.argoproj.io/skip-reconcile-
+   ```
+
+3. If the Application still shows the failed sync running, terminate it with
+   `argocd app terminate-op "$app"` and sync again.
+4. Once the app is healthy, delete the snapshot the watchdog restored from. Its
+   name is in the watchdog log; nothing else deletes it:
+
+   ```sh
+   kubectl -n default get volumesnapshot | grep "$app-upgrade-"
+   kubectl -n default delete volumesnapshot <name>
+   ```
+
+If the log says the sync recorded no snapshot, the claim was not touched.
+If the stop failed partway, the claim may be missing: recreate it from the
+snapshot in the log with [Restore a claim from a VolumeSnapshot](#restore-a-claim-from-a-volumesnapshot).
+
 ## Known snags
 
 ### A claim stays `Terminating`
