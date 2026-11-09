@@ -76,6 +76,8 @@ A detached volume reports robustness `unknown` because no engine is running to e
 - **PreSync snapshot (wave -1):** scales the workload to 0, waits for its pods to go and its volume to detach, takes a `VolumeSnapshot` of `CLAIM_NAME` through `SNAPSHOT_CLASS` (default `longhorn-backup`), and records the replica count and snapshot name in `<workload>-upgrade-state`. If any of that fails, it scales the workload back to its original replica count and aborts the sync. Otherwise the sync's apply restores the replica count from git.
 - **PostSync cleanup:** deletes the recorded snapshot, which also deletes its backup on shoebox, and the state ConfigMap. A sync that never becomes healthy never reaches PostSync, so its snapshot stays.
 
+The hooks' ServiceAccount can patch Applications. The `upgrade-hooks-pause` ValidatingAdmissionPolicy, shipped in the argo-cd chart's `extraObjects`, narrows that: `<app>-upgrade-hooks` may only set `argocd.argoproj.io/skip-reconcile` to `"true"` on Application `<app>`, or remove it. Sync the `argocd` Application before an app's first hooked sync.
+
 ## Helm-sourced Applications
 
 Monitoring stack, NFS provisioner, cert-manager and Longhorn use ArgoCD multi-source: the chart comes from an upstream registry, values come from this git repo via `$values` ref. Pin chart versions in `spec.sources[].targetRevision`.
