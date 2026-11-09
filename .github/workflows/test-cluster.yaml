@@ -175,6 +175,9 @@ jobs:
               errs.append("no longhorn chart source found")
           elif not re.fullmatch(r"\d+\.\d+\.\d+", str(chart.get("targetRevision", ""))):
               errs.append(f"chart version {chart.get('targetRevision')!r} is not an exact pin")
+          elif tuple(map(int, chart["targetRevision"].split("."))) < (1, 13, 0):
+              errs.append(f"chart {chart['targetRevision']} is below 1.13.0, where a recurring "
+                          "job that cannot reach the API server exits 0 instead of failing")
           if not any(s.get("path") == "cluster/argocd/hooks/longhorn" for s in sources):
               errs.append("hooks/longhorn missing from spec.sources; the readiness gate would not run")
           if "ServerSideApply=true" not in policy.get("syncOptions", []):
@@ -211,7 +214,7 @@ jobs:
           helm template longhorn longhorn/longhorn \
             --version "${LONGHORN_VERSION}" \
             --namespace longhorn-system \
-            --kube-version 1.29.0 \
+            --kube-version 1.37.0 \
             -f cluster/helm/longhorn/values.yaml > /tmp/longhorn.yaml
           python3 - <<'PY' > /tmp/longhorn-crds.yaml
           import yaml
@@ -1887,12 +1890,12 @@ jobs:
         # Longhorn's StorageClass is not a chart object: the chart renders it
         # into a ConfigMap that longhorn-manager applies. `helm template` with
         # no cluster to read from falls back to a kubeVersion the chart
-        # rejects, so pass the one the rest of CI validates against.
+        # rejects, so pass the live cluster's (chart 1.13 needs >=1.34).
         run: |
           helm template longhorn longhorn/longhorn \
             --version "${LONGHORN_VERSION}" \
             --namespace longhorn-system \
-            --kube-version 1.29.0 \
+            --kube-version 1.37.0 \
             -f cluster/helm/longhorn/values.yaml > /tmp/longhorn-render.yaml
           python3 .github/scripts/check_longhorn_render.py /tmp/longhorn-render.yaml
 
