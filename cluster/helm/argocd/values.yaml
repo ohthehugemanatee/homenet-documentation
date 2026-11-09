@@ -155,7 +155,7 @@ extraObjects:
       matchConditions:
         - name: upgrade-hook
           expression: >-
-            request.userInfo.username.startsWith('system:serviceaccount:default:') &&
+            request.userInfo.username.startsWith('system:serviceaccount:') &&
             request.userInfo.username.endsWith('-upgrade-hooks')
       variables:
         - name: key
@@ -166,7 +166,8 @@ extraObjects:
           expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
       validations:
         - expression: >-
-            request.userInfo.username == 'system:serviceaccount:default:' + object.metadata.name + '-upgrade-hooks'
+            request.userInfo.username == 'system:serviceaccount:' + object.spec.destination.namespace + ':' +
+            object.metadata.name + '-upgrade-hooks'
           message: an upgrade hook may only update its own Application
         - expression: >-
             object.spec == oldObject.spec &&
