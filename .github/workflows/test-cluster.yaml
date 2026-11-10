@@ -376,10 +376,13 @@ jobs:
         run: |
           # kubectl ignores sync waves, so each Job is applied on its own, in ArgoCD's order.
           setup() { kubectl apply -k .github/k3d/upgrade-hooks -l '!app.kubernetes.io/component' >&2; }
-          hook() {
+          start() {
             kubectl delete job "toy-upgrade-$1" --ignore-not-found --wait=true >&2
             kubectl apply -k .github/k3d/upgrade-hooks -l "app.kubernetes.io/component=$1" >&2
-            kubectl wait --for=condition="$2" "job/toy-upgrade-$1" --timeout=180s >&2 || {
+          }
+          hook() { start "$1"; finish "$@"; }
+          finish() {
+            kubectl wait --for=condition="$2" "job/toy-upgrade-$1" --timeout=300s >&2 || {
               kubectl describe "job/toy-upgrade-$1" >&2
               kubectl logs "job/toy-upgrade-$1" --all-containers --prefix >&2
               return 1; }
@@ -468,6 +471,54 @@ jobs:
           kubectl --as=system:serviceaccount:default:toy-upgrade-hooks -n argocd \
             annotate application toy argocd.argoproj.io/skip-reconcile=true
           kubectl -n argocd annotate application toy argocd.argoproj.io/skip-reconcile-
+
+          pause() { kubectl -n argocd get application "$1" -o jsonpath='{.metadata.annotations.argocd\.argoproj\.io/skip-reconcile}'; }
+          setup
+          hook gate Complete
+          hook snapshot Complete
+          snap=$(kubectl get configmap toy-upgrade-state -o jsonpath='{.data.snapshot}')
+          start watchdog
+          kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
+          out=$(finish watchdog Complete); echo "$out"
+          grep -q 'statefulset/toy is healthy after the sync.' <<<"$out"
+          test -z "$(pause toy)"
+          hook cleanup Complete
+          test -z "$(kubectl get volumesnapshot "$snap" --ignore-not-found -o name)"
+
+          # A broken upgrade writes to the claim, then crash-loops.
+          kubectl exec toy-0 -- sh -c 'echo before > /data/marker'
+          hook gate Complete
+          hook snapshot Complete
+          snap=$(kubectl get configmap toy-upgrade-state -o jsonpath='{.data.snapshot}')
+          start watchdog
+          kubectl patch statefulset toy --type json -p '[
+            {"op": "replace", "path": "/spec/replicas", "value": 1},
+            {"op": "replace", "path": "/spec/template/spec/containers/0/command",
+             "value": ["sh", "-c", "echo after > /data/marker; exit 1"]}]'
+          out=$(finish watchdog Failed); echo "$out"
+          grep -q "restored data-toy-0 from $snap" <<<"$out"
+          test "$(replicas)" = 0
+          test "$(pause toy)" = true
+          test "$(kubectl get pvc data-toy-0 -o jsonpath='{.spec.dataSource.name}')" = "$snap"
+          kubectl run reader --image=busybox:1.37 --restart=Never --overrides='{"spec": {
+            "containers": [{"name": "reader", "image": "busybox:1.37", "command": ["cat", "/data/marker"],
+                            "volumeMounts": [{"name": "data", "mountPath": "/data"}]}],
+            "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "data-toy-0"}}]}}'
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/reader --timeout=120s
+          test "$(kubectl logs reader)" = before
+          kubectl delete pod reader --timeout=60s
+
+          # Recovery per backup-and-restore.md: revert in git, lift the pause, sync.
+          kubectl -n argocd annotate application toy argocd.argoproj.io/skip-reconcile-
+          out=$(hook gate Complete); echo "$out"
+          grep -q 'StatefulSet/toy is ready to upgrade.' <<<"$out"
+          hook snapshot Complete
+          start watchdog
+          kubectl apply -f .github/k3d/upgrade-hooks/toy.yaml
+          finish watchdog Complete
+          hook cleanup Complete
+          test "$(kubectl exec toy-0 -- cat /data/marker)" = before
+          kubectl delete volumesnapshot "$snap" --timeout=120s
 
       - name: Run the weekly backup check against fake Longhorn state and a hostpath restore
         run: |

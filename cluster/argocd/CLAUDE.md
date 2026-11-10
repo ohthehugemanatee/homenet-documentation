@@ -14,7 +14,7 @@ One Application manifest per managed workload in `apps/`. File names match the A
 
 ## Sync hooks (`hooks/`)
 
-One directory per app under `hooks/<app>/`, built by kustomize. `hooks/upgrade/` is the exception: a shared base that an app's hook directory instantiates with `namePrefix: <app>-` and its values merged into `upgrade-params`. Every app runs in `default`, so the prefix keeps hook names apart.
+One directory per app under `hooks/<app>/`, built by kustomize. `hooks/upgrade/` is the exception: a shared base that an app's hook directory instantiates with `namePrefix: <app>-` and its values merged into `upgrade-params`. `<app>` must be the Application's name: the `upgrade-hooks-pause` admission policy only lets `<app>-upgrade-hooks` pause Application `<app>`. Every app runs in `default`, so the prefix keeps hook names apart.
 
 - **Every resource the hook Job needs is itself a hook.** ArgoCD applies plain resources in the main sync, which runs *after* `PreSync` — a ServiceAccount or ConfigMap left unannotated does not exist when the Job starts, and the first sync on a fresh cluster fails. Annotate prerequisites `hook: PreSync` in a sync-wave below the first Job that needs them.
 - **`hook-delete-policy: BeforeHookCreation`**, not `HookSucceeded`: deleting on success throws away the log of the run that let an upgrade through.

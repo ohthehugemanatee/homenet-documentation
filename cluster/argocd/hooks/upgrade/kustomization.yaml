@@ -8,6 +8,7 @@ resources:
   - rbac.yaml
   - gate-job.yaml
   - snapshot-job.yaml
+  - watchdog-job.yaml
   - cleanup-job.yaml
 configMapGenerator:
   - name: upgrade-scripts
@@ -15,15 +16,19 @@ configMapGenerator:
       - fetch.sh
       - gate.py
       - snapshot.sh
+      - safe-stop.sh
       - cleanup.sh
   - name: upgrade-params
     literals:
       - WORKLOAD_KIND=
       - WORKLOAD_NAME=
+      - ARGOCD_APP=
       - INTEGRITY_COMMAND=
       - CLAIM_NAME=
       - SNAPSHOT_CLASS=longhorn-backup
       - SNAPSHOT_TIMEOUT=45m
+      - WATCHDOG_TIMEOUT=20m
+      - WATCHDOG_SETTLE_SECONDS=300
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

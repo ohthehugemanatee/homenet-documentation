@@ -29,7 +29,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: upgrade-params
-          command: [sh, /hook/fetch.sh]
+          command: [sh, /hook/fetch.sh, gate]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
