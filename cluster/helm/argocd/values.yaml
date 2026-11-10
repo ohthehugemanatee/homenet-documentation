@@ -136,3 +136,57 @@ notifications:
 
 dex:
   enabled: false
+
+# The shared upgrade hooks (cluster/argocd/hooks/upgrade) may patch Applications;
+# this limits each app's hook ServiceAccount to the pause annotation on its own Application.
+extraObjects:
+  - apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: upgrade-hooks-pause
+    spec:
+      failurePolicy: Fail
+      matchConstraints:
+        resourceRules:
+          - apiGroups: ["argoproj.io"]
+            apiVersions: ["*"]
+            resources: ["applications"]
+            operations: ["UPDATE"]
+      matchConditions:
+        - name: upgrade-hook
+          expression: >-
+            request.userInfo.username.startsWith('system:serviceaccount:') &&
+            request.userInfo.username.endsWith('-upgrade-hooks')
+      variables:
+        - name: key
+          expression: "'argocd.argoproj.io/skip-reconcile'"
+        - name: before
+          expression: "has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {}"
+        - name: after
+          expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+      validations:
+        - expression: >-
+            request.userInfo.username == 'system:serviceaccount:' + object.spec.destination.namespace + ':' +
+            object.metadata.name + '-upgrade-hooks'
+          message: an upgrade hook may only update its own Application
+        - expression: >-
+            object.spec == oldObject.spec &&
+            has(object.operation) == has(oldObject.operation) &&
+            (!has(object.operation) || object.operation == oldObject.operation) &&
+            (has(object.metadata.labels) ? object.metadata.labels : {}) ==
+            (has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}) &&
+            (has(object.metadata.finalizers) ? object.metadata.finalizers : []) ==
+            (has(oldObject.metadata.finalizers) ? oldObject.metadata.finalizers : [])
+          message: an upgrade hook may only change the pause annotation
+        - expression: >-
+            variables.after.all(k, k == variables.key || (k in variables.before && variables.before[k] == variables.after[k])) &&
+            variables.before.all(k, k == variables.key || k in variables.after) &&
+            (!(variables.key in variables.after) || variables.after[variables.key] == 'true')
+          message: an upgrade hook may only set argocd.argoproj.io/skip-reconcile to "true"
+  - apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: upgrade-hooks-pause
+    spec:
+      policyName: upgrade-hooks-pause
+      validationActions: [Deny]

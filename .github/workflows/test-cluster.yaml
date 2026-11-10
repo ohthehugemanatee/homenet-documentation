@@ -425,6 +425,43 @@ jobs:
           test -z "$(kubectl get volumesnapshot "$snap" --ignore-not-found -o name)"
           test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
 
+          # A hook may only pause its own Application; ArgoCD's CRD stands in for ArgoCD, which k3d lacks.
+          kubectl apply --server-side \
+            -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.4/manifests/crds/application-crd.yaml
+          kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=60s
+          python3 -c 'import sys, yaml
+          print(yaml.safe_dump_all(yaml.safe_load(open(sys.argv[1]))["extraObjects"]))' \
+            cluster/helm/argocd/values.yaml | kubectl apply -f -
+          for app in toy other; do
+            kubectl -n argocd apply -f - <<EOF
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata: {name: $app, namespace: argocd}
+          spec:
+            project: default
+            source: {repoURL: https://example.invalid/repo.git, path: ., targetRevision: HEAD}
+            destination: {server: https://kubernetes.default.svc, namespace: default}
+          EOF
+          done
+          denied() {
+            local out
+            out=$(kubectl --as=system:serviceaccount:default:toy-upgrade-hooks -n argocd "$@" 2>&1) && return 1
+            grep -q upgrade-hooks-pause <<<"$out"
+          }
+          # The policy starts enforcing a few seconds after it is created.
+          for _ in $(seq 30); do
+            denied annotate application toy ci-probe=1 && break
+            kubectl -n argocd annotate application toy ci-probe- >/dev/null 2>&1 || true
+            sleep 2
+          done
+          denied annotate application toy ci-probe=1
+          denied patch application toy --type merge -p '{"spec":{"project":"other"}}'
+          denied annotate application other argocd.argoproj.io/skip-reconcile=true
+          denied annotate application toy argocd.argoproj.io/skip-reconcile=false
+          kubectl --as=system:serviceaccount:default:toy-upgrade-hooks -n argocd \
+            annotate application toy argocd.argoproj.io/skip-reconcile=true
+          kubectl -n argocd annotate application toy argocd.argoproj.io/skip-reconcile-
+
       - name: Run the weekly backup check against fake Longhorn state and a hostpath restore
         run: |
           # run JOB CONDITION [NAME=VALUE...]: a Job from the CronJob, env overrides on its restore container.
