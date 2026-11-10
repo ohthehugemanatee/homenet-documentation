@@ -29,29 +29,16 @@ spec:
           envFrom:
             - configMapRef:
                 name: upgrade-params
-          command:
-            - sh
-            - -c
-            - |
-              set -eu
-              # A stale record would point a restore at an earlier sync's snapshot.
-              kubectl delete configmap "${WORKLOAD_NAME:?}-upgrade-state" --ignore-not-found \
-                --cache-dir=/data/kube-cache
-              kubectl get "${WORKLOAD_KIND:?}/${WORKLOAD_NAME:?}" \
-                -o json --cache-dir=/data/kube-cache > /data/workload.json
-              kubectl get pods -o json --cache-dir=/data/kube-cache > /data/pods.json
-              if [ -n "${INTEGRITY_COMMAND:-}" ]; then
-                rc=0
-                kubectl exec "$WORKLOAD_KIND/$WORKLOAD_NAME" --cache-dir=/data/kube-cache \
-                  -- sh -c "$INTEGRITY_COMMAND" > /data/integrity.log 2>&1 || rc=$?
-                echo "$rc" > /data/integrity.rc
-              fi
+          command: [sh, /hook/fetch.sh]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
             - name: data
               mountPath: /data
           resources:
@@ -70,6 +57,7 @@ spec:
             - /data/pods.json
             - /data/integrity.rc
             - /data/integrity.log
+            - /data/stopped
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

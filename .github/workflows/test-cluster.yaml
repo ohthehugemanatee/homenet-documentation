@@ -413,6 +413,13 @@ jobs:
           kubectl create configmap toy-upgrade-state --from-literal=snapshot=stale
           hook gate Complete
           test -z "$(kubectl get configmap toy-upgrade-state --ignore-not-found -o name)"
+          # 0 replicas passes only when the state records a stop.
+          kubectl scale statefulset toy --replicas=0
+          hook gate Failed
+          kubectl create configmap toy-upgrade-state --from-literal=stopped=true
+          hook gate Complete
+          kubectl scale statefulset toy --replicas=1
+          kubectl rollout status statefulset/toy --timeout=120s
 
           hook snapshot Complete
           snap=$(kubectl get configmap toy-upgrade-state -o jsonpath='{.data.snapshot}')

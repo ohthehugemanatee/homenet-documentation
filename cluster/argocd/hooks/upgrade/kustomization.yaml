@@ -12,6 +12,7 @@ resources:
 configMapGenerator:
   - name: upgrade-scripts
     files:
+      - fetch.sh
       - gate.py
       - snapshot.sh
       - cleanup.sh
