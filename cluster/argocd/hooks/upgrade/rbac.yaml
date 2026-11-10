@@ -69,6 +69,10 @@ rules:
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments"]
     verbs: ["list"]
+  # The upgrade-hooks-pause ValidatingAdmissionPolicy narrows this to the pause annotation on the app's own Application.
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
