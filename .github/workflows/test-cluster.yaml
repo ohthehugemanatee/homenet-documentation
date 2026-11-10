@@ -20,6 +20,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Assert mariadb and unifi stay on the manual-sync stateful tier
+        run: |
+          # Self-heal would reassert unvalidated state against a live database.
+          python3 - <<'PY'
+          import sys, yaml
+          errs = []
+          for name in ("mariadb", "unifi"):
+              app = yaml.safe_load(open(f"cluster/argocd/apps/{name}.yaml"))
+              if "automated" in app["spec"].get("syncPolicy", {}):
+                  errs.append(f"{name}: syncPolicy.automated is set; it must stay manual-sync")
+              if app["metadata"].get("finalizers"):
+                  errs.append(f"{name}: finalizer present; an Application delete would cascade to the database")
+              anns = app["metadata"].get("annotations", {})
+              for trigger in ("on-out-of-sync", "on-sync-failed", "on-health-degraded"):
+                  if f"notifications.argoproj.io/subscribe.{trigger}.pushover" not in anns:
+                      errs.append(f"{name}: missing {trigger} Pushover annotation")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
       - name: Cache k3d binary
         id: cache-k3d
         uses: actions/cache@v4
