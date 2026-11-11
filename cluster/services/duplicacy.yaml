@@ -114,6 +114,11 @@ spec:
               subPath: ".duplicacy-cache"
             - name: nfs-storage
               mountPath: "/storage"
+          startupProbe:
+            tcpSocket:
+              port: 3875
+            periodSeconds: 10
+            failureThreshold: 60  # init.sh runs for minutes before duplicacy_web listens; 10 min grace
           livenessProbe:
             tcpSocket:
               port: 3875
