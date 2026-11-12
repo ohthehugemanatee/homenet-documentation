@@ -92,6 +92,7 @@ jobs:
           # see .github/scripts/tests/test_review_verdict.py.
           sys.path.insert(0, '.github/scripts')
           from review_verdict import decide_verdict, render_findings
+          from review_exceptions import exceptions_for_paths, touched_paths
 
           with open('/tmp/pr.diff') as f:
               diff = f.read()
@@ -100,6 +101,9 @@ jobs:
               print('Empty diff, skipping review')
               sys.exit(0)
 
+          # Taken before truncation so a file cut from the prompt still scopes its exceptions.
+          touched = touched_paths(diff)
+
           MAX_CHARS = 80000
           truncated = False
           if len(diff) > MAX_CHARS:
@@ -107,18 +111,21 @@ jobs:
               diff = diff[:cut if cut > 0 else MAX_CHARS]
               truncated = True
 
-          # --- Load known exceptions ---
+          # --- Load the known exceptions that apply to the touched paths ---
           exceptions_context = ''
           exceptions_path = '.github/agentic-review-exceptions.yaml'
           if os.path.exists(exceptions_path):
               with open(exceptions_path) as f:
-                  exceptions_text = f.read()
-              exceptions_context = (
-                  '\n\n## Known exceptions — do not re-raise\n\n'
-                  'The following findings have been reviewed and intentionally accepted '
-                  'by the maintainer. Do not raise them again:\n\n'
-                  '```yaml\n' + exceptions_text + '\n```'
-              )
+                  exceptions_text, kept, total = exceptions_for_paths(f.read(), touched)
+              sent = 'all, file did not parse' if kept is None else f'{kept} of {total}'
+              print(f'Exceptions sent: {sent}')
+              if exceptions_text:
+                  exceptions_context = (
+                      '\n\n## Known exceptions — do not re-raise\n\n'
+                      'The following findings have been reviewed and intentionally accepted '
+                      'by the maintainer. Do not raise them again:\n\n'
+                      '```yaml\n' + exceptions_text + '\n```'
+                  )
 
           # --- Fetch prior review comments on this PR ---
           prior_comments_context = ''
