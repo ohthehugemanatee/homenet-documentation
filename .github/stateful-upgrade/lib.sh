@@ -14,13 +14,18 @@ apply_version() { # old | new
   kc rollout status "$WORKLOAD" --timeout="$ROLLOUT_TIMEOUT"
 }
 
-# mariadb has no readinessProbe, so rollout status returns before it answers queries.
+# mariadb has no readinessProbe, and its init restarts the server once, so require two passes in a row.
 run_check() {
-  local script attempt
+  local script attempt passes=0
   script=$(cat "cluster/argocd/hooks/$APP/check.sh")
   for attempt in $(seq 1 60); do
-    if kc exec "$POD" -c "$CONTAINER" -- sh -c "$script"; then return 0; fi
-    echo "check.sh failed (attempt $attempt of 60)"
+    if kc exec "$POD" -c "$CONTAINER" -- sh -c "$script"; then
+      passes=$((passes + 1))
+      if [ "$passes" -ge 2 ]; then return 0; fi
+    else
+      passes=0
+      echo "check.sh failed (attempt $attempt of 60)"
+    fi
     sleep 5
   done
   return 1
