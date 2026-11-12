@@ -21,6 +21,8 @@ spec:
     metadata:
       labels:
         run: mariadb
+      annotations:
+        ci-upgrade-test: "roll"
     spec:
       volumes:
         - name: nfs
