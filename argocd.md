@@ -11,8 +11,8 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Category | Sync | Self-heal | Prune | Apps |
 |---|---|---|---|---|
 | Media | auto | yes | yes | plex, tautulli, radarr, sonarr, lidarr, prowlarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
-| Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade, starloom, starloom-eink |
-| Stateful | manual | no | no | nextcloud, collabora |
+| Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, redis, ingress-only, jobs, system-upgrade, starloom, starloom-eink |
+| Stateful | manual | no | no | nextcloud, collabora, mariadb, unifi |
 | Infrastructure | manual | no | no | cert-manager, longhorn, snapshot-controller, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 | Default TLS | auto | yes | no | traefik-default-tls |
