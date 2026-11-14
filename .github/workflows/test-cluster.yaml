@@ -541,6 +541,33 @@ jobs:
           test "$(kubectl exec toy-0 -- cat /data/marker)" = before
           kubectl delete volumesnapshot "$snap" --timeout=120s
 
+      - name: Assert mariadb is wired to the upgrade hooks
+        run: |
+          kubectl kustomize cluster/argocd/hooks/mariadb > /tmp/mariadb-hooks.yaml
+          python3 - <<'PY'
+          import sys, yaml
+          app = yaml.safe_load(open("cluster/argocd/apps/mariadb.yaml"))
+          docs = [d for d in yaml.safe_load_all(open("/tmp/mariadb-hooks.yaml")) if d]
+          errs = []
+          paths = [s.get("path") for s in app["spec"].get("sources", [])]
+          if paths != ["cluster/services", "cluster/argocd/hooks/mariadb"]:
+              errs.append(f"spec.sources paths are {paths}; the hooks would not run")
+          jobs = sorted(d["metadata"]["name"] for d in docs if d["kind"] == "Job")
+          want_jobs = [f"mariadb-upgrade-{n}" for n in ("cleanup", "gate", "snapshot", "watchdog")]
+          if jobs != want_jobs:
+              errs.append(f"hook Jobs are {jobs}, want {want_jobs}")
+          params = next((d["data"] for d in docs if d["metadata"]["name"] == "mariadb-upgrade-params"), {})
+          want = {"WORKLOAD_KIND": "statefulset", "WORKLOAD_NAME": "mariadb",
+                  "ARGOCD_APP": "mariadb", "CLAIM_NAME": "datadir-mariadb-0",
+                  "INTEGRITY_COMMAND": open("cluster/argocd/hooks/mariadb/check.sh").read()}
+          for key, value in want.items():
+              if params.get(key) != value:
+                  errs.append(f"upgrade-params {key} is {params.get(key)!r}, want {value!r}")
+          for e in errs:
+              print(f"FAILED: {e}")
+          sys.exit(1 if errs else 0)
+          PY
+
       - name: Run the weekly backup check against fake Longhorn state and a hostpath restore
         run: |
           # run JOB CONDITION [NAME=VALUE...]: a Job from the CronJob, env overrides on its restore container.
