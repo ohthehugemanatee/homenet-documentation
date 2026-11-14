@@ -56,3 +56,21 @@ def extract_report(response):
         return report.get('findings'), report.get('review_markdown') or '*(reviewer returned no review body)*'
     except (ValueError, AttributeError) as e:
         raise ReviewError(f'No report in response ({e}); stop_reason={stop}') from e
+
+
+# (usage key, label, $ per million tokens at the claude-sonnet-5-5 list price)
+USAGE_PRICES = (
+    ('input_tokens', 'input', 2.00),
+    ('output_tokens', 'output', 10.00),
+    ('cache_creation_input_tokens', 'cache write', 2.50),
+    ('cache_read_input_tokens', 'cache read', 0.10),
+)
+
+
+def usage_line(usage):
+    """One log line of token counts and the cost they imply at list prices."""
+    if not isinstance(usage, dict):
+        return 'Usage: not reported'
+    counts = [(label, usage.get(key) or 0, price) for key, label, price in USAGE_PRICES]
+    cost = sum(n * price for _, n, price in counts) / 1_000_000
+    return 'Usage: ' + ' | '.join(f'{label} {n:,}' for label, n, _ in counts) + f' | est. ${cost:.4f}'
