@@ -62,6 +62,16 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 4. Add notification annotations per `cluster/argocd/CLAUDE.md` conventions.
 5. Commit and push; the root app-of-apps picks it up automatically.
 
+## Forked builds
+
+`songhub` and `remarkable-sync`, the images we build ourselves, run from a mutable `:devel` tag with `imagePullPolicy: Always` (ADR-0012). A merge to the build's default branch that triggers the build pushes `:devel` and an immutable `:sha-<commit>` to GHCR. The manifest does not name the build, so ArgoCD shows Synced while the image changes. After the build run finishes, deploy by deleting the pod:
+
+```sh
+kubectl -n default delete pod songhub-0
+```
+
+Roll back by pinning a `sha-` tag in the manifest and syncing.
+
 ## Sync hooks
 
 `cluster/argocd/hooks/<app>/` holds `PreSync`/`PostSync`/`SyncFail` Jobs for an app, built by kustomize and carried into the app as an extra entry in `spec.sources`.

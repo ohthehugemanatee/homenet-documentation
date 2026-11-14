@@ -35,12 +35,12 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: songhub
-          # Tracks the main build of ohthehugemanatee/SongHub (build-image.yml).
+          # Tracks the devel build of ohthehugemanatee/SongHub (build-image.yml).
           # Mutable tag: deploy by deleting songhub-0, not by editing this file.
           # First deploy: the ghcr.io/ohthehugemanatee/songhub package
           # defaults to private and must be set public (or an
           # imagePullSecret added here) or this pod sits in ImagePullBackOff.
-          image: ghcr.io/ohthehugemanatee/songhub:main
+          image: ghcr.io/ohthehugemanatee/songhub:devel
           imagePullPolicy: Always
           ports:
             - containerPort: 3005

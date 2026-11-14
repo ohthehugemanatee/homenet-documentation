@@ -26,7 +26,7 @@ Sidecar image for `cluster/services/songhub.yaml`: converts SongHub's saved
 
 ## Deploying a build
 
-`songhub.yaml` runs `remarkable-sync:devel` and `songhub:main` with
+`songhub.yaml` runs `remarkable-sync:devel` and `songhub:devel` with
 `imagePullPolicy: Always`. A merge to this repo's `master` that touches
 `cluster/Dockerfiles/remarkable-sync/`, or to SongHub's `main`, builds the
 tag; the pod picks it up on its next start. Wait for the build run to
