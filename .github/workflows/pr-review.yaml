@@ -93,7 +93,7 @@ jobs:
           sys.path.insert(0, '.github/scripts')
           from review_verdict import decide_verdict, render_findings
           from review_exceptions import exceptions_for_paths, touched_paths
-          from review_api import ReviewError, build_request, extract_report
+          from review_api import ReviewError, build_request, extract_report, usage_line
 
           with open('/tmp/pr.diff') as f:
               diff = f.read()
@@ -246,6 +246,12 @@ jobs:
           if result.get('type') == 'error':
               print(f"API returned error: {result.get('error')}")
               sys.exit(1)
+
+          usage = usage_line(result.get('usage'))
+          print(usage)
+          if os.environ.get('GITHUB_STEP_SUMMARY'):
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                  f.write(usage + '\n')
 
           # A truncated or refused reply means the findings list is incomplete, so a
           # clean-looking result would be a lie. Treat it as the reviewer failing
