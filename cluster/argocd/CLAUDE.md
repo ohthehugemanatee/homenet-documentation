@@ -22,6 +22,7 @@ One directory per app under `hooks/<app>/`, built by kustomize. `hooks/upgrade/`
 - **The fetch initContainer's image must include a shell.** `kubectl` runs from `fetch.sh`, so the image needs one — an Alpine-based kubectl image (`alpine/kubectl`), not a distroless one.
 - A script longer than a line goes on disk and reaches the Job through a `configMapGenerator`, so the file the unit tests import is the file the Job runs. `disableNameSuffixHash: true` because the Job names the ConfigMap.
 - Hooks attach to an Application's manifests. For a Helm-sourced app, add the hook directory as another entry in `spec.sources`.
+- **`hooks/<app>/check.sh` is the app's health check.** The app's kustomization passes it as `INTEGRITY_COMMAND`, and the gate and watchdog run it as `sh -c "<file contents>"` in the workload's default container, so it may use only that image's tools and the container's environment. Keep it POSIX sh, read-only and data-agnostic (production has no seed data), and under 60 seconds. On failure it exits non-zero with the reason as its last line, which the gate reports. CI runs the same file.
 
 ## Verification
 

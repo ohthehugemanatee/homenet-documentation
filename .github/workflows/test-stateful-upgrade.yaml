@@ -1,0 +1,91 @@
+name: Stateful upgrade tests
+
+'on':
+  pull_request:
+    paths:
+      - cluster/services/**
+      - cluster/argocd/hooks/*/check.sh
+      - .github/stateful-upgrade/**
+      - .github/scripts/stateful_upgrade_render.py
+      - .github/workflows/test-stateful-upgrade.yaml
+
+concurrency:
+  group: test-stateful-upgrade-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    name: Upgrade in place (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [mariadb]
+    defaults:
+      run:
+        shell: bash
+    env:
+      K3D_VERSION: v5.7.5
+      APP: ${{ matrix.app }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the base commit
+        run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+
+      - name: Cache k3d binary
+        id: cache-k3d
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/k3d
+          key: k3d-${{ env.K3D_VERSION }}
+
+      - name: Install k3d
+        if: steps.cache-k3d.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSLo /tmp/k3d \
+            "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
+          install -m 755 /tmp/k3d /usr/local/bin/k3d
+
+      - name: Create k3d cluster
+        run: k3d cluster create ci --wait --no-lb
+
+      - name: Load the case
+        run: cat ".github/stateful-upgrade/${APP}/case.env" >> "$GITHUB_ENV"
+
+      - name: Set up the case
+        run: bash ".github/stateful-upgrade/${APP}/setup.sh"
+
+      - name: Install the base version
+        run: . .github/stateful-upgrade/lib.sh && apply_version old
+
+      - name: Check the base version
+        run: . .github/stateful-upgrade/lib.sh && run_check
+
+      - name: Seed data
+        run: bash ".github/stateful-upgrade/${APP}/seed.sh"
+
+      - name: Upgrade in place to the PR version
+        run: . .github/stateful-upgrade/lib.sh && apply_version new
+
+      - name: Check the upgraded version
+        run: . .github/stateful-upgrade/lib.sh && run_check
+
+      - name: Assert the seeded data survived
+        run: bash ".github/stateful-upgrade/${APP}/assert.sh"
+
+      - name: Dump pod state
+        if: failure()
+        run: |
+          kubectl -n "$NAMESPACE" describe "pod/$POD" || true
+          for container in $(kubectl -n "$NAMESPACE" get "pod/$POD" -o jsonpath='{.spec.containers[*].name}'); do
+            echo "::group::logs of $container"
+            kubectl -n "$NAMESPACE" logs "$POD" -c "$container" --tail=200 || true
+            echo "::endgroup::"
+          done
