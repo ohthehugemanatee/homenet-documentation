@@ -39,6 +39,14 @@ if printf '%s' "$val" | LC_ALL=C grep -q '[-_]'; then
   exit 1
 fi
 
+# Pattern before decoding: base64 -d treats missing padding differently across implementations.
+key_re='^[A-Za-z0-9+/]{43}=$'
+if ! [[ $val =~ $key_re ]]; then
+  echo "ERROR: SEMAPHORE_ACCESS_KEY_ENCRYPTION must be 43 standard base64 characters followed by '=', got ${#val} characters." >&2
+  printf "Hint: regenerate with: openssl rand -base64 32 | tr -d '\\\\n'\n" >&2
+  exit 1
+fi
+
 decoded_len=$(printf '%s' "$val" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
 if [ "$decoded_len" != "32" ]; then
   echo "ERROR: SEMAPHORE_ACCESS_KEY_ENCRYPTION must base64-decode to 32 bytes, got ${decoded_len}." >&2

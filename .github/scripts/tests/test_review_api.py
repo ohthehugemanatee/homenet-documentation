@@ -7,7 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from review_api import REPORT_SCHEMA, ReviewError, build_request, extract_report  # noqa: E402
+from review_api import REPORT_SCHEMA, ReviewError, build_request, extract_report, usage_line  # noqa: E402
+
 
 def text(payload):
     return {'type': 'text', 'text': payload if isinstance(payload, str) else json.dumps(payload)}
@@ -66,6 +67,22 @@ class ExtractReportTest(unittest.TestCase):
         for name, (response, reason) in cases.items():
             with self.subTest(name), self.assertRaisesRegex(ReviewError, reason):
                 extract_report(response)
+
+
+class UsageLineTest(unittest.TestCase):
+    def test_each_token_kind_is_priced_at_the_sonnet_5_5_list_price(self):
+        usage = {'input_tokens': 1_000_000, 'output_tokens': 100_000,
+                 'cache_creation_input_tokens': 10_000, 'cache_read_input_tokens': 1_000}
+        self.assertEqual(
+            usage_line(usage),
+            'Usage: input 1,000,000 | output 100,000 | cache write 10,000 | cache read 1,000 | est. $3.0251')
+
+    def test_missing_and_null_cache_fields_count_as_zero(self):
+        usage = {'input_tokens': 1000, 'output_tokens': 500, 'cache_read_input_tokens': None}
+        self.assertEqual(usage_line(usage), 'Usage: input 1,000 | output 500 | cache write 0 | cache read 0 | est. $0.0070')
+
+    def test_missing_usage_does_not_raise(self):
+        self.assertEqual(usage_line(None), 'Usage: not reported')
 
 
 if __name__ == '__main__':
