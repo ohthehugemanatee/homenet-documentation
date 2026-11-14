@@ -1,6 +1,6 @@
 # Longhorn
 
-Longhorn v1.12.1, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
+Longhorn v1.13.0, deployed by ArgoCD from `cluster/argocd/apps/longhorn.yaml`
 (chart source, manual sync) into `longhorn-system`. Custom StorageClasses live
 in `cluster/StorageClass/`. `recurring-jobs.yaml` holds the schedule,
 `backup-target.yaml` the destination. ArgoCD syncs neither. Names match the
@@ -25,7 +25,7 @@ longhorn-manager run UTC.
 
 ## Chart values
 
-`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.12.1
+`cluster/helm/longhorn/values.yaml` states this install as Longhorn chart 1.13.0
 values. `live-state.yaml` beside it is the 29 Aug 2026 capture of what the
 cluster runs, and `test-cluster.yaml`'s `Dry-run longhorn` step renders the
 chart and fails when the two part.
@@ -134,8 +134,8 @@ diff.
 at runtime from the `longhorn-webhook-ca` Secret and the chart emits none, so
 the `caBundle` is per-cluster PKI that cannot live in git. A sync that manages
 it leaves `webhookClientConfig` with no `strategy`, which the API server
-rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.12.1
-sets it on none of its 25 CRDs; it stays because `test-cluster.yaml` asserts it.
+rejects. `/spec/preserveUnknownFields` guards nothing at this pin, since 1.13.0
+sets it on none of its 28 CRDs; it stays because `test-cluster.yaml` asserts it.
 
 ## Snapshot is not backup
 
@@ -144,6 +144,11 @@ Only the weekly `backups` job writes a durable copy, to the shoebox NFS target
 that Duplicacy carries offsite. Losing `backups` while keeping the snapshot jobs
 leaves a healthy-looking UI covering nothing durable, and the weekly cadence
 leaves a volume created on a Tuesday with no durable copy for six days.
+
+A `backups` pod that cannot reach the API server retries for about a minute and
+exits non-zero. The Job longhorn-manager generates restarts it on failure, up to
+a backoff limit of 3, then fails, which raises `KubeJobFailed` the same morning.
+`test-cluster.yaml` fails a chart pin below 1.13.0, where that pod exited 0.
 
 `cluster/jobs/backup-verify.yaml` checks the job ran. Every Monday at 11:00 UTC
 it fails if any volume in the `default` group lacks a `Completed` backup from
@@ -167,7 +172,7 @@ the snapshot and the content.
 `snapshot-controller` serves the `snapshot.storage.k8s.io` API that Longhorn's
 `csi-snapshotter` sidecar answers to. ArgoCD deploys it from
 `cluster/operators/snapshot-controller/`, upstream external-snapshotter pinned
-to the sidecar's release: chart 1.12.1 ships `csi-snapshotter` v8.6.0, so the
+to the sidecar's release: chart 1.13.0 ships `csi-snapshotter` v8.6.0, so the
 controller is v8.6.0. The pin sets the image as well as the git refs, because
 upstream's deploy manifest at `v8.6.0` still names the v8.5.0 image.
 
