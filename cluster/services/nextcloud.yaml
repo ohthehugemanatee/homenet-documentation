@@ -100,7 +100,7 @@ spec:
             - name: TZ
               value: "Europe/Berlin"
             - name: DOCKER_MODS
-              value: "linuxserver/mods:nextcloud-notify-push"
+              value: "linuxserver/mods:nextcloud-notify-push|linuxserver/mods:nextcloud-memories"
           ports:
             - containerPort: 80
               name: nextcloud
