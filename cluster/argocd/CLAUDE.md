@@ -14,14 +14,15 @@ One Application manifest per managed workload in `apps/`. File names match the A
 
 ## Sync hooks (`hooks/`)
 
-One directory per app under `hooks/<app>/`, built by kustomize. `hooks/upgrade/` is the exception: a shared base that an app's hook directory instantiates with `namePrefix: <app>-` and its values merged into `upgrade-params`. Every app runs in `default`, so the prefix keeps hook names apart.
+One directory per app under `hooks/<app>/`, built by kustomize. `hooks/upgrade/` is the exception: a shared base that an app's hook directory instantiates with `namePrefix: <app>-` and its values merged into `upgrade-params`. `<app>` must be the Application's name: the `upgrade-hooks-pause` admission policy only lets `<app>-upgrade-hooks` pause Application `<app>`. Every app runs in `default`, so the prefix keeps hook names apart.
 
 - **Every resource the hook Job needs is itself a hook.** ArgoCD applies plain resources in the main sync, which runs *after* `PreSync` — a ServiceAccount or ConfigMap left unannotated does not exist when the Job starts, and the first sync on a fresh cluster fails. Annotate prerequisites `hook: PreSync` in a sync-wave below the first Job that needs them.
 - **`hook-delete-policy: BeforeHookCreation`**, not `HookSucceeded`: deleting on success throws away the log of the run that let an upgrade through.
 - **`backoffLimit: 0`.** A gate that retries takes minutes to say no. A hook that reads cluster state fetches it with `kubectl` in an initContainer, so a throttled API server retries inside `kubectl` before the readiness check ever runs; the main container still fails once, on the first real blocker.
-- **The fetch initContainer's image must include a shell.** `kubectl` runs inside an `sh -c` script, so the image needs one — an Alpine-based kubectl image (`alpine/kubectl`), not a distroless one.
+- **The fetch initContainer's image must include a shell.** `kubectl` runs from `fetch.sh`, so the image needs one — an Alpine-based kubectl image (`alpine/kubectl`), not a distroless one.
 - A script longer than a line goes on disk and reaches the Job through a `configMapGenerator`, so the file the unit tests import is the file the Job runs. `disableNameSuffixHash: true` because the Job names the ConfigMap.
 - Hooks attach to an Application's manifests. For a Helm-sourced app, add the hook directory as another entry in `spec.sources`.
+- **`hooks/<app>/check.sh` is the app's health check.** The app's kustomization passes it as `INTEGRITY_COMMAND`, and the gate and watchdog run it as `sh -c "<file contents>"` in the workload's default container, so it may use only that image's tools and the container's environment. Keep it POSIX sh, read-only and data-agnostic (production has no seed data), and under 60 seconds. On failure it exits non-zero with the reason as its last line, which the gate reports. CI runs the same file.
 
 ## Verification
 

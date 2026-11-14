@@ -71,6 +71,7 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 120
             successThreshold: 1
+          # Not /status.php: it needs MariaDB, and a restart cannot fix a database outage.
           livenessProbe:
             exec:
               command:
@@ -81,6 +82,16 @@ spec:
             timeoutSeconds: 15
             failureThreshold: 10
             successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: germany.vertesi.com  # must be in trusted_domains
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
           env:
             - name: PUID
               value: "1000"

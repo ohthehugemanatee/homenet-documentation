@@ -82,6 +82,10 @@ jobs:
       - name: Assert the Traefik default certificate is managed by ArgoCD
         # The issued Secret outlives its Certificate, so the loss is silent.
         run: python3 .github/scripts/check_default_tls_managed.py
+      - name: Require HTTP readiness and liveness probes on nextcloud
+        run: python3 .github/scripts/check_nextcloud_probes.py
+      - name: Require a startup probe on duplicacy
+        run: python3 .github/scripts/check_duplicacy_probes.py
 
   kustomize:
     name: Kustomize builds
