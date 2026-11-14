@@ -52,6 +52,17 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1
+        readinessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-}" -h127.0.0.1 -e 'SELECT 1'
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+          # the image init stops a throwaway server ~2 s after setting the root password
+          successThreshold: 2
         env:
           - name: PGID
             value: "1000"
