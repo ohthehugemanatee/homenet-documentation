@@ -13,6 +13,12 @@
 
 **Check names are gates — one producer each.** Branch protection matches required checks by name, so two producers of one name make the gate race itself and strand a red check run that no re-run can clear (#236, #245). `lint.yaml`'s `github-scripts` job enforces this across every `pull_request` workflow. A job whose `name:` is the check name and a `checks.create` using that name both count; when a workflow can run more than once per SHA, the single producer must update in place.
 
+## Stateful upgrade tests
+
+`workflows/test-stateful-upgrade.yaml` runs one job per app in `stateful-upgrade/<app>/`. It installs the manifest from the PR's base SHA in k3d, seeds data, applies the working-tree manifest in place, then runs the app's health check and reads the seeded data back. An unchanged manifest still runs, as old = new, which guards the case files themselves. `scripts/stateful_upgrade_render.py` rewrites the manifests for k3d: local-path storage, NFS volumes as `emptyDir`, ingress objects dropped, requests capped. The upgrade hooks are not exercised here; `test-cluster.yaml` covers them.
+
+A case is `case.env` (manifest paths, workload, pod, container), `setup.sh`, `seed.sh` and `assert.sh`, plus the app's `cluster/argocd/hooks/<app>/check.sh`, the file the hooks run. Add the app to the workflow's `matrix.app`.
+
 ## `autofix.py` invariants — DO NOT BREAK
 
 **IMPORTANT.** The autofix loop is the only thing keeping CI green without manual intervention. When editing `scripts/autofix.py`:
