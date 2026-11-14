@@ -34,3 +34,7 @@ persistence:
 preUpgradeChecker:
   jobEnabled: true
   upgradeVersionCheck: true
+
+networkPolicies:
+  # k3s enforces these; longhorn-manager's admits no Prometheus scrape.
+  restrictInternalTraffic: false

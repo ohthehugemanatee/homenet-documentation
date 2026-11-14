@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from check_longhorn_render import mismatches  # noqa: E402
+from check_longhorn_render import mismatches, network_policies  # noqa: E402
 
 CAPTURE = {
     'storageClass': {
@@ -68,6 +68,17 @@ class MismatchesTest(unittest.TestCase):
                                      rendered()['longhorn-storageclass']})
         self.assertEqual(len(found), 1)
         self.assertIn('longhorn-default-setting', found[0])
+
+
+class NetworkPoliciesTest(unittest.TestCase):
+    def test_render_without_policies_is_clean(self):
+        docs = [{'kind': 'ConfigMap', 'metadata': {'name': 'x'}}, None]
+        self.assertEqual(network_policies(docs), [])
+
+    def test_rendered_policy_is_named(self):
+        docs = [{'kind': 'NetworkPolicy', 'metadata': {'name': 'longhorn-manager'}},
+                {'kind': 'Deployment', 'metadata': {'name': 'longhorn-ui'}}]
+        self.assertEqual(network_policies(docs), ['longhorn-manager'])
 
 
 if __name__ == '__main__':
