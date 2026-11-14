@@ -11,8 +11,8 @@ ArgoCD continuously reconciles the cluster against this git repo. Every workload
 | Category | Sync | Self-heal | Prune | Apps |
 |---|---|---|---|---|
 | Media | auto | yes | yes | plex, tautulli, radarr, sonarr, lidarr, prowlarr, ombi, jackett, nzbget, delugevpn, calibre, its-mytabs, songhub |
-| Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, mariadb, redis, unifi, ingress-only, jobs, system-upgrade, starloom, starloom-eink |
-| Stateful | manual | no | no | nextcloud, collabora |
+| Utilities | auto | yes | yes | duplicacy, cloudflare-ddns, redis, ingress-only, jobs, system-upgrade, starloom, starloom-eink |
+| Stateful | manual | no | no | nextcloud, collabora, mariadb, unifi |
 | Infrastructure | manual | no | no | cert-manager, longhorn, snapshot-controller, metallb-config, storageclasses, cluster-base, default-limits, traefik-config, external-dns, nodelocaldns, storage, configmaps, cloudflared, claude-remote-debug-rbac |
 | Monitoring (Helm) | manual | no | no | kube-prometheus-stack, loki, alloy, nfs-provisioner |
 | Default TLS | auto | yes | no | traefik-default-tls |
@@ -70,11 +70,14 @@ After bootstrap, ArgoCD discovers all child Applications and begins reconciling.
 
 A detached volume reports robustness `unknown` because no engine is running to evaluate its replicas; the gate reads robustness only as a defect when it is `faulted`, so idle volumes do not block a sync.
 
-`hooks/upgrade/` is the shared base for app upgrades (ADR-0009). An app's hook directory instantiates it with `namePrefix: <app>-` and sets `WORKLOAD_KIND`, `WORKLOAD_NAME` and `CLAIM_NAME` in `upgrade-params`. No app uses it yet. It runs three Jobs:
+`hooks/upgrade/` is the shared base for app upgrades (ADR-0009). An app's hook directory instantiates it with `namePrefix: <app>-`, where `<app>` is the Application's name, and sets `WORKLOAD_KIND`, `WORKLOAD_NAME`, `ARGOCD_APP` and `CLAIM_NAME` in `upgrade-params`. No app uses it yet. It runs four Jobs:
 
-- **PreSync gate (wave -2):** deletes the `<workload>-upgrade-state` ConfigMap, then aborts the sync unless the workload's rollout is complete, every pod is Ready, and no container has restarted in the last 15 minutes. If an app sets `INTEGRITY_COMMAND`, the gate also runs it through `kubectl exec` as `sh -c` in the workload's default container, and a non-zero exit aborts the sync.
+- **PreSync gate (wave -2):** deletes the `<workload>-upgrade-state` ConfigMap, then aborts the sync unless the workload's rollout is complete, every pod is Ready, and no container has restarted in the last 15 minutes. If an app sets `INTEGRITY_COMMAND`, the gate also runs it through `kubectl exec` as `sh -c` in the workload's default container, and a non-zero exit aborts the sync. A workload at 0 replicas passes only if the deleted ConfigMap carried `stopped: "true"`.
 - **PreSync snapshot (wave -1):** scales the workload to 0, waits for its pods to go and its volume to detach, takes a `VolumeSnapshot` of `CLAIM_NAME` through `SNAPSHOT_CLASS` (default `longhorn-backup`), and records the replica count and snapshot name in `<workload>-upgrade-state`. If any of that fails, it scales the workload back to its original replica count and aborts the sync. Otherwise the sync's apply restores the replica count from git.
+- **Sync watchdog (the app's wave):** waits for the sync's apply to bring the replicas back, for the rollout to finish within `WATCHDOG_TIMEOUT` (default 20m), then `WATCHDOG_SETTLE_SECONDS` (default 300) more. It then runs the gate's checks with the restart window shortened to the settle time. On a pass it exits 0. On a failure it does a safe stop (ADR-0011): it sets `argocd.argoproj.io/skip-reconcile: "true"` on `ARGOCD_APP`, scales the workload to 0, deletes every pod naming the claim, records `stopped: "true"` in the state ConfigMap, recreates `CLAIM_NAME` from the recorded snapshot, and fails. The failed Job raises `KubeJobFailed` to Pushover; a paused Application sends no ArgoCD notifications. Recovery is in `backup-and-restore.md`.
 - **PostSync cleanup:** deletes the recorded snapshot, which also deletes its backup on shoebox, and the state ConfigMap. A sync that never becomes healthy never reaches PostSync, so its snapshot stays.
+
+The hooks' ServiceAccount can patch Applications. The `upgrade-hooks-pause` ValidatingAdmissionPolicy, shipped in the argo-cd chart's `extraObjects`, narrows that: `<app>-upgrade-hooks`, in the Application's destination namespace, may only set `argocd.argoproj.io/skip-reconcile` to `"true"` on Application `<app>`, or remove it. Sync the `argocd` Application before an app's first hooked sync.
 
 ## Helm-sourced Applications
 

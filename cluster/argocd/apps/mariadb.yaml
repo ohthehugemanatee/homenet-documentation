@@ -3,9 +3,8 @@ kind: Application
 metadata:
   name: mariadb
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
   annotations:
+    notifications.argoproj.io/subscribe.on-out-of-sync.pushover: ""
     notifications.argoproj.io/subscribe.on-sync-failed.pushover: ""
     notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
 spec:
@@ -19,7 +18,3 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: default
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true

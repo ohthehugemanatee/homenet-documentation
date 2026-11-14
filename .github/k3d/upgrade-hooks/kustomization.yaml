@@ -11,6 +11,9 @@ configMapGenerator:
     literals:
       - WORKLOAD_KIND=statefulset
       - WORKLOAD_NAME=toy
+      - ARGOCD_APP=toy
       - INTEGRITY_COMMAND=test ! -e /tmp/corrupt
       - CLAIM_NAME=data-toy-0
       - SNAPSHOT_CLASS=csi-hostpath-snapclass
+      - WATCHDOG_TIMEOUT=60s
+      - WATCHDOG_SETTLE_SECONDS=5
