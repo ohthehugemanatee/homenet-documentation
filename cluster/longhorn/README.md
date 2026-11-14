@@ -194,14 +194,10 @@ class exists to declare regenerable, and both cost the Longhorn I/O this cluster
 runs out of first. `recurringJobSelector` applies at volume creation, so an
 existing volume keeps whatever label it already carries until relabelled.
 
-The other 18 Longhorn-backed PVCs carry `default`: ten stateful app volumes
-(`duplicacy`, `its-mytabs`, `mariadb`, `nextcloud-www`, `ombi`, `plex`,
-`radarr`, `sonarr`, `songhub`, `unifi-db`), three `/config` volumes migrated off
-NFS (`jackett`, `nzbget`, `delugevpn`), `nextcloud-previews`, `nextcloud-mcp`,
-`calibre` (#268), and `grafana`, which holds users and API keys that no sidecar
-rebuilds. `nextcloud-previews` is regenerable scratch on
-`longhorn-ephemeral-fast` and still carries `default`. Plex transcode was the
-other exception and is now an `emptyDir` (#277).
+Every other PVC-backed Longhorn volume carries `default`.
+`nextcloud-previews` is regenerable scratch on `longhorn-ephemeral-fast` and
+still carries `default`. Plex transcode was the other exception and is now an
+`emptyDir` (#277).
 
 ## Audit, 23 Aug 2026
 

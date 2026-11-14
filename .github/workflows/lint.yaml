@@ -82,6 +82,10 @@ jobs:
       - name: Assert the Traefik default certificate is managed by ArgoCD
         # The issued Secret outlives its Certificate, so the loss is silent.
         run: python3 .github/scripts/check_default_tls_managed.py
+      - name: Require HTTP readiness and liveness probes on nextcloud
+        run: python3 .github/scripts/check_nextcloud_probes.py
+      - name: Require a startup probe on duplicacy
+        run: python3 .github/scripts/check_duplicacy_probes.py
 
   kustomize:
     name: Kustomize builds
@@ -146,6 +150,29 @@ jobs:
             echo "::error::the LAN is 10.10.10.0/24; 192.168.x.x is a stale placeholder"
             exit 1
           fi
+
+  adr:
+    name: ADR numbering
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Match ADR headings and index links to file numbers
+        run: |
+          status=0
+          for f in adr/[0-9]*.md; do
+            n=$(basename "$f" | cut -c1-4)
+            if ! head -n1 "$f" | grep -q "^# ADR-$n: "; then
+              echo "::error file=$f::heading must start with '# ADR-$n: '"
+              status=1
+            fi
+          done
+          while read -r label target; do
+            if [ "${target%%-*}" != "$label" ] || [ ! -f "adr/$target" ]; then
+              echo "::error file=adr/CLAUDE.md::index row $label must link to an existing adr/$label-*.md file, not $target"
+              status=1
+            fi
+          done < <(sed -nE 's/.*\[([0-9]{4})\]\(([^)]+\.md)\).*/\1 \2/p' adr/CLAUDE.md)
+          exit "$status"
 
   github-scripts:
     name: GitHub Actions helper scripts

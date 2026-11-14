@@ -4,7 +4,8 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                       '..', '..', '..', 'cluster', 'argocd', 'hooks',
@@ -62,6 +63,18 @@ class TestBlockers(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertIn('app-0', found[0])
         self.assertEqual(gate.blockers(workload(), [old], NOW), [])
+
+    def test_restart_window_is_configurable(self):
+        recent = [pod(finished_at='2026-10-01T11:58:00Z')]
+        self.assertEqual(gate.blockers(workload(), recent, NOW,
+                                       window=timedelta(seconds=60)), [])
+        self.assertTrue(gate.blockers(workload(), recent, NOW,
+                                      window=timedelta(minutes=5)))
+
+    def test_stopped_workload_at_zero_passes(self):
+        stopped = workload(replicas=0, ready=0, updated=0)
+        self.assertEqual(gate.blockers(stopped, [], NOW, stopped=True), [])
+        self.assertTrue(gate.blockers(stopped, [], NOW))
 
     def test_other_and_terminating_pods_are_ignored(self):
         pods = [pod(), pod('other-0', ready=False, app='other'),
@@ -130,6 +143,24 @@ class TestExitCode(unittest.TestCase):
         for rc, want in ((None, 0), ('0\n', 0), ('1\n', 1), ('x', 1)):
             with self.subTest(rc=rc):
                 self.assertEqual(self._run_integrity(rc), want)
+
+    def test_restart_window_comes_from_the_environment(self):
+        recent = [pod(finished_at='2026-10-01T11:58:00Z')]
+        with mock.patch.dict(os.environ, {'RESTART_WINDOW_SECONDS': '60'}):
+            self.assertEqual(self._run(workload(), recent), 0)
+        self.assertEqual(self._run(workload(), recent), 1)
+
+    def test_stopped_marker_lets_a_stopped_workload_through(self):
+        stopped = workload(replicas=0, ready=0, updated=0)
+        for marker, want in (('true', 0), ('', 1)):
+            with self.subTest(marker=marker):
+                args = ['gate.py',
+                        self._write('workload.json', json.dumps(stopped)),
+                        self._write('pods.json', json.dumps({'items': []})),
+                        os.path.join(self.tmpdir, 'integrity.rc'),
+                        os.path.join(self.tmpdir, 'integrity.log'),
+                        self._write('stopped', marker)]
+                self.assertEqual(gate.main(args, NOW), want)
 
     def test_unreadable_state_exits_nonzero(self):
         app = self._write('workload.json', json.dumps(workload()))

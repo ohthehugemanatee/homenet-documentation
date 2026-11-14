@@ -1,0 +1,119 @@
+---
+# See cluster/argocd/CLAUDE.md. Sync phase, wave 0: it starts with the app's own rollout.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: upgrade-watchdog
+  labels:
+    app.kubernetes.io/component: watchdog
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  # Outlasts WATCHDOG_TIMEOUT plus the settle and the stop, so a failed verdict always reaches the stop.
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      serviceAccountName: upgrade-hooks
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: watch
+          image: alpine/kubectl:1.36.4
+          command: [sh, /hook/fetch.sh, watchdog]
+          envFrom:
+            - configMapRef:
+                name: upgrade-params
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+        # Records the verdict instead of failing, so the stop container still runs.
+        - name: verdict
+          image: python:3.12-alpine
+          command:
+            - sh
+            - -c
+            - |
+              if [ -s /data/rollout.log ]; then
+                cat /data/rollout.log; echo 1 > /data/verdict
+              else
+                rc=0
+                RESTART_WINDOW_SECONDS="$WATCHDOG_SETTLE_SECONDS" python3 /hook/gate.py /data/workload.json \
+                  /data/pods.json /data/integrity.rc /data/integrity.log || rc=$?
+                echo "$rc" > /data/verdict
+              fi
+          envFrom:
+            - configMapRef:
+                name: upgrade-params
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      containers:
+        - name: stop
+          image: alpine/kubectl:1.36.4
+          command: [sh, /hook/safe-stop.sh]
+          envFrom:
+            - configMapRef:
+                name: upgrade-params
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hook
+              mountPath: /hook
+              readOnly: true
+            - name: data
+              mountPath: /data
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: hook
+          configMap:
+            name: upgrade-scripts
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

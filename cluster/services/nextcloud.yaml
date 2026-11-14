@@ -12,7 +12,7 @@ spec:
   serviceName: nextcloud
   volumeClaimTemplates:
     - metadata:
-        name: nextcloud-www
+        name: nextcloud-config
       spec:
         accessModes: [ "ReadWriteOnce" ]
         storageClassName: "longhorn"
@@ -51,7 +51,6 @@ spec:
         nvme: "1"
       containers:
         - name: nextcloud
-          # linuxserver publishes 34.x under the previous- prefix; version-34.* tags are frozen
           image: lscr.io/linuxserver/nextcloud:previous-34.0.5-ls124
           imagePullPolicy: IfNotPresent
           resources:
@@ -72,6 +71,7 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 120
             successThreshold: 1
+          # Not /status.php: it needs MariaDB, and a restart cannot fix a database outage.
           livenessProbe:
             exec:
               command:
@@ -82,6 +82,16 @@ spec:
             timeoutSeconds: 15
             failureThreshold: 10
             successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: germany.vertesi.com  # must be in trusted_domains
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
           env:
             - name: PUID
               value: "1000"
@@ -103,14 +113,8 @@ spec:
               subPath: "nextcloud/server-config/custom-init"
             - name: nfs-media
               mountPath: "/media"
-            - name: nextcloud-www
-              mountPath: "/www"
-            - name: nfs-config
-              mountPath: "/www/nextcloud/config"
-              subPath: "nextcloud/nextcloud-config"
-            - name: nfs-config
+            - name: nextcloud-config
               mountPath: "/config"
-              subPath: "nextcloud/server-config"
             - name: nextcloud-logs
               mountPath: "/config/log"
             - name: preview-cache

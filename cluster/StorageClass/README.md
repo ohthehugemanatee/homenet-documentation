@@ -16,8 +16,8 @@ are not defined here but are listed below for the full picture.
 
 | Class | Replicas | Provisioner | Intended use |
 | --- | --- | --- | --- |
-| `longhorn` (default) | 3 | Longhorn | General durable data. Consumer: unifi-db. |
-| `longhorn-static` | 3 | Longhorn | Pre-provisioned durable volumes for stateful app data: `nextcloud-www`, Plex/Radarr/Sonarr/Duplicacy DBs. |
+| `longhorn` (default) | 3 | Longhorn | General durable data. Consumers include `nextcloud-config`, unifi-db, and application config PVCs. |
+| `longhorn-static` | 3 | Longhorn | Pre-provisioned durable volumes for stateful app data, including MariaDB, Ombi, Plex/Radarr/Sonarr/Duplicacy DBs. |
 | `local-path` | — | k3s `local-path` | Node-local, unreplicated, fastest. MariaDB data dirs. |
 | `nfs-client` | — | nfs-subdir-provisioner | Volumes backed by shoebox NFS. |
 

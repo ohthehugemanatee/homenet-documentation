@@ -9,12 +9,14 @@ from datetime import datetime, timedelta, timezone
 RESTART_WINDOW = timedelta(minutes=15)
 
 
-def blockers(workload, pods, now, integrity=None):
+def blockers(workload, pods, now, integrity=None, window=RESTART_WINDOW,
+             stopped=False):
     spec = workload.get('spec') or {}
     status = workload.get('status') or {}
     want = spec.get('replicas', 1)
     if want < 1:
-        return [f'scaled to {want} replicas']
+        # The watchdog's safe stop leaves it at 0 for the next sync to bring back.
+        return [] if stopped else [f'scaled to {want} replicas']
 
     found = []
     if status.get('observedGeneration', 0) < \
@@ -42,7 +44,7 @@ def blockers(workload, pods, now, integrity=None):
             finished = ((container.get('lastState') or {}).get('terminated')
                         or {}).get('finishedAt')
             if finished and now - datetime.fromisoformat(
-                    finished.replace('Z', '+00:00')) < RESTART_WINDOW:
+                    finished.replace('Z', '+00:00')) < window:
                 found.append(f"container {container['name']} in pod "
                              f"{meta['name']} restarted at {finished}")
     if integrity and integrity[0] != 0:
@@ -65,6 +67,12 @@ def main(argv, now=None):
                 rc = int(handle.read())
             with open(argv[4], encoding='utf-8') as handle:
                 integrity = (rc, handle.read())
+        stopped = False
+        if len(argv) > 5 and os.path.exists(argv[5]):
+            with open(argv[5], encoding='utf-8') as handle:
+                stopped = handle.read().strip() == 'true'
+        window = timedelta(seconds=int(os.environ.get(
+            'RESTART_WINDOW_SECONDS', RESTART_WINDOW.total_seconds())))
     except (OSError, ValueError) as exc:
         print(f'upgrade gate could not read fetched state: {exc}',
               file=sys.stderr)
@@ -72,7 +80,7 @@ def main(argv, now=None):
 
     name = f"{workload['kind']}/{workload['metadata']['name']}"
     found = blockers(workload, pods, now or datetime.now(timezone.utc),
-                     integrity)
+                     integrity, window, stopped)
     if not found:
         print(f'{name} is ready to upgrade.')
         return 0

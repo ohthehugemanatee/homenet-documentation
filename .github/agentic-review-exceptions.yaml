@@ -1,6 +1,7 @@
 # Known-dismissed findings for AI PR review.
 # Findings listed here have been explicitly reviewed and accepted by the maintainer.
-# The auto-reviewer reads this file and must not re-raise any of these findings.
+# The auto-reviewer is sent only the entries whose `files` match a path the PR touches (a trailing / matches a directory)
+# and must not re-raise those findings. List every path a finding can appear in; the unit tests require `files` on every entry.
 
 exceptions:
   - pattern: "CHANGEME_PUSHOVER"
