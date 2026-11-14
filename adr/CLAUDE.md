@@ -35,3 +35,4 @@ Start from [`template.md`](template.md).
 | [0009](0009-upgrades-bracketed-by-shared-hooks.md) | App upgrades are bracketed by shared ArgoCD hooks | accepted |
 | [0010](0010-nextcloud-app-files-use-longhorn.md) | Nextcloud application files use Longhorn | accepted |
 | [0011](0011-failed-upgrades-stop-the-app.md) | A failed upgrade stops the app | accepted |
+| [0012](0012-builds-we-publish-run-from-a-mutable-devel-tag.md) | Builds we publish run from a mutable `devel` tag | accepted |
