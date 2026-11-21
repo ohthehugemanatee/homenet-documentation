@@ -42,7 +42,7 @@ extraEnv:
   # claude.ai's callback would then fail redirect-URI validation. No secret:
   # MCP clients are public clients, proven by PKCE (S256).
   - name: ALLOWED_MCP_CLIENTS
-    value: "claude-ai|https://claude.ai/api/mcp/auth_callback"
+    value: "claude-ai|https://claude.ai/api/mcp/auth_callback, hermes-agent|https://nousresearch.github.io/hermes-agent/docs/oauth/client-metadata.json"
   # Audience for issued tokens (ADR-005). Defaults to nextcloud.host, but the
   # server warns on startup that it wants this explicit.
   - name: NEXTCLOUD_RESOURCE_URI
