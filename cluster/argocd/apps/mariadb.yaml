@@ -9,12 +9,15 @@ metadata:
     notifications.argoproj.io/subscribe.on-health-degraded.pushover: ""
 spec:
   project: default
-  source:
-    repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
-    targetRevision: HEAD
-    path: cluster/services
-    directory:
-      include: mariadb.yaml
+  sources:
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      path: cluster/services
+      directory:
+        include: mariadb.yaml
+    - repoURL: https://github.com/ohthehugemanatee/homenet-documentation.git
+      targetRevision: HEAD
+      path: cluster/argocd/hooks/mariadb
   destination:
     server: https://kubernetes.default.svc
     namespace: default

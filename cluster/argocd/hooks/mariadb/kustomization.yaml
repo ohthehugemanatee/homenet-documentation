@@ -1,0 +1,17 @@
+---
+# Prefix is the Application name.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namePrefix: mariadb-
+resources:
+  - ../upgrade
+configMapGenerator:
+  - name: upgrade-params
+    behavior: merge
+    literals:
+      - WORKLOAD_KIND=statefulset
+      - WORKLOAD_NAME=mariadb
+      - ARGOCD_APP=mariadb
+      - CLAIM_NAME=datadir-mariadb-0
+    files:
+      - INTEGRITY_COMMAND=check.sh
