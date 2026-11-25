@@ -84,6 +84,8 @@ jobs:
         run: python3 .github/scripts/check_default_tls_managed.py
       - name: Require HTTP readiness and liveness probes on nextcloud
         run: python3 .github/scripts/check_nextcloud_probes.py
+      - name: Require a two-pass readiness probe on mariadb
+        run: python3 .github/scripts/check_mariadb_probes.py
       - name: Require a startup probe on duplicacy
         run: python3 .github/scripts/check_duplicacy_probes.py
 
