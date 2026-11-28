@@ -651,6 +651,18 @@ jobs:
           test "$(kubectl auth can-i get secrets --as="$SA" -A)" = no
           test "$(kubectl auth can-i list secrets --as="$SA" -A)" = no
 
+          for v in get list watch; do
+            test "$(kubectl auth can-i "$v" nodes --as="$SA")" = yes
+          done
+          for v in create update patch delete; do
+            test "$(kubectl auth can-i "$v" nodes --as="$SA")" = no
+          done
+          # nodes/proxy reaches the kubelet API, which serves exec.
+          # "nodes/proxy" as a TYPE/NAME arg means a node named proxy; use --subresource.
+          test "$(kubectl auth can-i get nodes --subresource=proxy --as="$SA")" = no
+          test "$(kubectl auth can-i create nodes --subresource=proxy --as="$SA")" = no
+          test "$(kubectl auth can-i patch nodes --subresource=status --as="$SA")" = no
+
           # CRDs and view's blind spots.
           for r in customresourcedefinitions.apiextensions.k8s.io \
                    storageclasses.storage.k8s.io \
