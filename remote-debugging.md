@@ -68,6 +68,12 @@ would hand over Secrets too; core reads come from the `view` binding, which
 already excludes them. Omitting core is what keeps Secrets unreadable, so never
 add `""` or `"*"` to that role. CI asserts both.
 
+`view` does not cover Nodes either. A third ClusterRole,
+`claude-remote-debug-node-read`, grants `get`/`list`/`watch` on core `nodes` and
+nothing else. It leaves out `nodes/proxy`, so the MCP server's `nodes_log` and
+`nodes_stats_summary` still return 403: the kubelet API behind that subresource
+also serves `exec`.
+
 `resources: ["*"]` covers a new kind inside a listed group. A new operator brings
 a new group, which has to be added to
 `cluster/services/claude-remote-debug-rbac.yaml` by hand. CI compares the role

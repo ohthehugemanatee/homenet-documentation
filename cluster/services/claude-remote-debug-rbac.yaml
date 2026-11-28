@@ -78,3 +78,26 @@ roleRef:
   kind: ClusterRole
   name: claude-remote-debug-extended-read
   apiGroup: rbac.authorization.k8s.io
+---
+# Core-group reads that view omits. Never add nodes/proxy: the kubelet API serves exec.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: claude-remote-debug-node-read
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: claude-remote-debug-node-read
+subjects:
+  - kind: ServiceAccount
+    name: claude-remote-debug
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: claude-remote-debug-node-read
+  apiGroup: rbac.authorization.k8s.io
